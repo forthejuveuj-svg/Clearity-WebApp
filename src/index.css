@@ -49,10 +49,10 @@ All colors MUST be HSL.
 
     --radius: 1rem;
 
-    /* Gradient colors - Red → Violet → Blue */
-    --gradient-start: 0 70% 60%;
-    --gradient-mid: 270 50% 55%;
-    --gradient-end: 240 60% 60%;
+    /* Gradient colors - Purple → Blue (cool gradient) */
+    --gradient-start: 280 70% 65%;
+    --gradient-mid: 260 60% 65%;
+    --gradient-end: 220 70% 65%;
 
     /* Node colors */
     --node-blue: 200 60% 50%;
@@ -159,4 +159,52 @@ All colors MUST be HSL.
       transform: translateY(-10px);
     }
   }
+
+  /* Live gradient animation */
+@keyframes gradientShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes neuralPulse {
+  0%, 100% {
+    opacity: 0.6;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    opacity: 1;
+    stroke-dashoffset: -18;
+  }
+}
+
+@keyframes neuralNodePulse {
+  0%, 100% {
+    opacity: 0.7;
+    r: 2;
+  }
+  50% {
+    opacity: 1;
+    r: 3;
+  }
+}
+
+@keyframes borderGlowSlow {
+  0% { 
+    box-shadow: 0 0 3px rgba(239, 68, 68, 0.2), 0 0 6px rgba(239, 68, 68, 0.1);
+  }
+  50% { 
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.4), 0 0 12px rgba(239, 68, 68, 0.2);
+  }
+  100% { 
+    box-shadow: 0 0 3px rgba(239, 68, 68, 0.2), 0 0 6px rgba(239, 68, 68, 0.1);
+  }
+}
+
+.animate-border-glow {
+  animation: borderGlowSlow 6s ease-in-out infinite !important;
+}
 }

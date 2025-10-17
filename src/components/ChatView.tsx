@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Mic, ArrowUp } from "lucide-react";
+import { TypingAnimation } from "./TypingAnimation";
 
 interface Message {
   role: "user" | "assistant";
@@ -63,7 +64,15 @@ export const ChatView = ({ initialMessage, onViewMap }: ChatViewProps) => {
                   : "bg-primary/10 backdrop-blur-sm text-foreground border border-primary/20 shadow-lg shadow-primary/5"
               }`}
             >
-              <p className="text-base leading-relaxed whitespace-pre-line">{message.content}</p>
+              {message.role === "assistant" ? (
+                <TypingAnimation
+                  text={message.content}
+                  speed={20}
+                  className="text-base leading-relaxed whitespace-pre-line"
+                />
+              ) : (
+                <p className="text-base leading-relaxed whitespace-pre-line">{message.content}</p>
+              )}
               {message.role === "assistant" && (
                 <div className="absolute -left-2 top-4 w-1 h-8 bg-gradient-to-b from-primary via-secondary to-accent rounded-full animate-pulse-glow" />
               )}
