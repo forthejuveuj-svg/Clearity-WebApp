@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Mic, ArrowUp, MessageSquare, AlertTriangle } from "lucide-react";
+import { Mic, ArrowUp, MessageSquare, AlertTriangle, X, Check } from "lucide-react";
 import { TypingAnimation } from "./TypingAnimation";
 import { ProblemsModal } from "./ProblemsModal";
 
@@ -35,7 +35,7 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
   const [isBuilding, setIsBuilding] = useState(true);
   const [buildProgress, setBuildProgress] = useState(0);
   const [visibleNodes, setVisibleNodes] = useState<string[]>([]);
-  const [mapHeight, setMapHeight] = useState(90); // Percentage of screen height for mind map
+  const [mapHeight, setMapHeight] = useState(60); // Percentage of screen height for mind map
   const [isDragging, setIsDragging] = useState(false);
   const [isInputExpanded, setIsInputExpanded] = useState(false);
   const [dragDirection, setDragDirection] = useState<'vertical' | 'horizontal' | null>(null);
@@ -44,6 +44,27 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
   const [dragOffset, setDragOffset] = useState(0); // Raw drag distance for smooth interpolation (-300 to 300)
   const [typingMessages, setTypingMessages] = useState<Set<number>>(new Set());
   const [isProblemsOpen, setIsProblemsOpen] = useState(false);
+  const [accumulatedTasks, setAccumulatedTasks] = useState<string[]>([]);
+  const [isAccumulatedTasksOpen, setIsAccumulatedTasksOpen] = useState(false);
+
+  // Function to add a task to accumulated tasks
+  const addToAccumulatedTasks = (task: string) => {
+    setAccumulatedTasks(prev => [...prev, task]);
+  };
+
+  // Add some sample tasks for demonstration
+  useEffect(() => {
+    // Add sample tasks after a delay to simulate user interaction
+    const timer = setTimeout(() => {
+      setAccumulatedTasks([
+        "Read neuroscience book for 30 minutes",
+        "Take 3 deep breaths",
+        "Write down 3 key insights from today's session"
+      ]);
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   // Mind map states for different history positions
   const mindMapStates: { [key: number]: Node[] } = {
@@ -111,6 +132,7 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
   const connections = [
     { from: "brain", to: "psychology" },
     { from: "psychology", to: "habits" },
+    { from: "brain", to: "design" },
   ];
 
   // Auto-reply and mind map building
@@ -249,18 +271,78 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
     };
   }, [isDragging, dragDirection]);
 
-  const getSizeClass = (size: string, isMainTopic: boolean = false) => {
-    if (isMainTopic) {
-      // Main topic circle - massive size that extends beyond borders
-      return "w-[27rem] h-[27rem] text-6xl font-bold";
+  const getCircleSize = (size: string, isMainTopic: boolean = false) => {
+    const screenWidth = window.innerWidth;
+    
+    if (screenWidth >= 1024) {
+      // Desktop sizes (unchanged)
+      if (isMainTopic) return { width: 432, height: 432 }; // 27rem
+      switch (size) {
+        case "small": return { width: 144, height: 144 }; // 9rem (36 * 4)
+        case "medium": return { width: 176, height: 176 }; // 11rem (44 * 4)
+        case "large": return { width: 208, height: 208 }; // 13rem (52 * 4)
+        default: return { width: 176, height: 176 };
+      }
     }
     
-    switch (size) {
-      case "small": return "w-36 h-36 text-xl";
-      case "medium": return "w-44 h-44 text-2xl";
-      case "large": return "w-52 h-52 text-3xl";
-      default: return "w-44 h-44";
+    if (screenWidth >= 768) {
+      // Tablet: scale between 768-1024px (unchanged)
+      const baseWidths = isMainTopic 
+        ? { min: 192, max: 432 } // 12rem to 27rem
+        : size === "small" ? { min: 96, max: 144 }  // 6rem to 9rem
+        : size === "medium" ? { min: 112, max: 176 } // 7rem to 11rem
+        : { min: 128, max: 208 }; // 8rem to 13rem (large)
+      
+      const scaleFactor = Math.max(0, Math.min(1, (screenWidth - 768) / (1024 - 768)));
+      const width = baseWidths.min + (baseWidths.max - baseWidths.min) * scaleFactor;
+      
+      return { width, height: width };
     }
+    
+    // Phone screens (< 768px): bigger circles for better visibility
+    const phoneScale = screenWidth / 768; // e.g., 375px / 768 = 0.49
+    const tabletBase = isMainTopic 
+      ? 192 
+      : size === "small" ? 96
+      : size === "medium" ? 112
+      : 128;
+    
+    // Multiply by 1.3 to make circles 30% bigger on phones
+    const width = tabletBase * phoneScale * 1.3;
+    return { width, height: width };
+  };
+
+  const getSizeClass = (size: string, isMainTopic: boolean = false) => {
+    const screenWidth = window.innerWidth;
+    
+    if (isMainTopic) {
+      if (screenWidth >= 1024) return "text-6xl font-bold";
+      if (screenWidth >= 768) return "text-xl font-bold";
+      return "text-base font-bold"; // Phone
+    }
+    
+    if (screenWidth >= 1024) {
+      // Desktop (unchanged)
+      switch (size) {
+        case "small": return "text-xl";
+        case "medium": return "text-2xl";
+        case "large": return "text-3xl";
+        default: return "";
+      }
+    }
+    
+    if (screenWidth >= 768) {
+      // Tablet (unchanged)
+      switch (size) {
+        case "small": return "text-sm";
+        case "medium": return "text-base";
+        case "large": return "text-base";
+        default: return "text-base";
+      }
+    }
+    
+    // Phone: smaller text
+    return "text-xs";
   };
 
   const getColorClass = (color: string) => {
@@ -405,6 +487,10 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
                   : `ring-4 ring-offset-16 ring-offset-transparent ${getRingClass(node.color)}`
                 }
               `}
+              style={{
+                width: `${getCircleSize(node.size, node.label === "Clearity").width}px`,
+                height: `${getCircleSize(node.size, node.label === "Clearity").height}px`
+              }}
             >
               <span className="font-medium leading-tight px-1 whitespace-pre-line text-white">
                 {node.label}
@@ -433,6 +519,7 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
                 </button>
               )}
 
+
               {/* Small thought labels around each circle */}
               {node.thoughts && node.thoughts.map((thought, idx) => {
                 let angles;
@@ -449,7 +536,25 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
                   angles = [60, 90, 120];
                 }
                 const angle = angles[idx];
-                const radius = node.label === "Clearity" ? 310 : 155;
+                // Responsive radius: scales with screen size
+                const screenWidth = window.innerWidth;
+                let radius;
+                
+                if (screenWidth >= 1024) {
+                  // Desktop (unchanged)
+                  radius = node.label === "Clearity" ? 310 : 155;
+                } else if (screenWidth >= 768) {
+                  // Tablet: scale between 768-1024px (unchanged)
+                  const minRadius = node.label === "Clearity" ? 160 : 105;
+                  const maxRadius = node.label === "Clearity" ? 310 : 155;
+                  const scaleFactor = Math.max(0, Math.min(1, (screenWidth - 768) / (1024 - 768)));
+                  radius = minRadius + (maxRadius - minRadius) * scaleFactor;
+                } else {
+                  // Phone: scale proportionally and make bigger
+                  const phoneScale = screenWidth / 768;
+                  const tabletRadius = node.label === "Clearity" ? 160 : 105;
+                  radius = tabletRadius * phoneScale * 1.3; // 30% bigger
+                }
                 const angleRad = (angle * Math.PI) / 180;
                 const x = Math.cos(angleRad) * radius;
                 const y = Math.sin(angleRad) * radius;
@@ -457,12 +562,16 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
                 return (
                   <div 
                     key={idx}
-                    className={`absolute font-semibold whitespace-nowrap px-6 py-3 rounded-full border backdrop-blur-sm transition-all duration-1000 ease-out hover:scale-125 hover:brightness-150 hover:shadow-lg cursor-pointer ${getThoughtColor(node.color)}`}
+                    className={`absolute font-semibold whitespace-nowrap px-3 py-1.5 lg:px-6 lg:py-3 rounded-full border backdrop-blur-sm transition-all duration-1000 ease-out hover:scale-125 hover:brightness-150 hover:shadow-lg cursor-pointer ${getThoughtColor(node.color)}`}
                     style={{
                       left: `calc(50% + ${x}px)`,
                       top: `calc(50% + ${y}px)`,
                       transform: 'translate(-50%, -50%)',
-                      fontSize: mapHeight >= 50 ? '1.25rem' : mapHeight >= 30 ? '1.5rem' : '1.75rem'
+                      fontSize: window.innerWidth >= 1024 
+                        ? (mapHeight >= 50 ? '1.25rem' : mapHeight >= 30 ? '1.5rem' : '1.75rem')
+                        : window.innerWidth >= 768
+                        ? '0.875rem' // text-sm for tablet
+                        : '0.75rem' // text-xs for phone (matches circle text)
                     }}
                   >
                     {thought}
@@ -483,6 +592,19 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
                 <span className="text-sm text-white">Building your mind map... {buildProgress}%</span>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Accumulated Tasks Button */}
+        {accumulatedTasks.length > 0 && (
+          <div className="absolute bottom-3 md:bottom-4 lg:bottom-4 left-3 md:left-4 lg:left-4">
+            <button
+              onClick={() => setIsAccumulatedTasksOpen(true)}
+              className="flex items-center gap-1 md:gap-2 lg:gap-2 px-2 md:px-3 lg:px-3 py-1.5 md:py-2 lg:py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs md:text-sm lg:text-sm rounded-md md:rounded-lg lg:rounded-lg border border-blue-500/40 hover:border-blue-400/60 transition-colors"
+            >
+              <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+              Tasks ({accumulatedTasks.length})
+            </button>
           </div>
         )}
       </div>
@@ -622,6 +744,58 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
         isOpen={isProblemsOpen} 
         onClose={() => setIsProblemsOpen(false)} 
       />
+
+      {/* Accumulated Tasks Modal */}
+      {isAccumulatedTasksOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setIsAccumulatedTasksOpen(false)}
+          />
+          
+          <div className="relative bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md mx-auto shadow-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <h3 className="text-white font-medium">Accumulated Tasks</h3>
+              <button
+                onClick={() => setIsAccumulatedTasksOpen(false)}
+                className="p-1 rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-3">
+              {accumulatedTasks.map((task, index) => (
+                <div key={index} className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setAccumulatedTasks(prev => prev.filter((_, i) => i !== index));
+                    }}
+                    className="w-5 h-5 rounded-full border-2 border-gray-400 hover:border-red-400 transition-colors flex items-center justify-center"
+                  >
+                    <X className="w-3 h-3 text-gray-400" />
+                  </button>
+                  <span className="text-white text-sm flex-1">{task}</span>
+                </div>
+              ))}
+            </div>
+            
+            <div className="p-4 border-t border-gray-700">
+              <button
+                onClick={() => {
+                  // Convert accumulated tasks to actual tasks
+                  console.log('Converting tasks:', accumulatedTasks);
+                  setAccumulatedTasks([]);
+                  setIsAccumulatedTasksOpen(false);
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-medium transition-colors"
+              >
+                Add to Tasks
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

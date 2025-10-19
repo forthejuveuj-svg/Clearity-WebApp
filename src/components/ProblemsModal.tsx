@@ -1,20 +1,26 @@
-import { useState } from "react";
-import { X, AlertTriangle, Lightbulb, CheckCircle, ArrowRight } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { X, AlertTriangle, CheckCircle, Clock, Target } from "lucide-react";
 
 interface Problem {
   id: string;
   title: string;
-  description: string;
-  severity: "low" | "medium" | "high";
-  category: string;
+  tag: string;
+  reasoning: string[];
+  effect: string;
+  microAction: {
+    title: string;
+    description: string;
+    whyThisHelps: string;
+  };
   solutions: Solution[];
+  isSolvable: boolean;
 }
 
 interface Solution {
   id: string;
   title: string;
   description: string;
-  action: string;
+  whyThisHelps: string;
   completed: boolean;
 }
 
@@ -28,97 +34,63 @@ export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted }: Problem
   const [problems] = useState<Problem[]>([
     {
       id: "1",
-      title: "Overthinking about work deadlines",
-      description: "Constantly worrying about upcoming project deadlines and feeling overwhelmed with tasks",
-      severity: "high",
-      category: "Work Stress",
+      title: "You're feeling scattered and can't focus",
+      tag: "Root Cause",
+      reasoning: [
+        "Multiple priorities without clear order",
+        "Repeated concerns across areas", 
+        "Stress and indecision detected"
+      ],
+      effect: "This mental overload can make everything feel urgent and exhausting, even if nothing is really urgent.",
+      microAction: {
+        title: "Pick the 1 most important task and write it down",
+        description: "Choose just one thing to focus on right now",
+        whyThisHelps: "Reduces cognitive load by limiting choices to one priority"
+      },
+      isSolvable: true,
       solutions: [
         {
           id: "1-1",
-          title: "Break down tasks into smaller chunks",
-          description: "Divide your work into 25-minute focused sessions with 5-minute breaks",
-          action: "Try the Pomodoro Technique",
+          title: "Set a 5-minute timer for your task",
+          description: "Work on your chosen task for just 5 minutes",
+          whyThisHelps: "Makes overwhelming tasks feel manageable",
           completed: false
         },
         {
-          id: "1-2", 
-          title: "Create a priority matrix",
-          description: "Categorize tasks by urgency and importance to focus on what matters most",
-          action: "Use Eisenhower Matrix",
-          completed: false
-        },
-        {
-          id: "1-3",
-          title: "Practice mindfulness",
-          description: "Take 5-minute breathing exercises when feeling overwhelmed",
-          action: "Download a meditation app",
+          id: "1-2",
+          title: "Take 3 deep breaths",
+          description: "Focus only on your breathing for 30 seconds",
+          whyThisHelps: "Activates your calm nervous system",
           completed: false
         }
       ]
     },
     {
-      id: "2",
-      title: "Anxiety about social situations",
-      description: "Feeling nervous and overthinking before social events or meetings",
-      severity: "medium",
-      category: "Social Anxiety",
-      solutions: [
-        {
-          id: "2-1",
-          title: "Prepare talking points",
-          description: "Write down 3-5 conversation starters before social events",
-          action: "Create a mental script",
-          completed: false
-        },
-        {
-          id: "2-2",
-          title: "Practice exposure therapy",
-          description: "Start with small social interactions and gradually increase",
-          action: "Join a local meetup group",
-          completed: false
-        },
-        {
-          id: "2-3",
-          title: "Focus on listening",
-          description: "Shift focus from yourself to genuinely listening to others",
-          action: "Practice active listening",
-          completed: false
-        }
-      ]
-    },
-    {
-      id: "3",
-      title: "Decision paralysis",
-      description: "Getting stuck in analysis paralysis when making important life decisions",
-      severity: "high",
-      category: "Decision Making",
-      solutions: [
-        {
-          id: "3-1",
-          title: "Set decision deadlines",
-          description: "Give yourself a specific timeframe to make decisions",
-          action: "Use the 2-minute rule for small decisions",
-          completed: false
-        },
-        {
-          id: "3-2",
-          title: "Limit options",
-          description: "Reduce choices to top 3 options to avoid overwhelm",
-          action: "Create a decision matrix",
-          completed: false
-        },
-        {
-          id: "3-3",
-          title: "Accept good enough",
-          description: "Remember that perfect is the enemy of good",
-          action: "Set 80% completion as success",
-          completed: false
-        }
-      ]
+      id: "2", 
+      title: "You're overthinking social interactions",
+      tag: "Emotional Block",
+      reasoning: [
+        "Fear of judgment is creating mental barriers",
+        "Past negative experiences influencing current thoughts",
+        "Overanalyzing what others might think"
+      ],
+      effect: "This anxiety can make you avoid social situations that could actually be positive experiences, creating a cycle of isolation.",
+      microAction: {
+        title: "Focus on listening to one person",
+        description: "In your next conversation, focus only on what they're saying",
+        whyThisHelps: "Shifts focus from yourself to others, reducing self-consciousness"
+      },
+      isSolvable: false,
+      solutions: []
     }
   ]);
 
   const [completedSolutions, setCompletedSolutions] = useState<Set<string>>(new Set());
+  const [remindLater, setRemindLater] = useState<Set<string>>(new Set());
+  const [isDragging, setIsDragging] = useState(false);
+  const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
+  const dragOffset = useRef({ x: 0, y: 0 });
+  const modalRef = useRef<HTMLDivElement>(null);
 
   const toggleSolution = (solutionId: string) => {
     setCompletedSolutions(prev => {
@@ -128,120 +100,211 @@ export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted }: Problem
       } else {
         newSet.add(solutionId);
       }
-      // Notify parent component about completed solutions
       onSolutionsCompleted?.(newSet.size);
       return newSet;
     });
   };
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case "high": return "text-red-400 bg-red-500/10 border-red-400/30";
-      case "medium": return "text-yellow-400 bg-yellow-500/10 border-yellow-400/30";
-      case "low": return "text-green-400 bg-green-500/10 border-green-400/30";
-      default: return "text-gray-400 bg-gray-500/10 border-gray-400/30";
+  const toggleRemindLater = (problemId: string) => {
+    setRemindLater(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(problemId)) {
+        newSet.delete(problemId);
+      } else {
+        newSet.add(problemId);
+      }
+      return newSet;
+    });
+  };
+
+  const turnIntoTask = (problemId: string) => {
+    console.log(`Turned problem ${problemId} into task`);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Only start dragging if clicking on the header area
+    const target = e.target as HTMLElement;
+    const header = modalRef.current?.querySelector('.modal-header');
+    
+    if (header && (header.contains(target) || target === header)) {
+      e.preventDefault();
+      setIsDragging(true);
+      const rect = modalRef.current?.getBoundingClientRect();
+      if (rect) {
+        dragOffset.current = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        };
+      }
     }
   };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (isDragging && modalRef.current) {
+      const newX = e.clientX - dragOffset.current.x;
+      const newY = e.clientY - dragOffset.current.y;
+      
+      // Keep modal within viewport bounds
+      const maxX = window.innerWidth - modalRef.current.offsetWidth;
+      const maxY = window.innerHeight - modalRef.current.offsetHeight;
+      
+      const constrainedX = Math.max(0, Math.min(newX, maxX));
+      const constrainedY = Math.max(0, Math.min(newY, maxY));
+      
+      setModalPosition({ x: constrainedX, y: constrainedY });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Add global event listeners for mouse move and up
+  React.useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
+    <div 
+      className="fixed top-0 left-0 right-0 h-[90vh] z-50 flex items-start justify-end p-4 pointer-events-none"
+    >
+      {/* Backdrop only for mind map area */}
       <div 
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute top-0 left-0 right-0 h-[90vh] bg-black/20 pointer-events-auto"
         onClick={onClose}
+        style={{
+          animation: 'breathe 4s ease-in-out infinite'
+        }}
       />
       
       {/* Modal */}
-      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-4xl mx-auto shadow-2xl max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-red-400" />
-            </div>
-            <h2 className="text-xl font-semibold text-white">Problems & Solutions</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            <X className="w-5 h-5 text-gray-400" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-          <div className="space-y-6">
-            {problems.map((problem) => (
-              <div key={problem.id} className="border border-gray-700 rounded-xl p-6">
-                {/* Problem Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-white">{problem.title}</h3>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getSeverityColor(problem.severity)}`}>
-                        {problem.severity.toUpperCase()}
-                      </span>
-                    </div>
-                    <p className="text-gray-400 text-sm">{problem.description}</p>
-                    <span className="inline-block mt-2 px-3 py-1 bg-blue-500/10 text-blue-400 text-xs rounded-full border border-blue-400/30">
-                      {problem.category}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Solutions */}
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                    <Lightbulb className="w-4 h-4" />
-                    Suggested Solutions
-                  </h4>
-                  {problem.solutions.map((solution) => (
-                    <div key={solution.id} className="bg-gray-800 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <button
-                          onClick={() => toggleSolution(solution.id)}
-                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                            completedSolutions.has(solution.id)
-                              ? 'border-green-400 bg-green-400'
-                              : 'border-gray-400 hover:border-green-400'
-                          }`}
-                        >
-                          {completedSolutions.has(solution.id) && (
-                            <CheckCircle className="w-3 h-3 text-white" />
-                          )}
-                        </button>
-                        <div className="flex-1">
-                          <h5 className="text-white font-medium mb-1">{solution.title}</h5>
-                          <p className="text-gray-400 text-sm mb-2">{solution.description}</p>
-                          <div className="flex items-center gap-2">
-                            <span className="text-blue-400 text-sm font-medium">{solution.action}</span>
-                            <ArrowRight className="w-3 h-3 text-blue-400" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-6 border-t border-gray-700 bg-gray-800/50">
+      <div 
+        ref={modalRef}
+        onMouseDown={handleMouseDown}
+        className="relative bg-gray-900/95 border border-gray-700/50 rounded-2xl w-full max-w-md mx-auto shadow-2xl max-h-[45vh] overflow-hidden backdrop-blur-sm mt-16 pointer-events-auto"
+        style={{ 
+          position: 'absolute', 
+          left: modalPosition.x || '50%', 
+          top: modalPosition.y || '16px', 
+          transform: modalPosition.x ? 'none' : 'translateX(-50%)',
+          cursor: isDragging ? 'grabbing' : 'grab'
+        }}
+      >
+        {/* Problem Header with calm gradient */}
+        <div className="modal-header bg-gradient-to-r from-red-500/20 via-orange-500/20 to-yellow-500/20 p-6 border-b border-gray-700/50">
           <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-400">
-              {completedSolutions.size} solutions completed
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+              </div>
+              <h2 className="text-lg font-semibold text-white">{problems[0]?.title}</h2>
             </div>
-            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition-colors">
-              Generate New Solutions
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-gray-800/50 transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="overflow-y-auto max-h-[calc(45vh-200px)]">
+          {/* Reasoning / Explanation */}
+          <div className="p-4 border-l-2 border-blue-500/40">
+            <h3 className="text-blue-300 font-medium mb-2 text-sm">Why this problem exists</h3>
+            <div className="space-y-1">
+              {problems[0]?.reasoning.map((reason, index) => (
+                <div key={index} className="flex items-start gap-2">
+                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                  <span className="text-gray-300 text-xs">{reason}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Effect / Awareness */}
+          <div className="p-4 border-l-2 border-orange-500/40">
+            <h3 className="text-orange-300 font-medium mb-2 text-sm">How this affects you</h3>
+            <p className="text-gray-300 text-xs leading-relaxed">{problems[0]?.effect}</p>
+          </div>
+
+          {/* Solution Path */}
+          {problems[0]?.isSolvable ? (
+            <div className="p-4 border-l-2 border-green-500/40">
+              <h3 className="text-green-300 font-medium mb-2 text-sm">Additional actions you can take:</h3>
+              <div className="space-y-2">
+                {problems[0]?.solutions.map((solution) => (
+                  <div key={solution.id} className="p-3">
+                    <div className="flex-1">
+                      <h5 className="text-white font-medium mb-1 text-sm">{solution.title}</h5>
+                      <p className="text-gray-400 text-xs mb-1">{solution.description}</p>
+                      <div className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded inline-block mb-2">
+                        Why this helps: {solution.whyThisHelps}
+                      </div>
+                      <button
+                        onClick={() => turnIntoTask(solution.id)}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs rounded-lg border border-blue-500/40 hover:border-blue-400/60 transition-colors"
+                      >
+                        <Target className="w-3 h-3" />
+                        Turn into a task
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 border-l-2 border-yellow-500/40">
+              <h3 className="text-yellow-300 font-medium mb-2 text-sm">Additional actions you can take:</h3>
+              <p className="text-gray-300 text-xs mb-2">
+                This can't be solved instantly — that's okay. Focus on noticing it without stress. You can return later if needed.
+              </p>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={remindLater.has(problems[0]?.id)}
+                    onChange={() => toggleRemindLater(problems[0]?.id)}
+                    className="w-4 h-4 rounded border-gray-400"
+                  />
+                  <span className="text-gray-300 text-xs">Remind me later</span>
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Closure / Next Step */}
+        <div className="p-4">
+          <div className="flex items-center justify-center">
+            <button
+              onClick={() => toggleRemindLater(problems[0]?.id)}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 text-xs rounded-lg transition-colors"
+            >
+              <Clock className="w-4 h-4" />
+              Remind me later
             </button>
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes breathe {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 0.8; }
+        }
+      `}</style>
     </div>
   );
 };

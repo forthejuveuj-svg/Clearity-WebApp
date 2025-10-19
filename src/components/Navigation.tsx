@@ -1,17 +1,18 @@
 import { useState } from "react";
-import { Search, Star, User, CheckSquare, Zap } from "lucide-react";
+import { Search, Star, User, CheckSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ClearityLogo from "@/assets/clearity-logo.svg";
 import { SearchModal } from "./SearchModal";
 import { TaskManagerModal } from "./TaskManagerModal";
-import { ProblemsModal } from "./ProblemsModal";
 
-export const Navigation = () => {
+interface NavigationProps {
+  onLogoClick?: () => void;
+}
+
+export const Navigation = ({ onLogoClick }: NavigationProps = {}) => {
   const navigate = useNavigate();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isTaskManagerOpen, setIsTaskManagerOpen] = useState(false);
-  const [isProblemsOpen, setIsProblemsOpen] = useState(false);
-  const [problemsSolved, setProblemsSolved] = useState<Set<string>>(new Set());
   
   // Check if user is paid (simulated - in real app this would come from auth state)
   const isPaidUser = localStorage.getItem("isPaidUser") === "true";
@@ -21,9 +22,19 @@ export const Navigation = () => {
     <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex items-center justify-between">
       {/* Logo and Settings */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full shadow-lg overflow-hidden">
+        <button 
+          onClick={() => {
+            if (onLogoClick) {
+              onLogoClick();
+            } else {
+              navigate('/');
+            }
+          }}
+          className="w-10 h-10 rounded-full shadow-lg overflow-hidden hover:scale-110 transition-transform duration-300"
+          aria-label="Go to Home"
+        >
           <img src={ClearityLogo} alt="Clearity Logo" className="w-full h-full object-cover" />
-        </div>
+        </button>
         
         <button 
           onClick={() => navigate('/settings')}
@@ -39,14 +50,6 @@ export const Navigation = () => {
           aria-label="Task Manager"
         >
           <CheckSquare className="w-5 h-5 text-white/60" />
-        </button>
-        
-        <button 
-          onClick={() => setIsProblemsOpen(true)}
-          className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm transition-all duration-300 hover:scale-110 relative border-red-400 animate-border-glow"
-          aria-label="Problems"
-        >
-          <Zap className="w-5 h-5 text-white/60" />
         </button>
       </div>
 
@@ -119,12 +122,6 @@ export const Navigation = () => {
         onClose={() => setIsTaskManagerOpen(false)} 
       />
       
-      {/* Problems Modal */}
-      <ProblemsModal 
-        isOpen={isProblemsOpen} 
-        onClose={() => setIsProblemsOpen(false)}
-        onSolutionsCompleted={(count) => setProblemsSolved(new Set([`solved-${count}`]))}
-      />
     </nav>
   );
 };

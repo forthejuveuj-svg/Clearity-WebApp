@@ -50,7 +50,7 @@ export const ChatView = ({ initialMessage, onViewMap }: ChatViewProps) => {
       )}
 
       {/* Chat messages */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-6 py-8 space-y-6 max-w-4xl mx-auto w-full">
+      <div className="relative z-10 flex-1 overflow-y-auto px-4 md:px-5 lg:px-6 py-6 md:py-7 lg:py-8 space-y-4 md:space-y-5 lg:space-y-6 max-w-4xl mx-auto w-full">
         {messages.map((message, idx) => (
           <div
             key={idx}
@@ -58,7 +58,7 @@ export const ChatView = ({ initialMessage, onViewMap }: ChatViewProps) => {
             style={{ animationDelay: `${idx * 0.1}s` }}
           >
             <div
-              className={`relative max-w-[80%] px-6 py-4 rounded-2xl ${
+              className={`relative max-w-[80%] px-3 md:px-4 lg:px-6 py-2 md:py-2.5 lg:py-4 rounded-lg md:rounded-xl lg:rounded-2xl ${
                 message.role === "user"
                   ? "bg-white/10 backdrop-blur-sm text-foreground ml-auto"
                   : "bg-primary/10 backdrop-blur-sm text-foreground border border-primary/20 shadow-lg shadow-primary/5"
@@ -68,10 +68,12 @@ export const ChatView = ({ initialMessage, onViewMap }: ChatViewProps) => {
                 <TypingAnimation
                   text={message.content}
                   speed={20}
-                  className="text-base leading-relaxed whitespace-pre-line"
+                  className="text-[7px] sm:text-[10px] md:text-[8px] lg:text-base leading-relaxed whitespace-pre-line"
                 />
               ) : (
-                <p className="text-base leading-relaxed whitespace-pre-line">{message.content}</p>
+                <p className="text-[7px] sm:text-[10px] md:text-[8px] lg:text-base leading-relaxed whitespace-pre-line">
+                  {message.content}
+                </p>
               )}
               {message.role === "assistant" && (
                 <div className="absolute -left-2 top-4 w-1 h-8 bg-gradient-to-b from-primary via-secondary to-accent rounded-full animate-pulse-glow" />
@@ -97,7 +99,7 @@ export const ChatView = ({ initialMessage, onViewMap }: ChatViewProps) => {
       </div>
 
       {/* Input bar */}
-      <div className="relative z-10 px-6 pb-8 max-w-4xl mx-auto w-full">
+      <div className="relative z-10 px-4 md:px-5 lg:px-6 pb-6 md:pb-7 lg:pb-8 max-w-4xl mx-auto w-full pr-20 md:pr-20 lg:pr-6">
         <form onSubmit={handleSubmit}>
           <div className="relative group">
             <input
@@ -105,18 +107,18 @@ export const ChatView = ({ initialMessage, onViewMap }: ChatViewProps) => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Let's overthink about..."
-              className="w-full px-6 py-4 pr-24 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl 
-                         text-base text-foreground placeholder:text-muted-foreground
+              className="w-full px-4 md:px-5 lg:px-6 py-3 md:py-3 lg:py-4 pr-20 md:pr-22 lg:pr-24 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl md:rounded-2xl lg:rounded-2xl 
+                         text-sm md:text-sm lg:text-base text-foreground placeholder:text-muted-foreground
                          focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50
                          transition-all duration-300"
             />
             
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+            <div className="absolute right-2 md:right-3 lg:right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 md:gap-2 lg:gap-2">
               <button
                 type="button"
-                className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 transition-colors duration-300"
+                className="p-2 md:p-2 lg:p-2.5 rounded-lg md:rounded-xl lg:rounded-xl bg-white/5 hover:bg-white/10 transition-colors duration-300"
               >
-                <Mic className="w-4 h-4 text-muted-foreground" />
+                <Mic className="w-3 h-3 md:w-4 md:h-4 lg:w-4 lg:h-4 text-muted-foreground" />
               </button>
               
               <button

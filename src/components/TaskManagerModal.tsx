@@ -10,6 +10,7 @@ interface Task {
   completed: boolean;
   subtasks: Subtask[];
   expanded: boolean;
+  kpi: string;
 }
 
 interface Subtask {
@@ -33,6 +34,7 @@ export const TaskManagerModal = ({ isOpen, onClose }: TaskManagerModalProps) => 
       description: "Brain → Clearity UX/UI design",
       completed: false,
       expanded: true,
+      kpi: "Complete 30 minutes of focused reading",
       subtasks: [
         { id: "1-1", title: "Download the book", completed: false },
         { id: "1-2", title: "Open in your Kindle", completed: false },
@@ -48,6 +50,7 @@ export const TaskManagerModal = ({ isOpen, onClose }: TaskManagerModalProps) => 
       description: "Brain → habit building for GYM",
       completed: false,
       expanded: false,
+      kpi: "Read 20 pages and identify 3 key insights",
       subtasks: [
         { id: "2-1", title: "Download the book", completed: false },
         { id: "2-2", title: "Open in your Kindle", completed: false },
@@ -63,6 +66,7 @@ export const TaskManagerModal = ({ isOpen, onClose }: TaskManagerModalProps) => 
       description: "Startup → UX/UI course for landings",
       completed: false,
       expanded: false,
+      kpi: "Complete 1 chapter and create 5 actionable notes",
       subtasks: [
         { id: "3-1", title: "Download the book", completed: false },
         { id: "3-2", title: "Open in your Kindle", completed: false },
@@ -78,6 +82,7 @@ export const TaskManagerModal = ({ isOpen, onClose }: TaskManagerModalProps) => 
       description: "Brain → Neuroscience books",
       completed: false,
       expanded: false,
+      kpi: "Read for 25 minutes without distractions",
       subtasks: [
         { id: "4-1", title: "Download the book", completed: false },
         { id: "4-2", title: "Open in your Kindle", completed: false },
@@ -168,7 +173,11 @@ export const TaskManagerModal = ({ isOpen, onClose }: TaskManagerModalProps) => 
                     </button>
                     <div>
                       <h3 className="text-white font-medium">{task.title}</h3>
-                      <p className="text-sm text-gray-400">{task.date} {task.time} {task.description}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="text-xs text-green-400 font-medium">Success:</div>
+                        <p className="text-sm text-green-300">{task.kpi}</p>
+                      </div>
+                      <p className="text-sm text-gray-400 mt-1">{task.date} {task.time} {task.description}</p>
                     </div>
                   </div>
                   <button

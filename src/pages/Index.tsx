@@ -47,7 +47,7 @@ const Index = () => {
 
   return (
     <div className="relative">
-      <Navigation />
+      <Navigation onLogoClick={handleBack} />
       
       {currentView === "onboarding" && <OnboardingView onStart={handleStart} />}
       {currentView === "combined" && <CombinedView initialMessage={initialMessage} onBack={handleBack} />}
@@ -58,18 +58,27 @@ const Index = () => {
         pendingMessage={pendingMessage}
       />
 
-      {/* Request a Feature Button */}
-      <button
-        onClick={() => window.open('https://clearity-web-app.stackvote.app/feedback', '_blank')}
-        className="fixed bottom-4 right-6 z-50 group px-3 py-2 rounded-2xl bg-white/5 hover:bg-white/10 transition-all duration-300 hover:scale-110 flex items-center gap-2"
-        aria-label="Request a Feature"
-      >
-        <Plus className="w-4 h-4 text-white/60" />
-        <span className="text-white/60 text-sm font-medium">Feature</span>
-        <span className="absolute right-full mr-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
-          Request a Feature
-        </span>
-      </button>
+      {/* Request a Feature Button - only show in combined view */}
+      {currentView === "combined" && (
+        <button
+          onClick={() => window.open('https://clearity-web-app.stackvote.app/feedback', '_blank')}
+          className="fixed bottom-4 right-6 xl:right-6 z-50 group px-3 py-2 rounded-2xl bg-white/5 hover:bg-white/10 transition-all duration-300 hover:scale-110 flex items-center gap-2"
+          style={{
+            bottom: window.innerWidth < 850 ? '4.5rem' : '1rem',
+            right: window.innerWidth < 850 ? '1rem' : '1.5rem',
+            padding: window.innerWidth < 850 ? '0.5rem' : '0.75rem 0.5rem'
+          }}
+          aria-label="Request a Feature"
+        >
+          <Plus className="w-4 h-4 text-white/60" />
+          {window.innerWidth >= 850 && (
+            <span className="text-white/60 text-sm font-medium">Feature</span>
+          )}
+          <span className="absolute right-full mr-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none">
+            Request a Feature
+          </span>
+        </button>
+      )}
     </div>
   );
 };
