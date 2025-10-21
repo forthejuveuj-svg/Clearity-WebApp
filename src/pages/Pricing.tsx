@@ -1,4 +1,4 @@
-import { Check, Star, Crown, Zap, ArrowLeft } from "lucide-react";
+import { Check, Star, Crown, Zap, ArrowLeft, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 
@@ -7,6 +7,16 @@ const Pricing = () => {
   const isPaidUser = localStorage.getItem("isPaidUser") === "true";
   const selectedPlan = localStorage.getItem("selectedPlan") || "Monthly";
   const [selectedTab, setSelectedTab] = useState<"monthly" | "annually">("monthly");
+  const [isDiscountFormOpen, setIsDiscountFormOpen] = useState(false);
+  const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
+  const [discountForm, setDiscountForm] = useState({
+    subscription: "monthly",
+    willingToPay: "",
+    reason: "",
+    location: "",
+    workStudy: "",
+    whatsapp: ""
+  });
 
   const subscriptionPlans = {
     monthly: {
@@ -53,6 +63,36 @@ const Pricing = () => {
       "VIP support"
     ],
     description: "Only 20 slots available"
+  };
+
+  const getPriceForSubscription = (subscription: string) => {
+    if (subscription === "monthly") return "$9.99";
+    if (subscription === "annually") return "$99";
+    if (subscription === "founding") return "$149";
+    return "";
+  };
+
+  const getPlaceholderForSubscription = (subscription: string) => {
+    if (subscription === "monthly") return "e.g. $7";
+    if (subscription === "annually") return "e.g. $70";
+    if (subscription === "founding") return "e.g. $120";
+    return "e.g. $7";
+  };
+
+  const handleDiscountFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("Discount request submitted:", discountForm);
+    // Here you would typically send this to your backend
+    setIsDiscountFormOpen(false);
+    setIsConfirmationModalOpen(true);
+    setDiscountForm({
+      subscription: "monthly",
+      willingToPay: "",
+      reason: "",
+      location: "",
+      workStudy: "",
+      whatsapp: ""
+    });
   };
 
   return (
@@ -228,8 +268,195 @@ const Pricing = () => {
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Footer - Discount Request Link */}
+        <div className="text-center mt-12 mb-8">
+          <button
+            onClick={() => setIsDiscountFormOpen(true)}
+            className="text-white/50 hover:text-white/80 text-sm underline transition-all duration-300"
+          >
+            Can't afford the full price?
+          </button>
+        </div>
       </div>
+
+      {/* Discount Request Modal */}
+      {isDiscountFormOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="sticky top-0 bg-gray-900 border-b border-white/10 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-white">Request a Discount</h2>
+              <button
+                onClick={() => setIsDiscountFormOpen(false)}
+                className="text-white/50 hover:text-white transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleDiscountFormSubmit} className="p-6 space-y-6">
+              {/* Subscription Choice */}
+              <div>
+                <label className="block text-white text-sm font-medium mb-2">
+                  Which subscription do you want to choose?
+                </label>
+                <select
+                  value={discountForm.subscription}
+                  onChange={(e) => setDiscountForm({ ...discountForm, subscription: e.target.value })}
+                  className="w-full bg-gray-800 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  required
+                >
+                  <option value="monthly">Monthly - $9.99/month</option>
+                  <option value="annually">Annually - $99/year</option>
+                  <option value="founding">Founding Membership - $149 lifetime</option>
+                </select>
+              </div>
+
+              {/* Willing to Pay */}
+              <div>
+                <label className="block text-white text-sm font-medium mb-2">
+                  How much are you willing to pay?
+                  <span className="text-white/50 ml-2">
+                    (Original price: {getPriceForSubscription(discountForm.subscription)})
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  value={discountForm.willingToPay}
+                  onChange={(e) => setDiscountForm({ ...discountForm, willingToPay: e.target.value })}
+                  placeholder={getPlaceholderForSubscription(discountForm.subscription)}
+                  className="w-full bg-gray-800 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500 transition-colors"
+                  required
+                />
+              </div>
+
+              {/* Reason */}
+              <div>
+                <label className="block text-white text-sm font-medium mb-2">
+                  Why should we give a discount specifically for you?
+                </label>
+                <textarea
+                  value={discountForm.reason}
+                  onChange={(e) => setDiscountForm({ ...discountForm, reason: e.target.value })}
+                  placeholder="Tell us your story..."
+                  rows={4}
+                  className="w-full bg-gray-800 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500 transition-colors resize-none"
+                  required
+                />
+              </div>
+
+              {/* Location */}
+              <div>
+                <label className="block text-white text-sm font-medium mb-2">
+                  Where do you live now?
+                </label>
+                <input
+                  type="text"
+                  value={discountForm.location}
+                  onChange={(e) => setDiscountForm({ ...discountForm, location: e.target.value })}
+                  placeholder="City, Country"
+                  className="w-full bg-gray-800 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500 transition-colors"
+                  required
+                />
+              </div>
+
+              {/* Work/Study */}
+              <div>
+                <label className="block text-white text-sm font-medium mb-2">
+                  Where do you work/study?
+                </label>
+                <input
+                  type="text"
+                  value={discountForm.workStudy}
+                  onChange={(e) => setDiscountForm({ ...discountForm, workStudy: e.target.value })}
+                  placeholder="Company or University name"
+                  className="w-full bg-gray-800 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500 transition-colors"
+                  required
+                />
+              </div>
+
+              {/* WhatsApp */}
+              <div>
+                <label className="block text-white text-sm font-medium mb-2">
+                  WhatsApp number
+                </label>
+                <input
+                  type="tel"
+                  value={discountForm.whatsapp}
+                  onChange={(e) => setDiscountForm({ ...discountForm, whatsapp: e.target.value })}
+                  placeholder="+1 234 567 8900"
+                  className="w-full bg-gray-800 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:border-blue-500 transition-colors"
+                  required
+                />
+              </div>
+
+              {/* Submit Button */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsDiscountFormOpen(false)}
+                  className="flex-1 py-3 rounded-xl font-medium text-base bg-gray-800 hover:bg-gray-700 text-white border border-white/10 transition-all duration-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 rounded-xl font-medium text-base bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white shadow-lg shadow-blue-500/20 transition-all duration-300"
+                >
+                  Request a discount
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {isConfirmationModalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 border border-white/20 rounded-3xl max-w-md w-full p-8 shadow-2xl shadow-purple-500/10 animate-in zoom-in-95 duration-300">
+            {/* Success Icon */}
+            <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-green-500/30">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-2xl font-bold text-white mb-6 text-center bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+              We will consider your request within 24 hours
+            </h3>
+
+            {/* Message */}
+            <div className="space-y-3 mb-6">
+              
+              {/* Calendly CTA */}
+              <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl p-4 mt-4">
+                <p className="text-white/70 text-sm text-center mb-2">
+                  💡 <span className="font-medium text-white">Increase your chances</span>
+                </p>
+                <a
+                  href="https://calendly.com/forthejuveuj/30min"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-center text-blue-400 hover:text-blue-300 font-medium transition-colors underline underline-offset-2"
+                >
+                  Talk to a founder →
+                </a>
+              </div>
+            </div>
+
+            {/* OK Button */}
+            <button
+              onClick={() => setIsConfirmationModalOpen(false)}
+              className="w-full py-3 rounded-xl font-medium text-base bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 transition-all duration-300 hover:scale-[1.02]"
+            >
+              Got it!
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

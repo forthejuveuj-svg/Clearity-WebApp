@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { Mic, ArrowUp, MessageSquare, AlertTriangle, X, Check } from "lucide-react";
+import { Mic, ArrowUp, MessageSquare, AlertTriangle, X, Check, Reply } from "lucide-react";
 import { TypingAnimation } from "./TypingAnimation";
 import { ProblemsModal } from "./ProblemsModal";
+import { TaskManagerModal } from "./TaskManagerModal";
 
 interface Message {
   role: "user" | "assistant";
@@ -25,12 +26,14 @@ interface Node {
 interface CombinedViewProps {
   initialMessage: string;
   onBack: () => void;
+  onToggleView?: (toggleFn: () => void) => void;
+  onNavigateToChat?: (navigateFn: (task: any) => void) => void;
+  onViewChange?: (view: 'mindmap' | 'tasks') => void;
 }
 
-export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "user", content: initialMessage }
-  ]);
+export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateToChat: onNavigateToChatProp, onViewChange }: CombinedViewProps) => {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [hasInitialized, setHasInitialized] = useState(false);
   const [input, setInput] = useState("");
   const [isBuilding, setIsBuilding] = useState(true);
   const [buildProgress, setBuildProgress] = useState(0);
@@ -44,27 +47,8 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
   const [dragOffset, setDragOffset] = useState(0); // Raw drag distance for smooth interpolation (-300 to 300)
   const [typingMessages, setTypingMessages] = useState<Set<number>>(new Set());
   const [isProblemsOpen, setIsProblemsOpen] = useState(false);
-  const [accumulatedTasks, setAccumulatedTasks] = useState<string[]>([]);
-  const [isAccumulatedTasksOpen, setIsAccumulatedTasksOpen] = useState(false);
-
-  // Function to add a task to accumulated tasks
-  const addToAccumulatedTasks = (task: string) => {
-    setAccumulatedTasks(prev => [...prev, task]);
-  };
-
-  // Add some sample tasks for demonstration
-  useEffect(() => {
-    // Add sample tasks after a delay to simulate user interaction
-    const timer = setTimeout(() => {
-      setAccumulatedTasks([
-        "Read neuroscience book for 30 minutes",
-        "Take 3 deep breaths",
-        "Write down 3 key insights from today's session"
-      ]);
-    }, 3000);
-    
-    return () => clearTimeout(timer);
-  }, []);
+  const [currentView, setCurrentView] = useState<'mindmap' | 'tasks'>('mindmap');
+  const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
 
   // Mind map states for different history positions
   const mindMapStates: { [key: number]: Node[] } = {
@@ -135,16 +119,49 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
     { from: "brain", to: "design" },
   ];
 
-  // Auto-reply and mind map building
+  // Handle initial message and responses
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Add AI response
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: "Perfect — this is exactly the right mindset.\n\nIf you want to design Reload around how the brain actually works, you need to understand how people think, remember, and focus — not just surface UX rules.\n\nHere's a focused roadmap of the brain topics that are most relevant for UX/UI, especially for your \"digital brain\" platform..."
-      }]);
-    }, 1000);
+    if (!hasInitialized) {
+      // Initialize even if initialMessage is empty
+      if (initialMessage) {
+        setMessages([{ role: "user", content: initialMessage }]);
+      }
+      setHasInitialized(true);
+      
+      // Add AI response after delay only if we have a message
+      if (initialMessage) {
+        const timer = setTimeout(() => {
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: "Perfect — this is exactly the right mindset.\n\nIf you want to design Reload around how the brain actually works, you need to understand how people think, remember, and focus — not just surface UX rules.\n\nHere's a focused roadmap of the brain topics that are most relevant for UX/UI, especially for your \"digital brain\" platform..."
+          }]);
+        }, 1000);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [initialMessage, hasInitialized]);
 
+  // Handle new messages when initialMessage changes (e.g., from task manager)
+  useEffect(() => {
+    if (initialMessage && hasInitialized && messages.length > 0 && messages[messages.length - 1].content !== initialMessage) {
+      // Add new user message
+      setMessages(prev => [...prev, { role: "user", content: initialMessage }]);
+      
+      // Add AI response after delay
+      const timer = setTimeout(() => {
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
+        }]);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [initialMessage]);
+
+  // Auto-build mind map
+  useEffect(() => {
     // Start building mind map slowly
     const buildTimer = setInterval(() => {
       setBuildProgress(prev => {
@@ -170,7 +187,6 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
     }, 800);
 
     return () => {
-      clearTimeout(timer);
       clearInterval(buildTimer);
       clearInterval(nodeTimer);
     };
@@ -200,6 +216,55 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
       }, 1000);
     }
   };
+
+  const handleNavigateToChat = (task: any) => {
+    // Switch to mindmap view
+    setCurrentView('mindmap');
+    
+    // Add task message to chat
+    setMessages(prev => [...prev, { role: "user", content: `Let's discuss "${task.title}". What would you like to know or work on?` }]);
+    
+    // Add AI response after delay
+    setTimeout(() => {
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
+      }]);
+    }, 1000);
+  };
+
+  const toggleView = () => {
+    setCurrentView(prev => prev === 'mindmap' ? 'tasks' : 'mindmap');
+  };
+
+  // Notify parent when view changes
+  useEffect(() => {
+    if (onViewChange) {
+      onViewChange(currentView);
+    }
+  }, [currentView, onViewChange]);
+
+  const handleReplyToTask = (task: any) => {
+    setReplyingToTask({ title: task.title });
+    setIsInputExpanded(true);
+  };
+
+  const handleCancelReply = () => {
+    setReplyingToTask(null);
+    if (!input) {
+      setIsInputExpanded(false);
+    }
+  };
+
+  // Pass functions to parent component
+  useEffect(() => {
+    if (onToggleView) {
+      onToggleView(toggleView);
+    }
+    if (onNavigateToChatProp) {
+      onNavigateToChatProp(handleNavigateToChat);
+    }
+  }, []);
 
   // Handle mouse events for dragging the divider
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -396,13 +461,25 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
     return `scale(${Math.max(scaleFactor * 0.9, 0.3)})`;
   };
 
+  const getTaskManagerScale = () => {
+    // Adjusted scaling logic for task manager - less aggressive scaling
+    const baseHeight = 60;
+    const effectiveHeight = Math.min(mapHeight, 60);
+    const scaleFactor = effectiveHeight / baseHeight;
+    // Scale between 0.6 (minimum) and 1.0 (maximum)
+    return Math.max(scaleFactor, 0.6);
+  };
+
   return (
     <div className="h-screen w-screen flex flex-col relative overflow-hidden bg-gradient-to-br from-black via-slate-900 to-black fixed inset-0">
-        {/* Mind Map Section */}
+        {/* Mind Map or Task Manager Section */}
         <div 
           className="relative overflow-hidden"
           style={{ height: `${mapHeight}vh` }}
         >
+        {currentView === 'mindmap' ? (
+          // Mind Map View
+          <>
         {/* Background particles */}
         <div className="absolute inset-0 opacity-20">
           {[...Array(15)].map((_, i) => (
@@ -595,17 +672,17 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
           </div>
         )}
 
-        {/* Accumulated Tasks Button */}
-        {accumulatedTasks.length > 0 && (
-          <div className="absolute bottom-3 md:bottom-4 lg:bottom-4 left-3 md:left-4 lg:left-4">
-            <button
-              onClick={() => setIsAccumulatedTasksOpen(true)}
-              className="flex items-center gap-1 md:gap-2 lg:gap-2 px-2 md:px-3 lg:px-3 py-1.5 md:py-2 lg:py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs md:text-sm lg:text-sm rounded-md md:rounded-lg lg:rounded-lg border border-blue-500/40 hover:border-blue-400/60 transition-colors"
-            >
-              <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-              Tasks ({accumulatedTasks.length})
-            </button>
-          </div>
+      </>
+        ) : (
+          // Task Manager View
+          <TaskManagerModal
+            isOpen={true}
+            onClose={() => {}}
+            onNavigateToChat={handleNavigateToChat}
+            isFullScreen={true}
+            scale={getTaskManagerScale()}
+            onReplyToTask={handleReplyToTask}
+          />
         )}
       </div>
 
@@ -693,6 +770,21 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
             )}
             <form onSubmit={handleSubmit} className="pointer-events-auto max-w-4xl mx-auto relative z-10 flex justify-end">
               <div className="relative group transition-all duration-300" style={{ width: isInputExpanded ? '100%' : '64px' }}>
+                {/* Replying to indicator - only show when expanded */}
+                {replyingToTask && isInputExpanded && (
+                  <div className="absolute -top-12 left-0 right-0 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                    <Reply className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                    <span className="text-sm text-blue-300 flex-1 truncate">Replying to: <strong>{replyingToTask.title}</strong></span>
+                    <button
+                      type="button"
+                      onClick={handleCancelReply}
+                      className="p-0.5 hover:bg-blue-500/20 rounded transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5 text-blue-400" />
+                    </button>
+                  </div>
+                )}
+                
                 {/* Icon when collapsed */}
                 {!isInputExpanded && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -744,58 +836,6 @@ export const CombinedView = ({ initialMessage, onBack }: CombinedViewProps) => {
         isOpen={isProblemsOpen} 
         onClose={() => setIsProblemsOpen(false)} 
       />
-
-      {/* Accumulated Tasks Modal */}
-      {isAccumulatedTasksOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setIsAccumulatedTasksOpen(false)}
-          />
-          
-          <div className="relative bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md mx-auto shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-gray-700">
-              <h3 className="text-white font-medium">Accumulated Tasks</h3>
-              <button
-                onClick={() => setIsAccumulatedTasksOpen(false)}
-                className="p-1 rounded-lg hover:bg-gray-800 transition-colors"
-              >
-                <X className="w-4 h-4 text-gray-400" />
-              </button>
-            </div>
-            
-            <div className="p-4 space-y-3">
-              {accumulatedTasks.map((task, index) => (
-                <div key={index} className="flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      setAccumulatedTasks(prev => prev.filter((_, i) => i !== index));
-                    }}
-                    className="w-5 h-5 rounded-full border-2 border-gray-400 hover:border-red-400 transition-colors flex items-center justify-center"
-                  >
-                    <X className="w-3 h-3 text-gray-400" />
-                  </button>
-                  <span className="text-white text-sm flex-1">{task}</span>
-                </div>
-              ))}
-            </div>
-            
-            <div className="p-4 border-t border-gray-700">
-              <button
-                onClick={() => {
-                  // Convert accumulated tasks to actual tasks
-                  console.log('Converting tasks:', accumulatedTasks);
-                  setAccumulatedTasks([]);
-                  setIsAccumulatedTasksOpen(false);
-                }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-medium transition-colors"
-              >
-                Add to Tasks
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

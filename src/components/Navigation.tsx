@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Star, User, CheckSquare } from "lucide-react";
+import { Search, Star, User, CheckSquare, Network } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ClearityLogo from "@/assets/clearity-logo.svg";
 import { SearchModal } from "./SearchModal";
@@ -7,9 +7,12 @@ import { TaskManagerModal } from "./TaskManagerModal";
 
 interface NavigationProps {
   onLogoClick?: () => void;
+  onNavigateToChat?: (task: any) => void;
+  onToggleView?: () => void;
+  currentView?: 'mindmap' | 'tasks';
 }
 
-export const Navigation = ({ onLogoClick }: NavigationProps = {}) => {
+export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, currentView = 'mindmap' }: NavigationProps = {}) => {
   const navigate = useNavigate();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isTaskManagerOpen, setIsTaskManagerOpen] = useState(false);
@@ -45,11 +48,21 @@ export const Navigation = ({ onLogoClick }: NavigationProps = {}) => {
         </button>
         
         <button 
-          onClick={() => setIsTaskManagerOpen(true)}
+          onClick={() => {
+            if (onToggleView) {
+              onToggleView();
+            } else {
+              setIsTaskManagerOpen(true);
+            }
+          }}
           className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:scale-110"
-          aria-label="Task Manager"
+          aria-label={currentView === 'tasks' ? 'Mind Map' : 'Task Manager'}
         >
-          <CheckSquare className="w-5 h-5 text-white/60" />
+          {currentView === 'tasks' ? (
+            <Network className="w-5 h-5 text-white/60" />
+          ) : (
+            <CheckSquare className="w-5 h-5 text-white/60" />
+          )}
         </button>
       </div>
 
@@ -119,7 +132,8 @@ export const Navigation = ({ onLogoClick }: NavigationProps = {}) => {
       {/* Task Manager Modal */}
       <TaskManagerModal 
         isOpen={isTaskManagerOpen} 
-        onClose={() => setIsTaskManagerOpen(false)} 
+        onClose={() => setIsTaskManagerOpen(false)}
+        onNavigateToChat={onNavigateToChat}
       />
       
     </nav>
