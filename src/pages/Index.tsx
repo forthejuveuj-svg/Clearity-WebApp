@@ -57,6 +57,17 @@ const Index = () => {
     setCurrentView("onboarding");
   };
 
+  const handleShowAuthFromOnboarding = () => {
+    setShowAuthModal(true);
+  };
+
+  const handleOpenTaskManagerFromOnboarding = () => {
+    // Navigate to combined view with task manager open
+    setCurrentView("combined");
+    setCombinedViewState('tasks');
+    setInitialMessage(""); // Empty message since going directly to task manager
+  };
+
   const toggleViewRef = React.useRef<(() => void) | null>(null);
   const navigateToChatRef = React.useRef<((task: any) => void) | null>(null);
   const [combinedViewState, setCombinedViewState] = useState<'mindmap' | 'tasks'>('mindmap');
@@ -150,11 +161,18 @@ const Index = () => {
       <Navigation 
         onLogoClick={handleBack} 
         onNavigateToChat={handleTaskNavigateToChat}
-        onToggleView={handleToggleView}
-        currentView={currentView === 'combined' ? combinedViewState : undefined}
+        onToggleView={currentView === 'combined' ? handleToggleView : undefined}
+        currentView={currentView === 'combined' ? combinedViewState : 'mindmap'}
+        onOpenTaskManager={currentView === 'onboarding' ? handleOpenTaskManagerFromOnboarding : undefined}
+        onShowAuth={currentView === 'onboarding' ? handleShowAuthFromOnboarding : undefined}
       />
       
-      {currentView === "onboarding" && <OnboardingView onStart={handleStart} />}
+      {currentView === "onboarding" && (
+        <OnboardingView 
+          onStart={handleStart} 
+          onShowAuth={handleShowAuthFromOnboarding}
+        />
+      )}
       {currentView === "combined" && (
         <CombinedView 
           initialMessage={initialMessage} 
@@ -162,6 +180,7 @@ const Index = () => {
           onToggleView={registerToggleView}
           onNavigateToChat={registerNavigateToChat}
           onViewChange={setCombinedViewState}
+          initialView={combinedViewState}
         />
       )}
       

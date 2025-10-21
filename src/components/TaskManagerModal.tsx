@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { X, ChevronLeft, ChevronRight, Expand, Calendar, CheckCircle, ChevronDown, ChevronRight as ChevronRightIcon, Info, MessageCircle, Trash2, Reply } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { X, ChevronLeft, ChevronRight, Expand, Calendar, CheckCircle, ChevronDown, ChevronRight as ChevronRightIcon, Info, MessageCircle, Trash2, Reply, Archive } from "lucide-react";
 
 interface Task {
   id: string;
@@ -46,6 +46,63 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
     fromHour: number; 
     fromStartMinute: number;
   } | null>(null);
+  const [showUnfinishedTasks, setShowUnfinishedTasks] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<{ id: string; source: 'today' | 'unfinished' } | null>(null);
+  const [dontAskAgain, setDontAskAgain] = useState(() => {
+    return localStorage.getItem('dontAskDeleteConfirmation') === 'true';
+  });
+  
+  // Archived tasks - tasks from past days not moved to schedule
+  const [archivedTasks, setArchivedTasks] = useState<Task[]>([
+    {
+      id: "arch-1",
+      title: "Review project proposal",
+      date: "18/10",
+      time: "2:00pm",
+      description: "Startup → Review and refine",
+      completed: false,
+      expanded: false,
+      kpi: "Complete review and provide 5 actionable feedbacks",
+      duration: 45,
+      subtasks: [
+        { id: "arch-1-1", title: "Read proposal", completed: false },
+        { id: "arch-1-2", title: "Note improvements", completed: false },
+        { id: "arch-1-3", title: "Send feedback", completed: false }
+      ]
+    },
+    {
+      id: "arch-2",
+      title: "Update portfolio website",
+      date: "17/10",
+      time: "10:30am",
+      description: "Design → Portfolio updates",
+      completed: false,
+      expanded: false,
+      kpi: "Add 3 new projects to portfolio",
+      duration: 90,
+      subtasks: [
+        { id: "arch-2-1", title: "Select projects", completed: false },
+        { id: "arch-2-2", title: "Write descriptions", completed: false },
+        { id: "arch-2-3", title: "Upload images", completed: false }
+      ]
+    },
+    {
+      id: "arch-3",
+      title: "Plan marketing strategy",
+      date: "16/10",
+      time: "9:00am",
+      description: "Business → Marketing plan",
+      completed: false,
+      expanded: false,
+      kpi: "Create 1-month content calendar",
+      duration: 60,
+      subtasks: [
+        { id: "arch-3-1", title: "Research competitors", completed: false },
+        { id: "arch-3-2", title: "Define target audience", completed: false },
+        { id: "arch-3-3", title: "Create content ideas", completed: false }
+      ]
+    }
+  ]);
 
   const openChat = (task: Task) => {
     if (onReplyToTask) {
@@ -67,8 +124,31 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
     }
   };
 
-  const deleteTask = (taskId: string) => {
-    setTasks(prev => prev.filter(task => task.id !== taskId));
+  const deleteTask = (taskId: string, source: 'today' | 'unfinished') => {
+    if (dontAskAgain) {
+      // Delete immediately without confirmation
+      confirmDeleteTask(taskId, source);
+    } else {
+      // Show confirmation modal
+      setTaskToDelete({ id: taskId, source });
+    }
+  };
+
+  const confirmDeleteTask = (taskId: string, source: 'today' | 'unfinished') => {
+    if (source === 'unfinished') {
+      setArchivedTasks(prev => prev.filter(task => task.id !== taskId));
+    } else {
+      setTasks(prev => prev.filter(task => task.id !== taskId));
+    }
+    setTaskToDelete(null);
+  };
+
+  const handleDontAskAgain = () => {
+    localStorage.setItem('dontAskDeleteConfirmation', 'true');
+    setDontAskAgain(true);
+    if (taskToDelete) {
+      confirmDeleteTask(taskToDelete.id, taskToDelete.source);
+    }
   };
 
   const sendMessage = () => {
@@ -96,7 +176,7 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
     }, 1000);
   };
   const [scheduledTasks, setScheduledTasks] = useState<{ 
-    [key: string]: { task: Task; duration: number; startMinute: number }[] 
+    [key: string]: { task: Task; duration: number; startMinute: number; sourceList?: 'unfinished' | 'today' }[] 
   }>({});
   const [tasks, setTasks] = useState<Task[]>([
     {
@@ -215,11 +295,11 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
       });
     }
 
-    // Update scheduled tasks with the same task ID
+    // Update scheduledTasks if the task is in the schedule
     setScheduledTasks(prev => {
-      const newScheduledTasks = { ...prev };
-      Object.keys(newScheduledTasks).forEach(hour => {
-        newScheduledTasks[hour] = newScheduledTasks[hour].map(item => {
+      const updated = { ...prev };
+      Object.keys(updated).forEach(hour => {
+        updated[hour] = updated[hour].map(item => {
           if (item.task.id === taskId) {
             const updatedSubtasks = item.task.subtasks.map(subtask =>
               subtask.id === subtaskId 
@@ -239,7 +319,7 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
           return item;
         });
       });
-      return newScheduledTasks;
+      return updated;
     });
   };
 
@@ -305,16 +385,27 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
         return; // Silently prevent drop
       }
       
-      // Add to schedule
+      // Add to schedule with source tracking
+      const taskWithSource = { 
+        task: draggedTask, 
+        duration: taskDuration, 
+        startMinute,
+        sourceList: showUnfinishedTasks ? 'unfinished' : 'today' as 'unfinished' | 'today'
+      };
+      
       setScheduledTasks(prev => ({
         ...prev,
         [key]: prev[key] 
-          ? [...prev[key], { task: draggedTask, duration: taskDuration, startMinute }] 
-          : [{ task: draggedTask, duration: taskDuration, startMinute }]
+          ? [...prev[key], taskWithSource] 
+          : [taskWithSource]
       }));
       
-      // Remove from task list
-      setTasks(prev => prev.filter(task => task.id !== draggedTask.id));
+      // Remove from task list or archived tasks
+      if (showUnfinishedTasks) {
+        setArchivedTasks(prev => prev.filter(task => task.id !== draggedTask.id));
+      } else {
+        setTasks(prev => prev.filter(task => task.id !== draggedTask.id));
+      }
       
       setDraggedTask(null);
     } else if (draggedScheduledTask) {
@@ -371,9 +462,13 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
       [key]: prev[key].filter(item => item.task.id !== taskId)
     }));
     
-    // Add back to task list
+    // Add back to the correct list based on source
     if (taskToRemove) {
-      setTasks(prev => [...prev, taskToRemove.task]);
+      if (taskToRemove.sourceList === 'unfinished') {
+        setArchivedTasks(prev => [...prev, taskToRemove.task]);
+      } else {
+        setTasks(prev => [...prev, taskToRemove.task]);
+      }
     }
   };
 
@@ -466,7 +561,7 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
     return tasks;
   };
 
-  const displayedTasks = getTasksForDay(selectedTaskManagerDay);
+  const displayedTasks = showUnfinishedTasks ? archivedTasks : getTasksForDay(selectedTaskManagerDay);
   
   // Get scheduled tasks for selected day
   const getScheduleForDay = (selectedDay: Date) => {
@@ -478,20 +573,53 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
 
   const scheduleScrollRef = useRef<HTMLDivElement>(null);
 
-  // Calculate productivity percentage
+  // Calculate productivity percentage - always recalculate to ensure it updates
   const calculateProductivity = () => {
     const selectedDate = selectedScheduleDay.toISOString().split('T')[0];
-    const scheduledTasksForDay = Object.values(scheduledTasks).flat().filter(item => {
+    
+    // Get all scheduled tasks (flatten the object)
+    const allScheduledTasks = Object.values(scheduledTasks).flat();
+    
+    // Get scheduled tasks for the day
+    const scheduledTasksForDay = allScheduledTasks.filter(item => {
       const taskDate = new Date(item.task.date.split('/').reverse().join('-'));
       return taskDate.toISOString().split('T')[0] === selectedDate;
     });
     
-    const totalScheduledMinutes = scheduledTasksForDay.reduce((sum, item) => sum + item.duration, 0);
-    const targetMinutes = targetHours * 60;
-    const productivity = Math.min(100, (totalScheduledMinutes / targetMinutes) * 100);
+    // Calculate total minutes from completed scheduled tasks only
+    const completedMinutes = scheduledTasksForDay
+      .filter(item => item.task.completed)
+      .reduce((sum, item) => sum + item.duration, 0);
     
-    return Math.round(productivity);
+    const targetMinutes = targetHours * 60;
+    const productivityValue = Math.min(100, (completedMinutes / targetMinutes) * 100);
+    
+    // Debug logging
+    console.log('Productivity Debug:', {
+      selectedDate,
+      allScheduledTasks: allScheduledTasks.length,
+      scheduledTasksForDay: scheduledTasksForDay.length,
+      completedTasks: scheduledTasksForDay.filter(item => item.task.completed).length,
+      completedMinutes,
+      targetMinutes,
+      productivity: Math.round(productivityValue),
+      scheduledTasksKeys: Object.keys(scheduledTasks),
+      sampleTask: scheduledTasksForDay[0] ? {
+        id: scheduledTasksForDay[0].task.id,
+        completed: scheduledTasksForDay[0].task.completed,
+        duration: scheduledTasksForDay[0].duration
+      } : null
+    });
+    
+    return Math.round(productivityValue);
   };
+
+  const productivity = calculateProductivity();
+
+  // Force re-render when scheduledTasks changes
+  useEffect(() => {
+    console.log('ScheduledTasks changed:', scheduledTasks);
+  }, [scheduledTasks]);
 
   // Scroll to 9 AM when modal opens
   useEffect(() => {
@@ -515,13 +643,15 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
       
       {/* Modal/Full Screen Content */}
       <div 
-        className={`relative ${isFullScreen ? 'h-full w-full bg-transparent pt-2' : 'bg-gray-900 border border-gray-700 rounded-2xl max-w-6xl mx-auto shadow-2xl max-h-[90vh]'} flex flex-col transition-transform duration-300 ease-out`}
-        style={isFullScreen ? { transform: `scale(${scale})`, transformOrigin: 'top center' } : {}}
+        className={`relative ${isFullScreen ? 'h-full w-full bg-transparent pt-2' : 'bg-gray-900 border border-gray-700 rounded-2xl max-w-6xl mx-auto shadow-2xl max-h-[90vh]'} flex flex-col`}
+        style={isFullScreen ? { 
+          backgroundColor: 'transparent'
+        } : {}}
       >
         {/* How it Works Banner - Top */}
         <div className="px-6 py-4 text-center">
           <p className="text-base text-blue-300 font-medium">
-            💡 <strong>How it works:</strong> Drag tasks from "All Tasks" to the schedule to start acting on them and track your productivity!
+            Drag tasks from the left side to the right side to start working on them
           </p>
         </div>
         
@@ -539,107 +669,94 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
         <div className="flex flex-1 overflow-hidden">
           {/* Left Side - Tasks List */}
           <div className="flex-1 flex flex-col overflow-hidden border-r border-gray-700">
-            {/* Task Manager Header with Mini Calendar */}
-            <div className="border-b border-gray-700 px-4 py-3">
-              <h3 className="text-white text-lg font-semibold mb-2">All Tasks</h3>
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setTaskManagerWeekOffset(prev => prev - 1)}
-                  className="p-1 rounded hover:bg-gray-800 transition-colors"
+            {/* Task Manager Header with Toggle */}
+            <div className="border-b border-gray-700 px-4 py-2.5">
+              <div className="flex items-center justify-center gap-1.5">
+                <button
+                  onClick={() => setShowUnfinishedTasks(false)}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
+                    !showUnfinishedTasks
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                  }`}
                 >
-                  <ChevronLeft className="w-3 h-3 text-gray-400" />
+                  Today
+                  <span className="text-[10px] bg-white/20 px-1 py-0.5 rounded-full">{tasks.length}</span>
                 </button>
-                <div className="flex gap-1">
-                  {taskManagerWeekData.map((dayData, index) => {
-                    const isSelected = selectedTaskManagerDay.getDate() === dayData.date && 
-                                      selectedTaskManagerDay.getMonth() === dayData.month &&
-                                      selectedTaskManagerDay.getFullYear() === dayData.year;
-                    return (
-                      <button
-                        key={index}
-                        onClick={() => setSelectedTaskManagerDay(new Date(dayData.year, dayData.month, dayData.date))}
-                        className={`flex flex-col items-center px-2 py-1 rounded text-[9px] transition-all ${
-                          isSelected
-                            ? 'bg-blue-600 text-white'
-                            : dayData.isToday
-                            ? 'bg-blue-600/50 text-white'
-                            : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-                        }`}
-                      >
-                        <span className="font-medium mb-0.5">{dayData.day}</span>
-                        <span className="text-[10px] font-semibold">{dayData.date}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <button 
-                  onClick={() => setTaskManagerWeekOffset(prev => prev + 1)}
-                  className="p-1 rounded hover:bg-gray-800 transition-colors"
+                <button
+                  onClick={() => setShowUnfinishedTasks(true)}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
+                    showUnfinishedTasks
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                  }`}
                 >
-                  <ChevronRight className="w-3 h-3 text-gray-400" />
+                  <Archive className="w-3 h-3" />
+                  Unfinished
+                  <span className="text-[10px] bg-white/20 px-1 py-0.5 rounded-full">{archivedTasks.length}</span>
                 </button>
               </div>
             </div>
 
             <div className="p-4 overflow-y-auto">
               <p className="text-xs text-blue-400 mb-3 font-medium">Drag tasks to the calendar →</p>
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {displayedTasks.map((task) => (
                   <div 
                     key={task.id} 
                     draggable
                     onDragStart={(e) => handleDragStart(e, task)}
-                    className="border border-gray-700 rounded-md p-2 cursor-grab active:cursor-grabbing hover:border-blue-500/50 hover:bg-gray-800/30 transition-all group relative"
+                    className="border border-gray-700 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-blue-500/50 hover:bg-gray-800/30 transition-all group relative"
                   >
                     {/* Main Task */}
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
                         <button
                           onClick={() => toggleTask(task.id)}
-                          className={`w-3.5 h-3.5 rounded-full border-2 transition-colors flex items-center justify-center flex-shrink-0 ${
+                          className={`w-4 h-4 rounded-full border-2 transition-colors flex items-center justify-center flex-shrink-0 ${
                             task.completed 
                               ? 'border-green-400 bg-green-500' 
                               : 'border-gray-400 hover:border-blue-400'
                           }`}
                         >
-                          {task.completed && <CheckCircle className="w-2.5 h-2.5 text-white" />}
+                          {task.completed && <CheckCircle className="w-3 h-3 text-white" />}
                         </button>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <h3 className={`text-xs font-medium truncate ${task.completed ? 'text-green-400 line-through' : 'text-white'}`}>
+                            <h3 className={`text-sm font-medium truncate ${task.completed ? 'text-green-400 line-through' : 'text-white'}`}>
                               {task.title}
                             </h3>
                             {task.completed && (
-                              <span className="text-[10px] text-green-400 bg-green-500/20 px-1 py-0.5 rounded-full font-medium flex-shrink-0">Done</span>
+                              <span className="text-xs text-green-400 bg-green-500/20 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">Done</span>
                             )}
                           </div>
-                          <p className="text-[10px] text-green-300 mt-0.5 truncate">→ {task.kpi}</p>
-                          <p className="text-[10px] text-gray-400 truncate">{task.date} • {task.time}</p>
+                          <p className="text-xs text-green-300 mt-1 truncate">→ {task.kpi}</p>
+                          <p className="text-xs text-gray-400 mt-0.5 truncate">{task.date} • {task.time}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-0.5 flex-shrink-0">
+                      <div className="flex items-center gap-1 flex-shrink-0">
                         <button
                           onClick={() => openChat(task)}
-                          className="p-0.5 rounded hover:bg-gray-800 transition-colors"
+                          className="p-1 rounded hover:bg-gray-800 transition-colors"
                           title="Reply to this task"
                         >
-                          <Reply className="w-3.5 h-3.5 text-blue-400" />
+                          <Reply className="w-4 h-4 text-blue-400" />
                         </button>
                         <button
-                          onClick={() => deleteTask(task.id)}
-                          className="p-0.5 rounded hover:bg-gray-800 transition-colors"
+                          onClick={() => deleteTask(task.id, showUnfinishedTasks ? 'unfinished' : 'today')}
+                          className="p-1 rounded hover:bg-gray-800 transition-colors"
                           title="Delete this task"
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                          <Trash2 className="w-4 h-4 text-red-400" />
                         </button>
                         <button
                           onClick={() => toggleExpanded(task.id)}
-                          className="p-0.5 rounded hover:bg-gray-800 transition-colors"
+                          className="p-1 rounded hover:bg-gray-800 transition-colors"
                         >
                           {task.expanded ? (
-                            <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                            <ChevronDown className="w-4 h-4 text-gray-400" />
                           ) : (
-                            <ChevronRightIcon className="w-3.5 h-3.5 text-gray-400" />
+                            <ChevronRightIcon className="w-4 h-4 text-gray-400" />
                           )}
                         </button>
                       </div>
@@ -647,16 +764,16 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
 
                     {/* Subtasks */}
                     {task.expanded && (
-                      <div className="mt-2 ml-5 space-y-1.5">
+                      <div className="mt-3 ml-6 space-y-2">
                         {task.subtasks.map((subtask) => (
-                          <div key={subtask.id} className="flex items-center gap-2">
+                          <div key={subtask.id} className="flex items-center gap-2.5">
                             <button
                               onClick={() => toggleSubtask(task.id, subtask.id)}
-                              className="w-3 h-3 rounded-full border border-gray-400 hover:border-blue-400 transition-colors flex items-center justify-center"
+                              className="w-3.5 h-3.5 rounded-full border border-gray-400 hover:border-blue-400 transition-colors flex items-center justify-center"
                             >
-                              {subtask.completed && <CheckCircle className="w-2.5 h-2.5 text-blue-400" />}
+                              {subtask.completed && <CheckCircle className="w-3 h-3 text-blue-400" />}
                             </button>
-                            <span className={`text-[10px] ${subtask.completed ? 'text-gray-500 line-through' : 'text-gray-300'}`}>
+                            <span className={`text-xs ${subtask.completed ? 'text-gray-500 line-through' : 'text-gray-300'}`}>
                               {subtask.title}
                             </span>
                           </div>
@@ -730,8 +847,8 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
                   <span className="text-xs text-white/60">hours/day</span>
                   <div className="relative group">
                     <Info className="w-3 h-3 text-white/40 cursor-help" />
-                    <div className="absolute top-full right-0 mt-2 w-48 p-2 bg-gray-800 border border-gray-600 rounded text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity z-[9999] shadow-lg">
-                      Productivity will be calculated based on amount of tasks you have over this amount of hours
+                    <div className="absolute top-full right-0 mt-2 w-40 p-2 bg-gray-800 border border-gray-600 rounded text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity z-[9999] shadow-lg">
+                      Shows how much of your day is planned with tasks
                     </div>
                   </div>
                 </div>
@@ -742,16 +859,16 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
             <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs text-white/60">Productivity</span>
-                <span className="text-xs text-white font-medium">{calculateProductivity()}%</span>
+                <span className="text-xs text-white font-medium">{productivity}%</span>
               </div>
               <div className="w-full bg-gray-700 rounded-full h-2">
                 <div 
                   className={`h-2 rounded-full transition-all duration-300 ${
-                    calculateProductivity() >= 100 ? 'bg-green-500' : 
-                    calculateProductivity() >= 75 ? 'bg-blue-500' : 
-                    calculateProductivity() >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                    productivity >= 100 ? 'bg-green-500' : 
+                    productivity >= 75 ? 'bg-blue-500' : 
+                    productivity >= 50 ? 'bg-yellow-500' : 'bg-red-500'
                   }`}
-                  style={{ width: `${Math.min(100, calculateProductivity())}%` }}
+                  style={{ width: `${Math.min(100, productivity)}%` }}
                 ></div>
               </div>
             </div>
@@ -963,6 +1080,60 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {taskToDelete && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setTaskToDelete(null)}
+          />
+          <div className="relative bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+            <h3 className="text-white text-lg font-semibold mb-3">Delete Task?</h3>
+            <p className="text-gray-300 text-sm mb-6">
+              Are you sure you want to delete this task? This action cannot be undone.
+            </p>
+            
+            {/* Don't ask again checkbox */}
+            <div className="mb-6 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="dontAskAgain"
+                checked={dontAskAgain}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setDontAskAgain(checked);
+                  localStorage.setItem('dontAskDeleteConfirmation', checked.toString());
+                }}
+                className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500 focus:ring-2"
+              />
+              <label htmlFor="dontAskAgain" className="text-sm text-gray-400 cursor-pointer">
+                Don't ask again
+              </label>
+            </div>
+            
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setTaskToDelete(null)}
+                className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-white text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (taskToDelete) {
+                    confirmDeleteTask(taskToDelete.id, taskToDelete.source);
+                  }
+                }}
+                className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white text-sm font-medium transition-colors"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

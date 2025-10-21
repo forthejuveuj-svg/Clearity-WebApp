@@ -207,4 +207,135 @@ All colors MUST be HSL.
 .animate-border-glow {
   animation: borderGlowSlow 6s ease-in-out infinite !important;
 }
+
+/* Moving blocks animations */
+@keyframes move-right {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100vw);
+  }
+}
+
+@keyframes move-left {
+  0% {
+    transform: translateX(100vw);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes move-up {
+  0% {
+    transform: translateY(100px);
+  }
+  100% {
+    transform: translateY(-100px);
+  }
+}
+
+@keyframes move-down {
+  0% {
+    transform: translateY(-100px);
+  }
+  100% {
+    transform: translateY(100px);
+  }
+}
+
+@keyframes move-diagonal {
+  0% {
+    transform: translate(-50px, 50px);
+  }
+  50% {
+    transform: translate(50px, -50px);
+  }
+  100% {
+    transform: translate(-50px, 50px);
+  }
+}
+
+@keyframes move-circular {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(30px, -30px);
+  }
+  50% {
+    transform: translate(0, -60px);
+  }
+  75% {
+    transform: translate(-30px, -30px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+.animate-move-right {
+  animation: move-right 15s linear infinite;
+}
+
+.animate-move-left {
+  animation: move-left 18s linear infinite;
+}
+
+.animate-move-right-slow {
+  animation: move-right 60s linear infinite;
+}
+
+.animate-move-left-slow {
+  animation: move-left 70s linear infinite;
+}
+
+/* Center-based animations - start/end from middle of screen */
+@keyframes move-left-center {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes move-right-center {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0%);
+  }
+}
+
+.animate-move-left-center {
+  animation: move-left-center 40s linear infinite;
+}
+
+.animate-move-right-center {
+  animation: move-right-center 35s linear infinite;
+}
+
+/* Pause animation on hover */
+.pause-animation:hover {
+  animation-play-state: paused;
+}
+
+.animate-move-up {
+  animation: move-up 12s ease-in-out infinite;
+}
+
+.animate-move-down {
+  animation: move-down 14s ease-in-out infinite;
+}
+
+.animate-move-diagonal {
+  animation: move-diagonal 20s ease-in-out infinite;
+}
+
+.animate-move-circular {
+  animation: move-circular 16s ease-in-out infinite;
+}
 }

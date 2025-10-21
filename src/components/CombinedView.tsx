@@ -29,9 +29,10 @@ interface CombinedViewProps {
   onToggleView?: (toggleFn: () => void) => void;
   onNavigateToChat?: (navigateFn: (task: any) => void) => void;
   onViewChange?: (view: 'mindmap' | 'tasks') => void;
+  initialView?: 'mindmap' | 'tasks';
 }
 
-export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateToChat: onNavigateToChatProp, onViewChange }: CombinedViewProps) => {
+export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateToChat: onNavigateToChatProp, onViewChange, initialView = 'mindmap' }: CombinedViewProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [input, setInput] = useState("");
@@ -47,7 +48,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [dragOffset, setDragOffset] = useState(0); // Raw drag distance for smooth interpolation (-300 to 300)
   const [typingMessages, setTypingMessages] = useState<Set<number>>(new Set());
   const [isProblemsOpen, setIsProblemsOpen] = useState(false);
-  const [currentView, setCurrentView] = useState<'mindmap' | 'tasks'>('mindmap');
+  const [currentView, setCurrentView] = useState<'mindmap' | 'tasks'>(initialView);
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
 
   // Mind map states for different history positions
@@ -675,14 +676,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       </>
         ) : (
           // Task Manager View
-          <TaskManagerModal
-            isOpen={true}
-            onClose={() => {}}
-            onNavigateToChat={handleNavigateToChat}
-            isFullScreen={true}
-            scale={getTaskManagerScale()}
-            onReplyToTask={handleReplyToTask}
-          />
+          <div className="h-full w-full bg-gray-900">
+            <TaskManagerModal
+              isOpen={true}
+              onClose={() => {}}
+              onNavigateToChat={handleNavigateToChat}
+              isFullScreen={true}
+              scale={1}
+              onReplyToTask={handleReplyToTask}
+            />
+          </div>
         )}
       </div>
 

@@ -10,9 +10,11 @@ interface NavigationProps {
   onNavigateToChat?: (task: any) => void;
   onToggleView?: () => void;
   currentView?: 'mindmap' | 'tasks';
+  onOpenTaskManager?: () => void;
+  onShowAuth?: () => void;
 }
 
-export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, currentView = 'mindmap' }: NavigationProps = {}) => {
+export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, currentView = 'mindmap', onOpenTaskManager, onShowAuth }: NavigationProps = {}) => {
   const navigate = useNavigate();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isTaskManagerOpen, setIsTaskManagerOpen] = useState(false);
@@ -51,6 +53,8 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
           onClick={() => {
             if (onToggleView) {
               onToggleView();
+            } else if (onOpenTaskManager) {
+              onOpenTaskManager();
             } else {
               setIsTaskManagerOpen(true);
             }
@@ -75,6 +79,17 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
         >
           <Search className="w-5 h-5 text-white/60" />
         </button>
+
+        {/* Sign Up / Log In Button - Only show if onShowAuth is provided (onboarding page) */}
+        {onShowAuth && (
+          <button
+            onClick={onShowAuth}
+            className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/20 
+                       text-white text-sm font-medium transition-all duration-300 hover:scale-105 hover:border-blue-500/50"
+          >
+            Sign Up
+          </button>
+        )}
         
         {isPaidUser ? (
           <div className="relative group">
