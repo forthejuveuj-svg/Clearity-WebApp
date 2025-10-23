@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
-import { Mic, ArrowUp, MessageSquare, AlertTriangle, X, Check, Reply } from "lucide-react";
+import { Mic, MicOff, ArrowUp, MessageSquare, AlertTriangle, X, Check, Reply } from "lucide-react";
 import { TypingAnimation } from "./TypingAnimation";
 import { ProblemsModal } from "./ProblemsModal";
 import { TaskManagerModal } from "./TaskManagerModal";
+import { useAudioRecording } from "@/hooks/useAudioRecording";
+import { generateMindMapJson } from "../utils/generateMindMapJson";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
+  audioSnippets?: any[];
 }
 
 interface Node {
@@ -21,6 +24,7 @@ interface Node {
   thoughts?: string[];
   hasProblem?: boolean;
   problemType?: "anxiety" | "blocker" | "stress";
+  problemData?: any[];
 }
 
 interface CombinedViewProps {
@@ -50,69 +54,48 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [isProblemsOpen, setIsProblemsOpen] = useState(false);
   const [currentView, setCurrentView] = useState<'mindmap' | 'tasks'>(initialView);
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
+  const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
 
-  // Mind map states for different history positions
-  const mindMapStates: { [key: number]: Node[] } = {
-    // Past maps
-    "-3": [
-      { id: "stress", label: "Stress", x: 25, y: 45, size: "large", color: "red", thoughts: ["work", "deadlines", "pressure"] },
-      { id: "anxiety", label: "Anxiety", x: 50, y: 30, size: "large", color: "violet", thoughts: ["worry", "fear", "doubt"] },
-      { id: "clearity", label: "Clearity", x: 95, y: 15, size: "large", color: "teal" },
-    ],
-    "-2": [
-      { id: "mindfulness", label: "Mindfulness", x: 30, y: 50, size: "large", color: "blue", thoughts: ["meditation", "present", "awareness"] },
-      { id: "focus", label: "Focus", x: 55, y: 35, size: "large", color: "violet", thoughts: ["attention", "clarity", "goals"] },
-      { id: "clearity", label: "Clearity", x: 95, y: 15, size: "large", color: "teal" },
-    ],
-    "-1": [
-      { id: "thinking", label: "Thinking", x: 25, y: 45, size: "large", color: "blue", thoughts: ["logic", "reason", "analysis"] },
-      { id: "creativity", label: "Creativity", x: 50, y: 60, size: "large", color: "violet", thoughts: ["ideas", "imagination", "innovation"] },
-      { id: "clearity", label: "Clearity", x: 95, y: 15, size: "large", color: "teal" },
-    ],
-    // Current map
-    "0": [
-      { id: "brain", label: "How brain\nworks", x: 20, y: 40, size: "large", color: "blue", thoughts: ["neurons", "memory", "focus"], hasProblem: true, problemType: "anxiety" },
-      { id: "design", label: "UX/UI\ndesign", x: 45, y: 25, size: "large", color: "violet", thoughts: ["colors", "layout", "flow"], hasProblem: true, problemType: "blocker" },
-      { id: "psychology", label: "Psychology", x: 35, y: 65, size: "large", color: "blue", thoughts: ["emotions", "behavior", "triggers"] },
-      { id: "habits", label: "Habits", x: 65, y: 55, size: "large", color: "red", thoughts: ["routine", "loop", "reward"] },
-      { id: "clearity", label: "Clearity", x: 95, y: 15, size: "large", color: "teal" },
-    ],
-    // Future maps
-    "1": [
-      { id: "productivity", label: "Productivity", x: 30, y: 50, size: "large", color: "blue", thoughts: ["efficiency", "output", "systems"] },
-      { id: "goals", label: "Goals", x: 50, y: 30, size: "large", color: "violet", thoughts: ["vision", "targets", "success"] },
-      { id: "growth", label: "Growth", x: 60, y: 60, size: "large", color: "red", thoughts: ["learning", "improve", "evolve"] },
-      { id: "clearity", label: "Clearity", x: 95, y: 15, size: "large", color: "teal" },
-    ],
-    "2": [
-      { id: "mastery", label: "Mastery", x: 35, y: 45, size: "large", color: "blue", thoughts: ["expertise", "skill", "practice"] },
-      { id: "wisdom", label: "Wisdom", x: 55, y: 60, size: "large", color: "violet", thoughts: ["knowledge", "insight", "experience"] },
-      { id: "clearity", label: "Clearity", x: 95, y: 15, size: "large", color: "teal" },
-    ],
-    "3": [
-      { id: "fulfillment", label: "Fulfillment", x: 40, y: 50, size: "large", color: "blue", thoughts: ["purpose", "meaning", "joy"] },
-      { id: "peace", label: "Inner\nPeace", x: 60, y: 35, size: "large", color: "violet", thoughts: ["calm", "balance", "harmony"] },
-      { id: "clearity", label: "Clearity", x: 95, y: 15, size: "large", color: "teal" },
-    ],
-  };
+  // Dynamic mind map states with fallback
+  const [mindMapStates, setMindMapStates] = useState<{ [key: string]: Node[] }>({
+    "0": [{ id: "clearity", label: "Clearity", x: 95, y: 15, size: "large" as const, color: "teal" as const }]
+  });
+
+  // Load mind map states on component mount
+  useEffect(() => {
+    generateMindMapJson().then(states => {
+      if (states && Object.keys(states).length > 0) {
+        setMindMapStates(states);
+      }
+    });
+  }, []);
+
+
 
   // Calculate which two states to blend between based on dragOffset
   const getBlendedStates = () => {
-    // dragOffset: -300 to 300
-    // Determine base position and blend factor
-    const exactPosition = dragOffset / 100; // e.g., -1.5, 0.7, etc.
-    const basePos = Math.floor(exactPosition); // e.g., -2, 0
-    const nextPos = Math.ceil(exactPosition); // e.g., -1, 1
-    const blendFactor = exactPosition - basePos; // 0 to 1
+    // Ensure mindMapStates has data
+    if (!mindMapStates || Object.keys(mindMapStates).length === 0) {
+      const fallbackNode: Node = { id: "clearity", label: "Clearity", x: 95, y: 15, size: "large", color: "teal" };
+      return { baseNodes: [fallbackNode], nextNodes: [fallbackNode], blendFactor: 0 };
+    }
+
+    const exactPosition = dragOffset / 100;
+    const basePos = Math.floor(exactPosition);
+    const nextPos = Math.ceil(exactPosition);
+    const blendFactor = exactPosition - basePos;
     
-    const baseNodes = mindMapStates[Math.max(-3, Math.min(3, basePos))] || mindMapStates[0];
-    const nextNodes = mindMapStates[Math.max(-3, Math.min(3, nextPos))] || mindMapStates[0];
+    const baseKey = Math.max(-3, Math.min(3, basePos)).toString();
+    const nextKey = Math.max(-3, Math.min(3, nextPos)).toString();
+    
+    const baseNodes = mindMapStates[baseKey] || mindMapStates["0"] || [];
+    const nextNodes = mindMapStates[nextKey] || mindMapStates["0"] || [];
     
     return { baseNodes, nextNodes, blendFactor };
   };
   
   const { baseNodes, nextNodes, blendFactor } = getBlendedStates();
-  const allNodes: Node[] = baseNodes; // Use base nodes for now (we can add blending back later)
+  const allNodes: Node[] = baseNodes || []; // Use base nodes for now (we can add blending back later)
 
   const connections = [
     { from: "brain", to: "psychology" },
@@ -195,12 +178,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Show all relevant nodes during transitions
   useEffect(() => {
-    if (!isBuilding) {
+    if (!isBuilding && baseNodes && nextNodes) {
       const allRelevantIds = [...baseNodes, ...nextNodes].map(n => n.id);
       const uniqueIds = [...new Set(allRelevantIds)];
       setVisibleNodes(uniqueIds);
     }
-  }, [dragOffset, historyPosition, isBuilding]);
+  }, [dragOffset, historyPosition, isBuilding, baseNodes, nextNodes]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,6 +238,95 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     if (!input) {
       setIsInputExpanded(false);
     }
+  };
+
+  // Audio recording integration
+  const {
+    isRecording,
+    recordingTime,
+    startRecording,
+    stopRecording,
+    playSnippet,
+    audioSnippets,
+    clearSnippets
+  } = useAudioRecording({
+    onTranscription: (text, snippetId) => {
+      console.log('New transcription:', text, 'for snippet:', snippetId);
+    },
+    whisperApiUrl: '',
+    whisperApiKey: '',
+    snippetDuration: 8000 // 8 seconds
+  });
+
+  const handleMicrophoneClick = async () => {
+    // Clear any pending blur timeout
+    if (blurTimeoutId) {
+      clearTimeout(blurTimeoutId);
+      setBlurTimeoutId(null);
+    }
+
+    if (isRecording) {
+      try {
+        await stopRecording();
+        
+        // Add voice message with clip count
+        const clipCount = audioSnippets.length;
+        const voiceMessageContent = `🎤 Voice message recorded (${clipCount} clips of 8 seconds each)`;
+        
+        setMessages(prev => [...prev, { 
+          role: "user", 
+          content: voiceMessageContent,
+          audioSnippets: audioSnippets // Store snippets for playback
+        }]);
+        
+        // Add AI response after delay
+        setTimeout(() => {
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: "I received your voice message. You can play back the clips to verify the recording worked."
+          }]);
+        }, 1000);
+      } catch (error) {
+        console.error('Error stopping recording:', error);
+      }
+    } else {
+      try {
+        await startRecording();
+        setIsInputExpanded(true); // Expand input to show recording status
+      } catch (error) {
+        console.error('Error starting recording:', error);
+        console.error('Error starting recording:', error);
+        alert('Failed to start recording. Please check microphone permissions.');
+      }
+    }
+  };
+
+  const handleInputBlur = () => {
+    // Use a timeout to allow button clicks to process first
+    const timeoutId = setTimeout(() => {
+      if (!input && !isRecording) {
+        setIsInputExpanded(false);
+      }
+      setBlurTimeoutId(null);
+    }, 150); // 150ms delay to allow button clicks
+    
+    setBlurTimeoutId(timeoutId);
+  };
+
+  const handleInputFocus = () => {
+    // Clear any pending blur timeout when focusing
+    if (blurTimeoutId) {
+      clearTimeout(blurTimeoutId);
+      setBlurTimeoutId(null);
+    }
+    setIsInputExpanded(true);
+  };
+
+  const formatRecordingTime = (ms: number) => {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
   // Pass functions to parent component
@@ -336,6 +408,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       document.body.style.userSelect = '';
     };
   }, [isDragging, dragDirection]);
+
+  // Cleanup blur timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutId) {
+        clearTimeout(blurTimeoutId);
+      }
+    };
+  }, [blurTimeoutId]);
 
   const getCircleSize = (size: string, isMainTopic: boolean = false) => {
     const screenWidth = window.innerWidth;
@@ -443,7 +524,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   const getProblemCount = (node: Node) => {
     if (!node.hasProblem) return 0;
-    // Return different numbers based on problem type
+    // Use problemData if available, otherwise fallback to problemType
+    if (node.problemData) {
+      return node.problemData.filter(p => p.status === 'active').length;
+    }
+    // Fallback for old problemType format
     switch (node.problemType) {
       case "anxiety": return 3;
       case "blocker": return 2;
@@ -498,7 +583,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         </div>
 
         {/* Beautiful Neural Connection lines */}
-        {connections.map((conn, idx) => {
+        {allNodes && allNodes.length > 0 && connections.map((conn, idx) => {
           const fromNode = allNodes.find(n => n.id === conn.from);
           const toNode = allNodes.find(n => n.id === conn.to);
           if (!fromNode || !toNode) return null;
@@ -542,7 +627,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         })}
 
         {/* Render nodes */}
-        {allNodes.map((node) => (
+        {allNodes && allNodes.map((node) => (
           <div
             key={node.id}
             className="absolute transition-transform duration-500 ease-out"
@@ -756,7 +841,22 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                         }}
                       />
                     ) : (
-                      <p className="whitespace-pre-line leading-relaxed">{message.content}</p>
+                      <div>
+                        <p className="whitespace-pre-line leading-relaxed">{message.content}</p>
+                        {message.audioSnippets && message.audioSnippets.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {message.audioSnippets.map((snippet, index) => (
+                              <button
+                                key={snippet.id}
+                                onClick={() => playSnippet(snippet.id)}
+                                className="px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs rounded border border-blue-500/40 hover:border-blue-400/60 transition-colors"
+                              >
+                                ▶ Clip {message.audioSnippets.length - index}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -773,8 +873,23 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             )}
             <form onSubmit={handleSubmit} className="pointer-events-auto max-w-4xl mx-auto relative z-10 flex justify-end">
               <div className="relative group transition-all duration-300" style={{ width: isInputExpanded ? '100%' : '64px' }}>
-                {/* Replying to indicator - only show when expanded */}
-                {replyingToTask && isInputExpanded && (
+                {/* Recording indicator - show when recording */}
+                {isRecording && isInputExpanded && (
+                  <div className="absolute -top-12 left-0 right-0 flex items-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/30 rounded-lg">
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                    <span className="text-sm text-red-300 flex-1">Recording... {formatRecordingTime(recordingTime)}</span>
+                    <button
+                      type="button"
+                      onClick={handleMicrophoneClick}
+                      className="p-0.5 hover:bg-red-500/20 rounded transition-colors"
+                    >
+                      <MicOff className="w-3.5 h-3.5 text-red-400" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Replying to indicator - only show when expanded and not recording */}
+                {replyingToTask && isInputExpanded && !isRecording && (
                   <div className="absolute -top-12 left-0 right-0 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                     <Reply className="w-4 h-4 text-blue-400 flex-shrink-0" />
                     <span className="text-sm text-blue-300 flex-1 truncate">Replying to: <strong>{replyingToTask.title}</strong></span>
@@ -797,15 +912,20 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 
                 <input
                   type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onFocus={() => setIsInputExpanded(true)}
-                  onBlur={() => !input && setIsInputExpanded(false)}
-                  placeholder={isInputExpanded ? "Let's overthink about..." : ""}
-                  className={`w-full px-5 py-3 bg-gray-900 border border-white/20 rounded-3xl 
+                  value={isRecording ? `Recording... ${formatRecordingTime(recordingTime)}` : input}
+                  onChange={(e) => !isRecording && setInput(e.target.value)}
+                  onFocus={handleInputFocus}
+                  onBlur={handleInputBlur}
+                  placeholder={isInputExpanded && !isRecording ? "Let's overthink about..." : ""}
+                  disabled={isRecording}
+                  className={`w-full px-5 py-3 bg-gray-900 border rounded-3xl 
                              text-sm text-white placeholder:text-white/50
-                             focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
+                             focus:outline-none focus:ring-2 focus:border-blue-500/50
                              transition-all duration-300 hover:border-white/30
+                             ${isRecording 
+                               ? 'border-red-500/50 text-red-300 cursor-not-allowed' 
+                               : 'border-white/20 focus:ring-blue-500/50'
+                             }
                              ${isInputExpanded ? 'pr-20' : 'cursor-pointer'}`}
                   style={{ paddingRight: isInputExpanded ? '80px' : '20px' }}
                 />
@@ -813,14 +933,23 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 <div className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 transition-opacity duration-300 ${isInputExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                   <button
                     type="button"
-                    className="p-2 rounded-2xl bg-white/5 hover:bg-white/10 transition-all duration-300 hover:scale-110"
+                    onClick={handleMicrophoneClick}
+                    className={`p-2 rounded-2xl transition-all duration-300 hover:scale-110 ${
+                      isRecording 
+                        ? 'bg-red-500/20 border border-red-500/30 animate-pulse' 
+                        : 'bg-white/5 hover:bg-white/10'
+                    }`}
                   >
-                    <Mic className="w-4 h-4 text-white/60" />
+                    {isRecording ? (
+                      <MicOff className="w-4 h-4 text-red-400" />
+                    ) : (
+                      <Mic className="w-4 h-4 text-white/60" />
+                    )}
                   </button>
                   
                   <button
                     type="submit"
-                    disabled={!input.trim()}
+                    disabled={!input.trim() || isRecording}
                     className="p-2 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 
                                disabled:opacity-30 disabled:cursor-not-allowed
                                transition-all duration-300 hover:scale-110 shadow-lg shadow-blue-500/25"
@@ -833,6 +962,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           </div>
         </div>
       </div>
+
+
 
       {/* Problems Modal */}
       <ProblemsModal 

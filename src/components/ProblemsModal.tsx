@@ -299,7 +299,7 @@ export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted }: Problem
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes breathe {
           0%, 100% { opacity: 0.6; }
           50% { opacity: 0.8; }

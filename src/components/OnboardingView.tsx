@@ -93,6 +93,7 @@ export const OnboardingView = ({ onStart, onShowAuth }: OnboardingViewProps) => 
               <div className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 md:gap-3">
                 <button
                   type="button"
+                  onClick={onShowAuth}
                   className="p-1.5 md:p-2 rounded-lg hover:bg-white/10 transition-colors duration-300"
                 >
                   <Mic className="w-4 h-4 md:w-5 md:h-5 text-white/60" />
