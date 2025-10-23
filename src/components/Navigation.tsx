@@ -1,9 +1,11 @@
-import { useState } from "react";
-import { Search, Star, User, CheckSquare, Network } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Search, Star, User, CheckSquare, Network, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ClearityLogo from "@/assets/clearity-logo.svg";
 import { SearchModal } from "./SearchModal";
 import { TaskManagerModal } from "./TaskManagerModal";
+import { useAuthContext } from "./AuthProvider";
+import { useAuth } from "@/hooks/useAuth";
 
 interface NavigationProps {
   onLogoClick?: () => void;
@@ -16,12 +18,40 @@ interface NavigationProps {
 
 export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, currentView = 'mindmap', onOpenTaskManager, onShowAuth }: NavigationProps = {}) => {
   const navigate = useNavigate();
+  const { user } = useAuthContext();
+  const { signOut } = useAuth();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isTaskManagerOpen, setIsTaskManagerOpen] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   
   // Check if user is paid (simulated - in real app this would come from auth state)
   const isPaidUser = localStorage.getItem("isPaidUser") === "true";
   const selectedPlan = localStorage.getItem("selectedPlan") || "Monthly";
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate('/');
+      setShowUserMenu(false);
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex items-center justify-between">
@@ -41,13 +71,55 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
           <img src={ClearityLogo} alt="Clearity Logo" className="w-full h-full object-cover" />
         </button>
         
-        <button 
-          onClick={() => navigate('/settings')}
-          className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:scale-110"
-          aria-label="Settings"
-        >
-          <User className="w-5 h-5 text-white/60" />
-        </button>
+        {user && (
+          <div className="relative" ref={userMenuRef}>
+            <button 
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:scale-110"
+              aria-label="User Menu"
+            >
+              {user.user_metadata?.avatar_url ? (
+                <img 
+                  src={user.user_metadata.avatar_url} 
+                  alt="User Avatar" 
+                  className="w-5 h-5 rounded-full"
+                />
+              ) : (
+                <User className="w-5 h-5 text-white/60" />
+              )}
+            </button>
+
+            {showUserMenu && (
+              <div className="absolute top-full mt-2 left-0 bg-gray-900/95 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl shadow-black/40 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 min-w-[200px]">
+                <div className="p-3 border-b border-white/10">
+                  <p className="text-white text-sm font-medium truncate">
+                    {user.user_metadata?.full_name || user.email}
+                  </p>
+                  <p className="text-white/50 text-xs truncate">{user.email}</p>
+                </div>
+                <div className="p-1">
+                  <button
+                    onClick={() => {
+                      navigate('/settings');
+                      setShowUserMenu(false);
+                    }}
+                    className="w-full px-3 py-2 rounded-lg hover:bg-white/10 transition-all duration-200 flex items-center gap-2 text-left group"
+                  >
+                    <User className="w-4 h-4 text-white/60 group-hover:text-white transition-colors" />
+                    <span className="text-white/80 text-sm group-hover:text-white transition-colors">Settings</span>
+                  </button>
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full px-3 py-2 rounded-lg hover:bg-white/10 transition-all duration-200 flex items-center gap-2 text-left group"
+                  >
+                    <LogOut className="w-4 h-4 text-red-400 group-hover:text-red-300 transition-colors" />
+                    <span className="text-white/80 text-sm group-hover:text-white transition-colors">Sign Out</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         
         <button 
           onClick={() => {

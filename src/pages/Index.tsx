@@ -5,12 +5,14 @@ import { Navigation } from "@/components/Navigation";
 import { OnboardingView } from "@/components/OnboardingView";
 import { CombinedView } from "@/components/CombinedView";
 import { AuthModal } from "@/components/AuthModal";
+import { useAuthContext } from "@/components/AuthProvider";
 import { MessageCircle, Plus, Lightbulb, Bug, Mail, Sparkles, X, Upload, Image as ImageIcon, CheckCircle, Calendar, Instagram, Phone } from "lucide-react";
 
 type ViewState = "onboarding" | "combined";
 
 const Index = () => {
   const location = useLocation();
+  const { user, loading } = useAuthContext();
   const [currentView, setCurrentView] = useState<ViewState>(() => {
     // Restore view from sessionStorage if available
     const savedView = sessionStorage.getItem('currentView');
@@ -48,9 +50,16 @@ const Index = () => {
   }, [location]);
 
   const handleStart = (message: string) => {
-    // Always show auth modal on first message attempt
-    setPendingMessage(message);
-    setShowAuthModal(true);
+    // Check if user is authenticated
+    if (user) {
+      // User is authenticated, go directly to combined view
+      setInitialMessage(message);
+      setCurrentView("combined");
+    } else {
+      // User not authenticated, show auth modal
+      setPendingMessage(message);
+      setShowAuthModal(true);
+    }
   };
 
   const handleBack = () => {
@@ -58,14 +67,24 @@ const Index = () => {
   };
 
   const handleShowAuthFromOnboarding = () => {
-    setShowAuthModal(true);
+    if (user) {
+      // User is already authenticated, go to combined view
+      setCurrentView("combined");
+    } else {
+      setShowAuthModal(true);
+    }
   };
 
   const handleOpenTaskManagerFromOnboarding = () => {
-    // Navigate to combined view with task manager open
-    setCurrentView("combined");
-    setCombinedViewState('tasks');
-    setInitialMessage(""); // Empty message since going directly to task manager
+    if (user) {
+      // User is authenticated, go directly to task manager
+      setCurrentView("combined");
+      setCombinedViewState('tasks');
+      setInitialMessage(""); // Empty message since going directly to task manager
+    } else {
+      // User not authenticated, show auth modal
+      setShowAuthModal(true);
+    }
   };
 
   const toggleViewRef = React.useRef<(() => void) | null>(null);
