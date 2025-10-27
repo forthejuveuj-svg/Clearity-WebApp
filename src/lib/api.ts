@@ -2,7 +2,9 @@
  * API service for backend RPC calls
  */
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+import { config } from './config';
+
+const BACKEND_URL = config.backendUrl;
 
 interface RPCResponse<T = any> {
   success: boolean;
