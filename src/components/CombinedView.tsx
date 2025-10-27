@@ -58,7 +58,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Dynamic mind map states with fallback
   const [mindMapStates, setMindMapStates] = useState<{ [key: string]: Node[] }>({
-    "0": [{ id: "clearity", label: "Clearity", x: 95, y: 15, size: "large" as const, color: "teal" as const }]
+    "0": []
   });
 
   // Load mind map states on component mount
@@ -72,15 +72,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
 
 
-  // Calculate which two states to blend between based on dragOffset
+  // Calculate which two states to blend between based on dragOffset or historyPosition
   const getBlendedStates = () => {
     // Ensure mindMapStates has data
     if (!mindMapStates || Object.keys(mindMapStates).length === 0) {
-      const fallbackNode: Node = { id: "clearity", label: "Clearity", x: 95, y: 15, size: "large", color: "teal" };
-      return { baseNodes: [fallbackNode], nextNodes: [fallbackNode], blendFactor: 0 };
+      return { baseNodes: [], nextNodes: [], blendFactor: 0 };
     }
 
-    const exactPosition = dragOffset / 100;
+    // Use dragOffset for smooth interpolation while dragging, historyPosition when not dragging
+    const exactPosition = isDragging ? dragOffset / 100 : historyPosition;
     const basePos = Math.floor(exactPosition);
     const nextPos = Math.ceil(exactPosition);
     const blendFactor = exactPosition - basePos;
@@ -382,7 +382,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const handleMouseUp = () => {
     setIsDragging(false);
     setDragDirection(null);
-    // Reset drag offset when releasing
+    // Reset dragOffset since we now use historyPosition when not dragging
     setDragOffset(0);
   };
 
@@ -418,12 +418,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     };
   }, [blurTimeoutId]);
 
-  const getCircleSize = (size: string, isMainTopic: boolean = false) => {
+  const getCircleSize = (size: string) => {
     const screenWidth = window.innerWidth;
     
     if (screenWidth >= 1024) {
-      // Desktop sizes (unchanged)
-      if (isMainTopic) return { width: 432, height: 432 }; // 27rem
+      // Desktop sizes
       switch (size) {
         case "small": return { width: 144, height: 144 }; // 9rem (36 * 4)
         case "medium": return { width: 176, height: 176 }; // 11rem (44 * 4)
@@ -433,10 +432,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
     
     if (screenWidth >= 768) {
-      // Tablet: scale between 768-1024px (unchanged)
-      const baseWidths = isMainTopic 
-        ? { min: 192, max: 432 } // 12rem to 27rem
-        : size === "small" ? { min: 96, max: 144 }  // 6rem to 9rem
+      // Tablet: scale between 768-1024px
+      const baseWidths = size === "small" ? { min: 96, max: 144 }  // 6rem to 9rem
         : size === "medium" ? { min: 112, max: 176 } // 7rem to 11rem
         : { min: 128, max: 208 }; // 8rem to 13rem (large)
       
@@ -448,9 +445,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     
     // Phone screens (< 768px): bigger circles for better visibility
     const phoneScale = screenWidth / 768; // e.g., 375px / 768 = 0.49
-    const tabletBase = isMainTopic 
-      ? 192 
-      : size === "small" ? 96
+    const tabletBase = size === "small" ? 96
       : size === "medium" ? 112
       : 128;
     
@@ -459,14 +454,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     return { width, height: width };
   };
 
-  const getSizeClass = (size: string, isMainTopic: boolean = false) => {
+  const getSizeClass = (size: string) => {
     const screenWidth = window.innerWidth;
-    
-    if (isMainTopic) {
-      if (screenWidth >= 1024) return "text-6xl font-bold";
-      if (screenWidth >= 768) return "text-xl font-bold";
-      return "text-base font-bold"; // Phone
-    }
     
     if (screenWidth >= 1024) {
       // Desktop (unchanged)
@@ -639,36 +628,24 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           >
             <div
               className={`
-                ${getSizeClass(node.size, node.label === "Clearity")} ${getColorClass(node.color)}
+                ${getSizeClass(node.size)} ${getColorClass(node.color)}
                 relative rounded-full border-2 bg-gray-900/60 backdrop-blur-sm
                 flex items-center justify-center text-center
                 transition-all duration-500
                 hover:scale-110 hover:bg-gray-800/60
                 cursor-pointer
-                ${node.label === "Clearity" 
-                  ? "ring-4 ring-offset-16 ring-offset-transparent ring-teal-400/40 shadow-[0_0_40px_-10px_rgba(45,212,191,0.8)] border-4 border-teal-400" 
-                  : `ring-4 ring-offset-16 ring-offset-transparent ${getRingClass(node.color)}`
-                }
+                ring-4 ring-offset-16 ring-offset-transparent ${getRingClass(node.color)}
               `}
               style={{
-                width: `${getCircleSize(node.size, node.label === "Clearity").width}px`,
-                height: `${getCircleSize(node.size, node.label === "Clearity").height}px`
+                width: `${getCircleSize(node.size).width}px`,
+                height: `${getCircleSize(node.size).height}px`
               }}
             >
               <span className="font-medium leading-tight px-1 whitespace-pre-line text-white">
                 {node.label}
               </span>
 
-              {/* Empty circle around Clearity */}
-              {node.label === "Clearity" && (
-                <div 
-                  className="absolute inset-0 rounded-full border-6 border-teal-400 pointer-events-none shadow-[0_0_30px_-5px_rgba(45,212,191,0.8)]"
-                  style={{
-                    transform: 'scale(1.2)',
-                    margin: '-10%'
-                  }}
-                />
-              )}
+
 
               {/* Problem indicator */}
               {node.hasProblem && (
@@ -704,18 +681,18 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 let radius;
                 
                 if (screenWidth >= 1024) {
-                  // Desktop (unchanged)
-                  radius = node.label === "Clearity" ? 310 : 155;
+                  // Desktop
+                  radius = 155;
                 } else if (screenWidth >= 768) {
-                  // Tablet: scale between 768-1024px (unchanged)
-                  const minRadius = node.label === "Clearity" ? 160 : 105;
-                  const maxRadius = node.label === "Clearity" ? 310 : 155;
+                  // Tablet: scale between 768-1024px
+                  const minRadius = 105;
+                  const maxRadius = 155;
                   const scaleFactor = Math.max(0, Math.min(1, (screenWidth - 768) / (1024 - 768)));
                   radius = minRadius + (maxRadius - minRadius) * scaleFactor;
                 } else {
                   // Phone: scale proportionally and make bigger
                   const phoneScale = screenWidth / 768;
-                  const tabletRadius = node.label === "Clearity" ? 160 : 105;
+                  const tabletRadius = 105;
                   radius = tabletRadius * phoneScale * 1.3; // 30% bigger
                 }
                 const angleRad = (angle * Math.PI) / 180;
@@ -798,6 +775,19 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               ? `← ${Math.abs(historyPosition)} ${Math.abs(historyPosition) === 1 ? 'step' : 'steps'} back` 
               : `${historyPosition} ${historyPosition === 1 ? 'step' : 'steps'} ahead →`}
           </div>
+        )}
+        
+        {/* Return to current button */}
+        {historyPosition !== 0 && (
+          <button
+            onClick={() => {
+              setHistoryPosition(0);
+              setDragOffset(0);
+            }}
+            className="absolute right-8 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-full border border-blue-500/50 hover:border-blue-400 transition-all duration-200 hover:scale-105"
+          >
+            Return to current →
+          </button>
         )}
         
         {/* Tooltip */}
