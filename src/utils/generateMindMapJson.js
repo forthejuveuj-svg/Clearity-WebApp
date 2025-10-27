@@ -6,11 +6,32 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function fetchSupabaseData() {
   try {
+    // Get current user session
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.user) {
+      console.log('No authenticated user, returning empty data');
+      return { projects: [], knowledgeNodes: [], problems: [] };
+    }
+
+    console.log('Fetching data for user:', session.user.id);
+
     const [projectsResult, knowledgeNodesResult, problemsResult] = await Promise.all([
-      supabase.from('projects').select('*'),
-      supabase.from('knowledge_nodes').select('*'),
-      supabase.from('problems').select('*')
+      supabase.from('projects').select('*').order('created_at', { ascending: false }),
+      supabase.from('knowledge_nodes').select('*').order('created_at', { ascending: false }),
+      supabase.from('problems').select('*').eq('status', 'active').order('created_at', { ascending: false })
     ]);
+
+    // Check for errors
+    if (projectsResult.error) {
+      console.error('Error fetching projects:', projectsResult.error);
+    }
+    if (knowledgeNodesResult.error) {
+      console.error('Error fetching knowledge nodes:', knowledgeNodesResult.error);
+    }
+    if (problemsResult.error) {
+      console.error('Error fetching problems:', problemsResult.error);
+    }
 
     return {
       projects: projectsResult.data || [],
@@ -84,7 +105,7 @@ function createProjectNode(project, knowledgeNodes = [], problems = []) {
   // Get knowledge nodes created on the same date for additional thoughts (if not enough from project_id)
   let additionalThoughts = [];
   if (relatedKnowledge.length < 4) {
-    const projectDate = getDateKey(new Date(project.created_at || project.updated_at || project.last_updated));
+    const projectDate = getDateKey(new Date(project.created_at || project.last_updated));
     additionalThoughts = knowledgeNodes
       .filter(kn => {
         // Skip if already included by project_id
@@ -92,8 +113,7 @@ function createProjectNode(project, knowledgeNodes = [], problems = []) {
 
         const knowledgeDates = [
           kn.created_at && getDateKey(new Date(kn.created_at)),
-          kn.updated_at && getDateKey(new Date(kn.updated_at)),
-          kn.last_updated && getDateKey(new Date(kn.last_updated))
+          kn.updated_at && getDateKey(new Date(kn.updated_at))
         ].filter(Boolean);
         return knowledgeDates.includes(projectDate);
       })

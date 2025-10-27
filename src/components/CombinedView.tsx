@@ -4,6 +4,8 @@ import { TypingAnimation } from "./TypingAnimation";
 import { ProblemsModal } from "./ProblemsModal";
 import { TaskManagerModal } from "./TaskManagerModal";
 import { useAudioRecording } from "@/hooks/useAudioRecording";
+import { useAuth } from "@/hooks/useAuth";
+import { APIService } from "@/lib/api";
 import { generateMindMapJson } from "../utils/generateMindMapJson";
 
 interface Message {
@@ -37,6 +39,7 @@ interface CombinedViewProps {
 }
 
 export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateToChat: onNavigateToChatProp, onViewChange, initialView = 'mindmap' }: CombinedViewProps) => {
+  const { userId } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [input, setInput] = useState("");
@@ -55,17 +58,35 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [currentView, setCurrentView] = useState<'mindmap' | 'tasks'>(initialView);
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Dynamic mind map states with fallback
   const [mindMapStates, setMindMapStates] = useState<{ [key: string]: Node[] }>({
     "0": []
   });
 
+  // Function to reload mind map nodes
+  const reloadNodes = () => {
+    generateMindMapJson().then(states => {
+      if (states && Object.keys(states).length > 0) {
+        setMindMapStates(states);
+        console.log('Mind map nodes reloaded after successful processing');
+      }
+    });
+  };
+
   // Load mind map states on component mount
   useEffect(() => {
     generateMindMapJson().then(states => {
       if (states && Object.keys(states).length > 0) {
         setMindMapStates(states);
+      }
+    });
+
+    // Check backend connectivity
+    APIService.healthCheck().then(response => {
+      if (!response.success) {
+        console.warn('Backend health check failed:', response.error);
       }
     });
   }, []);
@@ -105,44 +126,96 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Handle initial message and responses
   useEffect(() => {
-    if (!hasInitialized) {
+    if (!hasInitialized && userId) {
       // Initialize even if initialMessage is empty
       if (initialMessage) {
         setMessages([{ role: "user", content: initialMessage }]);
+        
+        // Process initial message with RPC call
+        const processInitialMessage = async () => {
+          setIsProcessing(true);
+          try {
+            const response = await APIService.minddump({
+              text: initialMessage,
+              user_id: userId,
+              use_relator: false
+            });
+
+            if (response.success) {
+              setMessages(prev => [...prev, {
+                role: "assistant",
+                content: response.result?.output || "I've processed your input successfully!"
+              }]);
+              
+              // Reload nodes when processing is successful
+              reloadNodes();
+            } else {
+              setMessages(prev => [...prev, {
+                role: "assistant",
+                content: `I encountered an issue processing your request: ${response.error || 'Unknown error'}`
+              }]);
+            }
+          } catch (error) {
+            console.error('Error processing initial message:', error);
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: "I'm having trouble connecting to the backend. Please try again later."
+            }]);
+          } finally {
+            setIsProcessing(false);
+          }
+        };
+
+        processInitialMessage();
       }
       setHasInitialized(true);
-      
-      // Add AI response after delay only if we have a message
-      if (initialMessage) {
-        const timer = setTimeout(() => {
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: "Perfect — this is exactly the right mindset.\n\nIf you want to design Reload around how the brain actually works, you need to understand how people think, remember, and focus — not just surface UX rules.\n\nHere's a focused roadmap of the brain topics that are most relevant for UX/UI, especially for your \"digital brain\" platform..."
-          }]);
-        }, 1000);
-        
-        return () => clearTimeout(timer);
-      }
     }
-  }, [initialMessage, hasInitialized]);
+  }, [initialMessage, hasInitialized, userId]);
 
   // Handle new messages when initialMessage changes (e.g., from task manager)
   useEffect(() => {
-    if (initialMessage && hasInitialized && messages.length > 0 && messages[messages.length - 1].content !== initialMessage) {
+    if (initialMessage && hasInitialized && userId && messages.length > 0 && messages[messages.length - 1].content !== initialMessage) {
       // Add new user message
       setMessages(prev => [...prev, { role: "user", content: initialMessage }]);
       
-      // Add AI response after delay
-      const timer = setTimeout(() => {
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
-        }]);
-      }, 1000);
-      
-      return () => clearTimeout(timer);
+      // Process with RPC call
+      const processNewMessage = async () => {
+        setIsProcessing(true);
+        try {
+          const response = await APIService.minddump({
+            text: initialMessage,
+            user_id: userId,
+            use_relator: false
+          });
+
+          if (response.success) {
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: response.result?.output || "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
+            }]);
+            
+            // Reload nodes when processing is successful
+            reloadNodes();
+          } else {
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
+            }]);
+          }
+        } catch (error) {
+          console.error('Error processing new message:', error);
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
+          }]);
+        } finally {
+          setIsProcessing(false);
+        }
+      };
+
+      processNewMessage();
     }
-  }, [initialMessage]);
+  }, [initialMessage, hasInitialized, userId, messages]);
 
   // Auto-build mind map
   useEffect(() => {
@@ -185,36 +258,101 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   }, [dragOffset, historyPosition, isBuilding, baseNodes, nextNodes]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim()) {
-      setMessages([...messages, { role: "user", content: input }]);
+    if (input.trim() && !isProcessing) {
+      const userMessage = input.trim();
+      setMessages([...messages, { role: "user", content: userMessage }]);
       setInput("");
+      setIsProcessing(true);
       
-      // Add AI response after a delay
-      setTimeout(() => {
+      if (!userId) {
         setMessages(prev => [...prev, {
           role: "assistant",
-          content: "That's a great follow-up question! Let me help you explore that further..."
+          content: "Please log in to use the AI processing features."
         }]);
-      }, 1000);
+        setIsProcessing(false);
+        return;
+      }
+      
+      try {
+        // Call the minddump RPC endpoint
+        const response = await APIService.minddump({
+          text: userMessage,
+          user_id: userId,
+          use_relator: false
+        });
+
+        if (response.success) {
+          // Add AI response with the actual result
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: response.result?.output || "I've processed your input successfully!"
+          }]);
+          
+          // Reload nodes when processing is successful
+          reloadNodes();
+        } else {
+          // Handle error case
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: `I encountered an issue processing your request: ${response.error || 'Unknown error'}`
+          }]);
+        }
+      } catch (error) {
+        console.error('Error calling minddump:', error);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: "I'm having trouble connecting to the backend. Please try again later."
+        }]);
+      } finally {
+        setIsProcessing(false);
+      }
     }
   };
 
-  const handleNavigateToChat = (task: any) => {
+  const handleNavigateToChat = async (task: any) => {
     // Switch to mindmap view
     setCurrentView('mindmap');
     
-    // Add task message to chat
-    setMessages(prev => [...prev, { role: "user", content: `Let's discuss "${task.title}". What would you like to know or work on?` }]);
+    const taskMessage = `Let's discuss "${task.title}". What would you like to know or work on?`;
     
-    // Add AI response after delay
-    setTimeout(() => {
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
-      }]);
-    }, 1000);
+    // Add task message to chat
+    setMessages(prev => [...prev, { role: "user", content: taskMessage }]);
+    
+    if (userId) {
+      setIsProcessing(true);
+      try {
+        const response = await APIService.minddump({
+          text: taskMessage,
+          user_id: userId,
+          use_relator: false
+        });
+
+        if (response.success) {
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: response.result?.output || "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
+          }]);
+          
+          // Reload nodes when processing is successful
+          reloadNodes();
+        } else {
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
+          }]);
+        }
+      } catch (error) {
+        console.error('Error processing task message:', error);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
+        }]);
+      } finally {
+        setIsProcessing(false);
+      }
+    }
   };
 
   const toggleView = () => {
@@ -878,8 +1016,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   </div>
                 )}
 
-                {/* Replying to indicator - only show when expanded and not recording */}
-                {replyingToTask && isInputExpanded && !isRecording && (
+                {/* Processing indicator - show when processing */}
+                {isProcessing && isInputExpanded && !isRecording && (
+                  <div className="absolute -top-12 left-0 right-0 flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
+                    <span className="text-sm text-purple-300 flex-1">Processing your message...</span>
+                  </div>
+                )}
+
+                {/* Replying to indicator - only show when expanded and not recording and not processing */}
+                {replyingToTask && isInputExpanded && !isRecording && !isProcessing && (
                   <div className="absolute -top-12 left-0 right-0 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                     <Reply className="w-4 h-4 text-blue-400 flex-shrink-0" />
                     <span className="text-sm text-blue-300 flex-1 truncate">Replying to: <strong>{replyingToTask.title}</strong></span>
@@ -903,17 +1049,19 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 <input
                   type="text"
                   value={isRecording ? `Recording... ${formatRecordingTime(recordingTime)}` : input}
-                  onChange={(e) => !isRecording && setInput(e.target.value)}
+                  onChange={(e) => !isRecording && !isProcessing && setInput(e.target.value)}
                   onFocus={handleInputFocus}
                   onBlur={handleInputBlur}
-                  placeholder={isInputExpanded && !isRecording ? "Let's overthink about..." : ""}
-                  disabled={isRecording}
+                  placeholder={isInputExpanded && !isRecording && !isProcessing ? "Let's overthink about..." : ""}
+                  disabled={isRecording || isProcessing}
                   className={`w-full px-5 py-3 bg-gray-900 border rounded-3xl 
                              text-sm text-white placeholder:text-white/50
                              focus:outline-none focus:ring-2 focus:border-blue-500/50
                              transition-all duration-300 hover:border-white/30
                              ${isRecording 
                                ? 'border-red-500/50 text-red-300 cursor-not-allowed' 
+                               : isProcessing
+                               ? 'border-purple-500/50 text-purple-300 cursor-not-allowed'
                                : 'border-white/20 focus:ring-blue-500/50'
                              }
                              ${isInputExpanded ? 'pr-20' : 'cursor-pointer'}`}
@@ -939,12 +1087,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   
                   <button
                     type="submit"
-                    disabled={!input.trim() || isRecording}
+                    disabled={!input.trim() || isRecording || isProcessing}
                     className="p-2 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 
                                disabled:opacity-30 disabled:cursor-not-allowed
                                transition-all duration-300 hover:scale-110 shadow-lg shadow-blue-500/25"
                   >
-                    <ArrowUp className="w-4 h-4 text-white" />
+                    {isProcessing ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <ArrowUp className="w-4 h-4 text-white" />
+                    )}
                   </button>
                 </div>
               </div>
