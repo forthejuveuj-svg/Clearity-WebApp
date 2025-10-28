@@ -1,19 +1,25 @@
-import React, { useState, useRef } from "react";
-import { X, AlertTriangle, CheckCircle, Clock, Target } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { X, AlertTriangle, CheckCircle, Clock, Target, ArrowRight, Loader2 } from "lucide-react";
+import { convertProblemToProject, getActiveProblems } from "../utils/projectManager";
 
 interface Problem {
   id: string;
   title: string;
-  tag: string;
-  reasoning: string[];
-  effect: string;
-  microAction: {
+  description?: string;
+  tag?: string;
+  reasoning?: string[];
+  effect?: string;
+  status: 'active' | 'ongoing' | 'resolved';
+  created_at: string;
+  updated_at?: string;
+  project_id?: string;
+  microAction?: {
     title: string;
     description: string;
     whyThisHelps: string;
   };
-  solutions: Solution[];
-  isSolvable: boolean;
+  solutions?: Solution[];
+  isSolvable?: boolean;
 }
 
 interface Solution {
@@ -28,62 +34,13 @@ interface ProblemsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSolutionsCompleted?: (count: number) => void;
+  onProblemConverted?: (problemId: string, projectId: string) => void;
 }
 
-export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted }: ProblemsModalProps) => {
-  const [problems] = useState<Problem[]>([
-    {
-      id: "1",
-      title: "You're feeling scattered and can't focus",
-      tag: "Root Cause",
-      reasoning: [
-        "Multiple priorities without clear order",
-        "Repeated concerns across areas", 
-        "Stress and indecision detected"
-      ],
-      effect: "This mental overload can make everything feel urgent and exhausting, even if nothing is really urgent.",
-      microAction: {
-        title: "Pick the 1 most important task and write it down",
-        description: "Choose just one thing to focus on right now",
-        whyThisHelps: "Reduces cognitive load by limiting choices to one priority"
-      },
-      isSolvable: true,
-      solutions: [
-        {
-          id: "1-1",
-          title: "Set a 5-minute timer for your task",
-          description: "Work on your chosen task for just 5 minutes",
-          whyThisHelps: "Makes overwhelming tasks feel manageable",
-          completed: false
-        },
-        {
-          id: "1-2",
-          title: "Take 3 deep breaths",
-          description: "Focus only on your breathing for 30 seconds",
-          whyThisHelps: "Activates your calm nervous system",
-          completed: false
-        }
-      ]
-    },
-    {
-      id: "2", 
-      title: "You're overthinking social interactions",
-      tag: "Emotional Block",
-      reasoning: [
-        "Fear of judgment is creating mental barriers",
-        "Past negative experiences influencing current thoughts",
-        "Overanalyzing what others might think"
-      ],
-      effect: "This anxiety can make you avoid social situations that could actually be positive experiences, creating a cycle of isolation.",
-      microAction: {
-        title: "Focus on listening to one person",
-        description: "In your next conversation, focus only on what they're saying",
-        whyThisHelps: "Shifts focus from yourself to others, reducing self-consciousness"
-      },
-      isSolvable: false,
-      solutions: []
-    }
-  ]);
+export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted, onProblemConverted }: ProblemsModalProps) => {
+  const [problems, setProblems] = useState<Problem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [convertingProblem, setConvertingProblem] = useState<string | null>(null);
 
   const [completedSolutions, setCompletedSolutions] = useState<Set<string>>(new Set());
   const [remindLater, setRemindLater] = useState<Set<string>>(new Set());
@@ -91,6 +48,25 @@ export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted }: Problem
   const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
   const dragOffset = useRef({ x: 0, y: 0 });
   const modalRef = useRef<HTMLDivElement>(null);
+
+  // Load problems when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      loadProblems();
+    }
+  }, [isOpen]);
+
+  const loadProblems = async () => {
+    setLoading(true);
+    try {
+      const activeProblems = await getActiveProblems();
+      setProblems(activeProblems);
+    } catch (error) {
+      console.error('Error loading problems:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleSolution = (solutionId: string) => {
     setCompletedSolutions(prev => {
@@ -117,8 +93,24 @@ export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted }: Problem
     });
   };
 
-  const turnIntoTask = (problemId: string) => {
-    console.log(`Turned problem ${problemId} into task`);
+  const handleConvertToProject = async (problem: Problem) => {
+    setConvertingProblem(problem.id);
+    try {
+      const project = await convertProblemToProject(problem);
+      
+      // Update local state to remove the converted problem
+      setProblems(prev => prev.filter(p => p.id !== problem.id));
+      
+      // Notify parent component
+      onProblemConverted?.(problem.id, project.id);
+      
+      console.log(`Successfully converted problem "${problem.title}" to project "${project.name}"`);
+    } catch (error) {
+      console.error('Error converting problem to project:', error);
+      // You might want to show a toast notification here
+    } finally {
+      setConvertingProblem(null);
+    }
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -191,7 +183,7 @@ export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted }: Problem
       <div 
         ref={modalRef}
         onMouseDown={handleMouseDown}
-        className="relative bg-gray-900/95 border border-gray-700/50 rounded-2xl w-full max-w-md mx-auto shadow-2xl max-h-[45vh] overflow-hidden backdrop-blur-sm mt-16 pointer-events-auto"
+        className="relative bg-gray-900/95 border border-gray-700/50 rounded-2xl w-full max-w-lg mx-auto shadow-2xl max-h-[70vh] overflow-hidden backdrop-blur-sm mt-16 pointer-events-auto"
         style={{ 
           position: 'absolute', 
           left: modalPosition.x || '50%', 
@@ -200,14 +192,19 @@ export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted }: Problem
           cursor: isDragging ? 'grabbing' : 'grab'
         }}
       >
-        {/* Problem Header with calm gradient */}
-        <div className="modal-header bg-gradient-to-r from-red-500/20 via-orange-500/20 to-yellow-500/20 p-6 border-b border-gray-700/50">
+        {/* Header */}
+        <div className="modal-header bg-gradient-to-r from-red-500/20 via-orange-500/20 to-yellow-500/20 p-4 border-b border-gray-700/50">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center">
                 <AlertTriangle className="w-5 h-5 text-red-400" />
               </div>
-              <h2 className="text-lg font-semibold text-white">{problems[0]?.title}</h2>
+              <h2 className="text-lg font-semibold text-white">Active Problems</h2>
+              {problems.length > 0 && (
+                <span className="bg-red-500/20 text-red-300 text-xs px-2 py-1 rounded-full">
+                  {problems.length}
+                </span>
+              )}
             </div>
             <button
               onClick={onClose}
@@ -219,83 +216,85 @@ export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted }: Problem
         </div>
 
         {/* Scrollable Content */}
-        <div className="overflow-y-auto max-h-[calc(45vh-200px)]">
-          {/* Reasoning / Explanation */}
-          <div className="p-4 border-l-2 border-blue-500/40">
-            <h3 className="text-blue-300 font-medium mb-2 text-sm">Why this problem exists</h3>
-            <div className="space-y-1">
-              {problems[0]?.reasoning.map((reason, index) => (
-                <div key={index} className="flex items-start gap-2">
-                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-1.5 flex-shrink-0"></div>
-                  <span className="text-gray-300 text-xs">{reason}</span>
+        <div className="overflow-y-auto max-h-[calc(70vh-120px)] p-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+              <span className="ml-2 text-gray-400">Loading problems...</span>
+            </div>
+          ) : problems.length === 0 ? (
+            <div className="text-center py-8">
+              <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-3" />
+              <h3 className="text-white font-medium mb-2">No active problems</h3>
+              <p className="text-gray-400 text-sm">Great! You don't have any active problems right now.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {problems.map((problem, index) => (
+                <div key={problem.id} className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 hover:bg-gray-800/70 hover:border-gray-600/50 transition-all duration-200 hover:shadow-lg">
+                  {/* Problem Header */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className="w-2 h-2 bg-red-400 rounded-full mt-2 flex-shrink-0"></div>
+                      <div className="flex-1">
+                        <h3 className="text-white font-medium text-sm mb-1 leading-tight">{problem.title}</h3>
+                        {problem.description && (
+                          <p className="text-gray-400 text-xs leading-relaxed">{problem.description}</p>
+                        )}
+                        {problem.effect && (
+                          <p className="text-gray-400 text-xs leading-relaxed mt-1">{problem.effect}</p>
+                        )}
+                      </div>
+                    </div>
+                    {problem.tag && (
+                      <span className="bg-orange-500/20 text-orange-300 text-xs px-2 py-1 rounded-full ml-3 flex-shrink-0">
+                        {problem.tag}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Problem Details */}
+                  {problem.reasoning && problem.reasoning.length > 0 && (
+                    <div className="mb-3 ml-5">
+                      <h4 className="text-blue-300 font-medium text-xs mb-2">Why this exists:</h4>
+                      <div className="space-y-1">
+                        {problem.reasoning.slice(0, 2).map((reason, reasonIndex) => (
+                          <div key={reasonIndex} className="flex items-start gap-2">
+                            <div className="w-1 h-1 bg-blue-400 rounded-full mt-1.5 flex-shrink-0"></div>
+                            <span className="text-gray-400 text-xs">{reason}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2 pt-3 border-t border-gray-700/30 ml-5">
+                    <button
+                      onClick={() => handleConvertToProject(problem)}
+                      disabled={convertingProblem === problem.id}
+                      className="flex items-center gap-2 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs rounded-lg border border-blue-500/40 hover:border-blue-400/60 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md"
+                    >
+                      {convertingProblem === problem.id ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <ArrowRight className="w-3 h-3" />
+                      )}
+                      Convert to Project
+                    </button>
+                    
+                    <button
+                      onClick={() => toggleRemindLater(problem.id)}
+                      className="flex items-center gap-2 px-3 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 text-xs rounded-lg transition-all duration-200 hover:shadow-md"
+                    >
+                      <Clock className="w-3 h-3" />
+                      Later
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Effect / Awareness */}
-          <div className="p-4 border-l-2 border-orange-500/40">
-            <h3 className="text-orange-300 font-medium mb-2 text-sm">How this affects you</h3>
-            <p className="text-gray-300 text-xs leading-relaxed">{problems[0]?.effect}</p>
-          </div>
-
-          {/* Solution Path */}
-          {problems[0]?.isSolvable ? (
-            <div className="p-4 border-l-2 border-green-500/40">
-              <h3 className="text-green-300 font-medium mb-2 text-sm">Additional actions you can take:</h3>
-              <div className="space-y-2">
-                {problems[0]?.solutions.map((solution) => (
-                  <div key={solution.id} className="p-3">
-                    <div className="flex-1">
-                      <h5 className="text-white font-medium mb-1 text-sm">{solution.title}</h5>
-                      <p className="text-gray-400 text-xs mb-1">{solution.description}</p>
-                      <div className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded inline-block mb-2">
-                        Why this helps: {solution.whyThisHelps}
-                      </div>
-                      <button
-                        onClick={() => turnIntoTask(solution.id)}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs rounded-lg border border-blue-500/40 hover:border-blue-400/60 transition-colors"
-                      >
-                        <Target className="w-3 h-3" />
-                        Turn into a task
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="p-4 border-l-2 border-yellow-500/40">
-              <h3 className="text-yellow-300 font-medium mb-2 text-sm">Additional actions you can take:</h3>
-              <p className="text-gray-300 text-xs mb-2">
-                This can't be solved instantly — that's okay. Focus on noticing it without stress. You can return later if needed.
-              </p>
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={remindLater.has(problems[0]?.id)}
-                    onChange={() => toggleRemindLater(problems[0]?.id)}
-                    className="w-4 h-4 rounded border-gray-400"
-                  />
-                  <span className="text-gray-300 text-xs">Remind me later</span>
-                </label>
-              </div>
-            </div>
           )}
-        </div>
-
-        {/* Closure / Next Step */}
-        <div className="p-4">
-          <div className="flex items-center justify-center">
-            <button
-              onClick={() => toggleRemindLater(problems[0]?.id)}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 text-xs rounded-lg transition-colors"
-            >
-              <Clock className="w-4 h-4" />
-              Remind me later
-            </button>
-          </div>
         </div>
       </div>
 

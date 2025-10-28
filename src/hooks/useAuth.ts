@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import { getRedirectUrl } from '@/lib/config'
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null)
@@ -32,7 +31,7 @@ export const useAuth = () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: getRedirectUrl('/')
+        redirectTo: window.location.origin
       }
     })
     if (error) throw error

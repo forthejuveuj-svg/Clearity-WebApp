@@ -1110,7 +1110,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       {/* Problems Modal */}
       <ProblemsModal 
         isOpen={isProblemsOpen} 
-        onClose={() => setIsProblemsOpen(false)} 
+        onClose={() => setIsProblemsOpen(false)}
+        onProblemConverted={(problemId, projectId) => {
+          console.log(`Problem ${problemId} converted to project ${projectId}`);
+          // You might want to refresh the mind map or show a success message here
+        }}
       />
     </div>
   );
