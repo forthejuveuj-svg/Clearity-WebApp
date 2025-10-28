@@ -28,10 +28,15 @@ export const useAuth = () => {
   }, [])
 
   const signInWithGoogle = async () => {
+    // Force production URL - replace with your actual domain
+    const redirectUrl = 'https://74.208.127.204/';
+    console.log('OAuth redirect URL:', redirectUrl);
+    console.log('Current location:', window.location.href);
+    
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin
+        redirectTo: redirectUrl
       }
     })
     if (error) throw error
