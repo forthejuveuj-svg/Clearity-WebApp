@@ -9,6 +9,7 @@ const BACKEND_URL = config.backendUrl;
 interface RPCResponse<T = any> {
   success: boolean;
   result?: T;
+  output?: string;
   error?: string;
   method?: string;
 }

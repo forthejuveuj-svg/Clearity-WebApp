@@ -144,7 +144,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             if (response.success) {
               setMessages(prev => [...prev, {
                 role: "assistant",
-                content: response.result?.output || "I've processed your input successfully!"
+                content: response.output 
               }]);
               
               // Reload nodes when processing is successful
@@ -191,7 +191,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           if (response.success) {
             setMessages(prev => [...prev, {
               role: "assistant",
-              content: response.result?.output || "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
+              content: response.output 
             }]);
             
             // Reload nodes when processing is successful
@@ -287,7 +287,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           // Add AI response with the actual result
           setMessages(prev => [...prev, {
             role: "assistant",
-            content: response.result?.output || "I've processed your input successfully!"
+            content: response.output 
           }]);
           
           // Reload nodes when processing is successful
@@ -332,7 +332,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         if (response.success) {
           setMessages(prev => [...prev, {
             role: "assistant",
-            content: response.result?.output || "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
+            content: response.output
           }]);
           
           // Reload nodes when processing is successful
