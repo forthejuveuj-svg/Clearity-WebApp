@@ -3,6 +3,7 @@
  */
 
 import { config } from './config';
+import { APIServiceMock } from './apiMock';
 
 const BACKEND_URL = config.backendUrl;
 
@@ -20,7 +21,26 @@ interface MindDumpParams {
   use_relator?: boolean;
 }
 
+interface FixNodesParams {
+  text: string;
+  user_id?: string;
+}
+
+interface ProjectManagerParams {
+  text: string;
+}
+
+interface TaskManagerAssessParams {
+  user_message: string;
+  task_object: any;
+  context?: any;
+}
+
 export class APIService {
+  private static get useMockAPI(): boolean {
+    return import.meta.env.DEV && window.location.hostname === 'localhost';
+  }
+
   private static async makeRPCCall<T = any>(method: string, params: any): Promise<RPCResponse<T>> {
     try {
       const response = await fetch(`${BACKEND_URL}/rpc`, {
@@ -49,10 +69,56 @@ export class APIService {
   }
 
   static async minddump(params: MindDumpParams): Promise<RPCResponse> {
+    if (this.useMockAPI) {
+      return APIServiceMock.minddump(params);
+    }
     return this.makeRPCCall('minddump', params);
   }
 
+  static async fixNodes(params: FixNodesParams): Promise<RPCResponse> {
+    if (this.useMockAPI) {
+      return APIServiceMock.fixNodes(params);
+    }
+    return this.makeRPCCall('fix_nodes', params);
+  }
+
+  static async projectManager(params: ProjectManagerParams): Promise<RPCResponse> {
+    if (this.useMockAPI) {
+      return APIServiceMock.projectManager(params);
+    }
+    
+    const response = await this.makeRPCCall('projectmanager', params);
+    // Transform the response to match expected format
+    if (response.success && response.result?.message) {
+      return {
+        ...response,
+        output: response.result.message
+      };
+    }
+    return response;
+  }
+
+  static async taskManagerAssess(params: TaskManagerAssessParams): Promise<RPCResponse> {
+    if (this.useMockAPI) {
+      return APIServiceMock.taskManagerAssess(params);
+    }
+    
+    const response = await this.makeRPCCall('taskmanager_assess', params);
+    // Transform the response to match expected format
+    if (response.success && response.result?.message) {
+      return {
+        ...response,
+        output: response.result.message
+      };
+    }
+    return response;
+  }
+
   static async healthCheck(): Promise<RPCResponse> {
+    if (this.useMockAPI) {
+      return APIServiceMock.healthCheck();
+    }
+    
     try {
       const response = await fetch(`${BACKEND_URL}/health`);
       if (!response.ok) {

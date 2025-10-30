@@ -7,6 +7,7 @@ import { useAudioRecording } from "@/hooks/useAudioRecording";
 import { useAuth } from "@/hooks/useAuth";
 import { APIService } from "@/lib/api";
 import { generateMindMapJson } from "../utils/generateMindMapJson";
+import { messageModeHandler } from "@/utils/messageModeHandler";
 
 interface Message {
   role: "user" | "assistant";
@@ -55,6 +56,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Reset message mode handler when component mounts
+  useEffect(() => {
+    messageModeHandler.reset();
+  }, []);
 
   // Single mind map state - data comes directly from database
   const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
@@ -113,20 +119,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       if (initialMessage) {
         setMessages([{ role: "user", content: initialMessage }]);
         
-        // Process initial message with RPC call
+        // Process initial message with message mode handler
         const processInitialMessage = async () => {
           setIsProcessing(true);
           try {
-            const response = await APIService.minddump({
-              text: initialMessage,
-              user_id: userId,
-              use_relator: false
-            });
+            const result = await messageModeHandler.processMessage(initialMessage, userId);
 
-            if (response.success) {
+            if (result.success) {
               setMessages(prev => [...prev, {
                 role: "assistant",
-                content: response.output 
+                content: result.output || "Processing completed successfully."
               }]);
               
               // Reload nodes when processing is successful
@@ -134,7 +136,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             } else {
               setMessages(prev => [...prev, {
                 role: "assistant",
-                content: `I encountered an issue processing your request: ${response.error || 'Unknown error'}`
+                content: `I encountered an issue processing your request: ${result.error || 'Unknown error'}`
               }]);
             }
           } catch (error) {
@@ -160,20 +162,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       // Add new user message
       setMessages(prev => [...prev, { role: "user", content: initialMessage }]);
       
-      // Process with RPC call
+      // Process with message mode handler
       const processNewMessage = async () => {
         setIsProcessing(true);
         try {
-          const response = await APIService.minddump({
-            text: initialMessage,
-            user_id: userId,
-            use_relator: false
-          });
+          const result = await messageModeHandler.processMessage(initialMessage, userId);
 
-          if (response.success) {
+          if (result.success) {
             setMessages(prev => [...prev, {
               role: "assistant",
-              content: response.output 
+              content: result.output || "Processing completed successfully."
             }]);
             
             // Reload nodes when processing is successful
@@ -261,18 +259,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }
       
       try {
-        // Call the minddump RPC endpoint
-        const response = await APIService.minddump({
-          text: userMessage,
-          user_id: userId,
-          use_relator: false
-        });
+        // Use message mode handler to process the message
+        const result = await messageModeHandler.processMessage(userMessage, userId);
 
-        if (response.success) {
+        if (result.success) {
           // Add AI response with the actual result
           setMessages(prev => [...prev, {
             role: "assistant",
-            content: response.output 
+            content: result.output || "Processing completed successfully."
           }]);
           
           // Reload nodes when processing is successful
@@ -281,11 +275,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           // Handle error case
           setMessages(prev => [...prev, {
             role: "assistant",
-            content: `I encountered an issue processing your request: ${response.error || 'Unknown error'}`
+            content: `I encountered an issue processing your request: ${result.error || 'Unknown error'}`
           }]);
         }
       } catch (error) {
-        console.error('Error calling minddump:', error);
+        console.error('Error processing message:', error);
         setMessages(prev => [...prev, {
           role: "assistant",
           content: "I'm having trouble connecting to the backend. Please try again later."
@@ -293,6 +287,29 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       } finally {
         setIsProcessing(false);
       }
+    }
+  };
+
+  // Handle node clicks for project focus (invisible to user)
+  const handleNodeClick = (node: Node) => {
+    // Simple heuristic: if node label contains project-like keywords, treat as project
+    const projectKeywords = ['project', 'course', 'learning', 'study', 'work', 'build', 'create'];
+    const isProject = projectKeywords.some(keyword => 
+      node.label.toLowerCase().includes(keyword)
+    );
+    
+    if (isProject) {
+      // Determine if project is started (simple heuristic based on node color or other properties)
+      const isStarted = node.color === 'blue' || node.color === 'teal'; // Assume blue/teal = started
+      
+      // Silently switch to project mode - user doesn't see any indication
+      messageModeHandler.setProjectFocus({
+        id: node.id,
+        name: node.label,
+        status: isStarted ? 'started' : 'not_started'
+      });
+      
+      // No message added - mode switch is invisible to user
     }
   };
 
@@ -703,6 +720,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             }}
           >
             <div
+              onClick={() => handleNodeClick(node)}
               className={`
                 ${getSizeClass()} ${getColorClass(node.color)}
                 relative rounded-full border-2 bg-gray-900/60 backdrop-blur-sm
@@ -994,7 +1012,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   onChange={(e) => !isRecording && !isProcessing && setInput(e.target.value)}
                   onFocus={handleInputFocus}
                   onBlur={handleInputBlur}
-                  placeholder={isInputExpanded && !isRecording && !isProcessing ? "Let's overthink about..." : ""}
+                  placeholder={isInputExpanded && !isRecording && !isProcessing ? messageModeHandler.getPlaceholder() : ""}
                   disabled={isRecording || isProcessing}
                   className={`w-full px-5 py-3 bg-gray-900 border rounded-3xl 
                              text-sm text-white placeholder:text-white/50

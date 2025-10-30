@@ -1,8 +1,17 @@
 import { useState, useEffect } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { useAuthDev } from './useAuthDev'
 
 export const useAuth = () => {
+  // Use mock auth in development when running on localhost
+  const isDevelopment = import.meta.env.DEV && window.location.hostname === 'localhost'
+  
+  if (isDevelopment) {
+    return useAuthDev()
+  }
+
+  // Production auth implementation
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
