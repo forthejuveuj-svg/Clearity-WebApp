@@ -141,7 +141,6 @@ function createProjectNode(project, knowledgeNodes = [], problems = []) {
     label: project.name.length > 12 ? project.name.replace(/\s+/g, '\n') : project.name,
     x: position.x,
     y: position.y,
-    size: "medium",
     color,
     thoughts: allThoughts,
     hasProblem: projectProblems.length > 0,
@@ -156,45 +155,6 @@ function getDateKey(date) {
   return date.toISOString().split('T')[0]; // YYYY-MM-DD format
 }
 
-function organizeDataByDates(projects, knowledgeNodes, problems) {
-  const today = new Date();
-  const todayKey = getDateKey(today);
-
-  // Get all unique dates from all data sources
-  const allDates = new Set();
-
-  [...projects, ...knowledgeNodes, ...problems].forEach(item => {
-    if (item.created_at) allDates.add(getDateKey(new Date(item.created_at)));
-    if (item.updated_at) allDates.add(getDateKey(new Date(item.updated_at)));
-    if (item.last_updated) allDates.add(getDateKey(new Date(item.last_updated)));
-  });
-
-  // Sort dates and get the last 3 (excluding today if present)
-  const sortedDates = Array.from(allDates)
-    .filter(date => date !== todayKey)
-    .sort((a, b) => new Date(b) - new Date(a))
-    .slice(0, 3);
-
-  // If today exists in data, add it
-  if (allDates.has(todayKey)) {
-    sortedDates.unshift(todayKey);
-  }
-
-  return sortedDates;
-}
-
-function getItemsForDate(items, targetDate) {
-  return items.filter(item => {
-    const itemDates = [
-      item.created_at && getDateKey(new Date(item.created_at)),
-      item.updated_at && getDateKey(new Date(item.updated_at)),
-      item.last_updated && getDateKey(new Date(item.last_updated))
-    ].filter(Boolean);
-
-    return itemDates.includes(targetDate);
-  });
-}
-
 export async function generateMindMapJson() {
   try {
     console.log('=== DEBUGGING generateMindMapJson ===');
@@ -206,76 +166,33 @@ export async function generateMindMapJson() {
       problems: problems.length
     });
 
-    const mindMapStates = {};
-    const dates = organizeDataByDates(projects, knowledgeNodes, problems);
-    const today = getDateKey(new Date());
+    // Clear used positions
+    usedPositions.length = 0;
 
-    console.log('Organized dates:', dates);
-    console.log('Today:', today);
-
-    // Process dates and assign to time slots
-    dates.forEach((date) => {
-      let timeSlot;
-
-      if (date === today) {
-        timeSlot = "0"; // Today
-      } else {
-        // Assign to -1, -2, -3 based on how recent they are
-        const dayIndex = dates.filter(d => d !== today).indexOf(date);
-        timeSlot = (-1 - dayIndex).toString();
-      }
-
-      console.log(`Processing date ${date} -> timeSlot ${timeSlot}`);
-
-      // Get data for this date
-      const dateProjects = getItemsForDate(projects, date);
-      console.log(`Projects for ${date}:`, dateProjects.length);
-
-      // Clear used positions for this time slot
-      usedPositions.length = 0;
-
-      // Create nodes for this date - only project nodes
-      const nodes = [];
-
-      // Add project nodes (knowledge and problems are integrated into project nodes)
-      dateProjects.forEach(project => {
-        const node = createProjectNode(project, knowledgeNodes, problems);
-        if (node) nodes.push(node);
-      });
-
-      console.log(`Created ${nodes.length} nodes for timeSlot ${timeSlot}`);
-      mindMapStates[timeSlot] = nodes;
+    // Create nodes from current projects
+    const nodes = [];
+    projects.forEach(project => {
+      const node = createProjectNode(project, knowledgeNodes, problems);
+      if (node) nodes.push(node);
     });
 
-    // Ensure we have all required time slots (empty arrays for slots with no data)
-    ["-3", "-2", "-1", "0"].forEach(slot => {
-      if (!mindMapStates[slot]) {
-        console.log(`Creating empty array for slot ${slot}`);
-        mindMapStates[slot] = [];
-      }
-    });
+    // Determine parent node title - defaults to hidden (null)
+    // This will be set by backend data when a parent node should be shown
+    let parentNode = null;
 
-    // Future maps (without Clearity node)
-    const futureMaps = [
-      [{ id: "productivity", label: "Productivity", x: 30, y: 50, size: "medium", color: "blue", thoughts: ["efficiency", "output", "systems"] }],
-      [{ id: "mastery", label: "Mastery", x: 35, y: 45, size: "medium", color: "blue", thoughts: ["expertise", "skill", "practice"] }],
-      [{ id: "fulfillment", label: "Fulfillment", x: 40, y: 50, size: "medium", color: "blue", thoughts: ["purpose", "meaning", "joy"] }]
-    ];
+    console.log(`Created ${nodes.length} nodes`);
+    console.log(`Parent node: ${parentNode}`);
 
-    futureMaps.forEach((nodes, index) => {
-      const slot = (index + 1).toString();
-      console.log(`Adding future map to slot ${slot}:`, nodes.length, 'nodes');
-      // Clear positions for future maps (they have fixed positions anyway)
-      usedPositions.length = 0;
-      mindMapStates[slot] = nodes;
-    });
+    const result = {
+      nodes,
+      parentNode,
+      _timestamp: Date.now()
+    };
 
-    console.log('Final mindMapStates:', mindMapStates);
+    console.log('Final result:', result);
     console.log('=== END DEBUGGING ===');
 
-    // Add timestamp to force cache refresh
-    mindMapStates._timestamp = Date.now();
-    return mindMapStates;
+    return result;
   } catch (error) {
     console.error('Error generating mind map:', error);
     console.log('Falling back to getFallbackJson()');
@@ -287,27 +204,18 @@ export async function generateMindMapJson() {
 
 function getFallbackJson() {
   return {
-    "-3": [
+    nodes: [
       {
-        id: "stress",
-        label: "Stress",
-        x: 25,
-        y: 45,
-        size: "medium",
-        color: "red",
-        thoughts: ["work", "deadlines", "pressure"],
-        hasProblem: true,
-        problemData: [
-          { id: 1, title: "High workload", status: "active", description: "Too many tasks" },
-          { id: 2, title: "Tight deadlines", status: "active", description: "Not enough time" }
-        ]
+        id: "sample-project",
+        label: "Sample\nProject",
+        x: 30,
+        y: 50,
+        color: "blue",
+        thoughts: ["planning", "development", "testing"],
+        hasProblem: false
       }
     ],
-    "-2": [{ id: "mindfulness", label: "Mindfulness", x: 30, y: 50, size: "medium", color: "blue", thoughts: ["meditation", "present", "awareness"] }],
-    "-1": [{ id: "thinking", label: "Thinking", x: 25, y: 45, size: "medium", color: "blue", thoughts: ["logic", "reason", "analysis"] }],
-    "0": [],
-    "1": [{ id: "productivity", label: "Productivity", x: 30, y: 50, size: "medium", color: "blue", thoughts: ["efficiency", "output", "systems"] }],
-    "2": [{ id: "mastery", label: "Mastery", x: 35, y: 45, size: "medium", color: "blue", thoughts: ["expertise", "skill", "practice"] }],
-    "3": [{ id: "fulfillment", label: "Fulfillment", x: 40, y: 50, size: "medium", color: "blue", thoughts: ["purpose", "meaning", "joy"] }]
+    parentNode: null, // Default to hidden
+    _timestamp: Date.now()
   };
 }

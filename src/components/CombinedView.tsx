@@ -19,7 +19,6 @@ interface Node {
   label: string;
   x: number;
   y: number;
-  size: "small" | "medium" | "large";
   color: "blue" | "violet" | "red" | "teal";
   subNodes?: { label: string }[];
   tension?: number;
@@ -59,12 +58,18 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Single mind map state - data comes directly from database
   const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
+  const [parentNodeTitle, setParentNodeTitle] = useState<string | null>(null);
 
   // Function to reload mind map nodes from database
   const reloadNodes = () => {
-    generateMindMapJson().then(states => {
-      if (states && states["0"]) {
-        setMindMapNodes(states["0"]);
+    generateMindMapJson().then(data => {
+      if (data) {
+        // Set regular nodes (all nodes are regular now)
+        setMindMapNodes(data.nodes || []);
+        
+        // Set parent node title if provided
+        setParentNodeTitle(data.parentNode || null);
+        
         console.log('Mind map nodes reloaded after successful processing');
       }
     });
@@ -72,9 +77,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Load mind map nodes on component mount
   useEffect(() => {
-    generateMindMapJson().then(states => {
-      if (states && states["0"]) {
-        setMindMapNodes(states["0"]);
+    generateMindMapJson().then(data => {
+      if (data) {
+        // Set regular nodes (all nodes are regular now)
+        setMindMapNodes(data.nodes || []);
+        
+        // Set parent node title if provided
+        setParentNodeTitle(data.parentNode || null);
       }
     });
 
@@ -226,9 +235,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   useEffect(() => {
     if (!isBuilding && mindMapNodes.length > 0) {
       const allNodeIds = mindMapNodes.map(n => n.id);
+      // Include parent node if it exists
+      if (parentNodeTitle) {
+        allNodeIds.push("parent-node");
+      }
       setVisibleNodes(allNodeIds);
     }
-  }, [isBuilding, mindMapNodes]);
+  }, [isBuilding, mindMapNodes, parentNodeTitle]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -501,24 +514,17 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     };
   }, [blurTimeoutId]);
 
-  const getCircleSize = (size: string) => {
+  const getCircleSize = () => {
     const screenWidth = window.innerWidth;
     
     if (screenWidth >= 1024) {
-      // Desktop sizes
-      switch (size) {
-        case "small": return { width: 144, height: 144 }; // 9rem (36 * 4)
-        case "medium": return { width: 176, height: 176 }; // 11rem (44 * 4)
-        case "large": return { width: 208, height: 208 }; // 13rem (52 * 4)
-        default: return { width: 176, height: 176 };
-      }
+      // Desktop sizes - all regular nodes are medium
+      return { width: 176, height: 176 }; // 11rem (44 * 4)
     }
     
     if (screenWidth >= 768) {
       // Tablet: scale between 768-1024px
-      const baseWidths = size === "small" ? { min: 96, max: 144 }  // 6rem to 9rem
-        : size === "medium" ? { min: 112, max: 176 } // 7rem to 11rem
-        : { min: 128, max: 208 }; // 8rem to 13rem (large)
+      const baseWidths = { min: 112, max: 176 }; // 7rem to 11rem for regular nodes
       
       const scaleFactor = Math.max(0, Math.min(1, (screenWidth - 768) / (1024 - 768)));
       const width = baseWidths.min + (baseWidths.max - baseWidths.min) * scaleFactor;
@@ -528,36 +534,23 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     
     // Phone screens (< 768px): bigger circles for better visibility
     const phoneScale = screenWidth / 768; // e.g., 375px / 768 = 0.49
-    const tabletBase = size === "small" ? 96
-      : size === "medium" ? 112
-      : 128;
+    const tabletBase = 112;
     
     // Multiply by 1.3 to make circles 30% bigger on phones
     const width = tabletBase * phoneScale * 1.3;
     return { width, height: width };
   };
 
-  const getSizeClass = (size: string) => {
+  const getSizeClass = () => {
     const screenWidth = window.innerWidth;
     
+    // All regular nodes are medium size
     if (screenWidth >= 1024) {
-      // Desktop (unchanged)
-      switch (size) {
-        case "small": return "text-xl";
-        case "medium": return "text-2xl";
-        case "large": return "text-3xl";
-        default: return "";
-      }
+      return "text-2xl";
     }
     
     if (screenWidth >= 768) {
-      // Tablet (unchanged)
-      switch (size) {
-        case "small": return "text-sm";
-        case "medium": return "text-base";
-        case "large": return "text-base";
-        default: return "text-base";
-      }
+      return "text-base";
     }
     
     // Phone: smaller text
@@ -698,7 +691,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           );
         })}
 
-        {/* Render nodes */}
+        {/* Render regular nodes */}
         {allNodes && allNodes.map((node) => (
           <div
             key={node.id}
@@ -711,7 +704,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           >
             <div
               className={`
-                ${getSizeClass(node.size)} ${getColorClass(node.color)}
+                ${getSizeClass()} ${getColorClass(node.color)}
                 relative rounded-full border-2 bg-gray-900/60 backdrop-blur-sm
                 flex items-center justify-center text-center
                 transition-all duration-500
@@ -720,15 +713,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 ring-4 ring-offset-16 ring-offset-transparent ${getRingClass(node.color)}
               `}
               style={{
-                width: `${getCircleSize(node.size).width}px`,
-                height: `${getCircleSize(node.size).height}px`
+                width: `${getCircleSize().width}px`,
+                height: `${getCircleSize().height}px`
               }}
             >
               <span className="font-medium leading-tight px-1 whitespace-pre-line text-white">
                 {node.label}
               </span>
-
-
 
               {/* Problem indicator */}
               {node.hasProblem && (
@@ -742,22 +733,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 </button>
               )}
 
-
               {/* Small thought labels around each circle */}
               {node.thoughts && node.thoughts.map((thought, idx) => {
-                let angles;
-                if (node.id === "brain") {
-                  angles = [150, 180, 210];
-                } else if (node.id === "design") {
-                  // Avoid top-right area where problem indicator is
-                  angles = mapHeight < 40 ? [300, 330, 0] : [200, 230, 260];
-                } else if (node.id === "psychology") {
-                  angles = mapHeight < 40 ? [150, 180, 210] : [45, 90, 135];
-                } else if (node.id === "habits") {
-                  angles = [150, 180, 210];
-                } else {
-                  angles = [60, 90, 120];
-                }
+                // Default angles for all nodes
+                const angles = [60, 90, 120];
                 const angle = angles[idx];
                 // Responsive radius: scales with screen size
                 const screenWidth = window.innerWidth;
@@ -804,6 +783,46 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             </div>
           </div>
         ))}
+
+        {/* Render parent node if title is provided */}
+        {parentNodeTitle && (
+          <div
+            key="parent-node"
+            className="absolute transition-transform duration-500 ease-out"
+            style={{
+              left: "85%",
+              top: "15%",
+              transform: `translate(-50%, -50%) ${getScaleTransform()}`,
+            }}
+          >
+            <div
+              className="text-6xl font-bold lg:text-6xl md:text-xl sm:text-base border-teal-400 shadow-[0_0_20px_-5px_rgba(45,212,191,0.4)]
+                relative rounded-full border-4 bg-gray-900/60 backdrop-blur-sm
+                flex items-center justify-center text-center
+                transition-all duration-500
+                hover:scale-110 hover:bg-gray-800/60
+                cursor-pointer
+                ring-4 ring-offset-16 ring-offset-transparent ring-teal-400/40 shadow-[0_0_40px_-10px_rgba(45,212,191,0.8)]"
+              style={{
+                width: "432px",
+                height: "432px"
+              }}
+            >
+              <span className="font-medium leading-tight px-1 whitespace-pre-line text-white">
+                {parentNodeTitle}
+              </span>
+
+              {/* Empty circle around parent node (like Clearity in old version) */}
+              <div 
+                className="absolute inset-0 rounded-full border-6 border-teal-400 pointer-events-none shadow-[0_0_30px_-5px_rgba(45,212,191,0.8)]"
+                style={{
+                  transform: 'scale(1.2)',
+                  margin: '-10%'
+                }}
+              />
+            </div>
+          </div>
+        )}
 
 
         {/* Building progress indicator */}
