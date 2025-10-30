@@ -14,9 +14,8 @@ const Index = () => {
   const location = useLocation();
   const { user, loading } = useAuthContext();
   const [currentView, setCurrentView] = useState<ViewState>(() => {
-    // Restore view from sessionStorage if available
-    const savedView = sessionStorage.getItem('currentView');
-    return (savedView === 'combined' ? 'combined' : 'onboarding') as ViewState;
+    // Don't restore view from storage initially - let auth check handle it
+    return 'onboarding';
   });
   const [initialMessage, setInitialMessage] = useState("");
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -33,21 +32,37 @@ const Index = () => {
   const [showBugSubmittedNotification, setShowBugSubmittedNotification] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
 
-  // Save current view to sessionStorage whenever it changes
+  // Save current view to localStorage for persistence across sessions
   useEffect(() => {
-    sessionStorage.setItem('currentView', currentView);
+    localStorage.setItem('currentView', currentView);
   }, [currentView]);
 
-  // Check if we came back from auth with a message
+  // Auto-redirect authenticated users to combined view
   useEffect(() => {
-    if (location.state?.startWithMessage) {
-      const message = location.state.startWithMessage;
-      setInitialMessage(message);
-      setCurrentView("combined");
-      // Clear the state so refresh doesn't restart
-      window.history.replaceState({}, document.title);
+    if (!loading && user) {
+      // User is authenticated, check if we should go to combined view
+      const savedView = localStorage.getItem('currentView');
+      const hasBeenToCombined = savedView === 'combined';
+      
+      // If user has been to combined view before OR if they're coming from auth,
+      // take them directly to combined view
+      if (hasBeenToCombined || location.state?.startWithMessage) {
+        setCurrentView('combined');
+        
+        // Handle message from auth redirect
+        if (location.state?.startWithMessage) {
+          setInitialMessage(location.state.startWithMessage);
+          // Clear the state so refresh doesn't restart
+          window.history.replaceState({}, document.title);
+        }
+      }
+    } else if (!loading && !user) {
+      // User is not authenticated, reset to onboarding
+      setCurrentView('onboarding');
     }
-  }, [location]);
+  }, [user, loading, location.state]);
+
+
 
   const handleStart = (message: string) => {
     // Check if user is authenticated

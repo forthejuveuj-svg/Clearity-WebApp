@@ -46,6 +46,10 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
   const handleSignOut = async () => {
     try {
       await signOut();
+      
+      // Clear cached session data
+      localStorage.removeItem('currentView');
+      
       navigate('/');
       setShowUserMenu(false);
     } catch (error) {
@@ -131,7 +135,7 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
               setIsTaskManagerOpen(true);
             }
           }}
-          className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:scale-110"
+          className="hidden p-2.5 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:scale-110"
           aria-label={currentView === 'tasks' ? 'Mind Map' : 'Task Manager'}
         >
           {currentView === 'tasks' ? (

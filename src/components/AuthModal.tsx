@@ -22,6 +22,10 @@ export const AuthModal = ({ isOpen, onClose, pendingMessage }: AuthModalProps) =
     try {
       setIsLoading(true);
       await signInWithGoogle();
+      
+      // Mark that user should go to combined view
+      localStorage.setItem('currentView', 'combined');
+      
       onClose();
       
       // If there's a pending message, go to app with it

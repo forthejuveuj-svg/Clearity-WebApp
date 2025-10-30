@@ -33,6 +33,10 @@ export const Auth = () => {
     try {
       setIsLoading(true);
       await signInWithGoogle();
+      
+      // Mark that user should go to combined view
+      localStorage.setItem('currentView', 'combined');
+      
       // Navigation will be handled by the auth state change
     } catch (error: any) {
       toast.error(error.message || "Failed to sign in with Google");
@@ -47,6 +51,9 @@ export const Auth = () => {
     try {
       await signInWithEmail(loginEmail, loginPassword);
       toast.success("Successfully signed in!");
+      
+      // Mark that user should go to combined view
+      localStorage.setItem('currentView', 'combined');
       
       // If there's a pending message, go back to app with it
       if (pendingMessage) {
@@ -79,6 +86,9 @@ export const Auth = () => {
     try {
       await signUpWithEmail(signupEmail, signupPassword, signupName);
       toast.success("Account created! Please check your email to verify your account.");
+      
+      // Mark that user should go to combined view
+      localStorage.setItem('currentView', 'combined');
       
       // If there's a pending message, go back to app with it
       if (pendingMessage) {

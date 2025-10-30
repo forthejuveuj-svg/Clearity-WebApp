@@ -49,10 +49,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [mapHeight, setMapHeight] = useState(60); // Percentage of screen height for mind map
   const [isDragging, setIsDragging] = useState(false);
   const [isInputExpanded, setIsInputExpanded] = useState(false);
-  const [dragDirection, setDragDirection] = useState<'vertical' | 'horizontal' | null>(null);
-  const [historyPosition, setHistoryPosition] = useState(0); // 0 = current, negative = past, positive = future
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
-  const [dragOffset, setDragOffset] = useState(0); // Raw drag distance for smooth interpolation (-300 to 300)
   const [typingMessages, setTypingMessages] = useState<Set<number>>(new Set());
   const [isProblemsOpen, setIsProblemsOpen] = useState(false);
   const [currentView, setCurrentView] = useState<'mindmap' | 'tasks'>(initialView);
@@ -60,26 +57,24 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Dynamic mind map states with fallback
-  const [mindMapStates, setMindMapStates] = useState<{ [key: string]: Node[] }>({
-    "0": []
-  });
+  // Single mind map state - data comes directly from database
+  const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
 
-  // Function to reload mind map nodes
+  // Function to reload mind map nodes from database
   const reloadNodes = () => {
     generateMindMapJson().then(states => {
-      if (states && Object.keys(states).length > 0) {
-        setMindMapStates(states);
+      if (states && states["0"]) {
+        setMindMapNodes(states["0"]);
         console.log('Mind map nodes reloaded after successful processing');
       }
     });
   };
 
-  // Load mind map states on component mount
+  // Load mind map nodes on component mount
   useEffect(() => {
     generateMindMapJson().then(states => {
-      if (states && Object.keys(states).length > 0) {
-        setMindMapStates(states);
+      if (states && states["0"]) {
+        setMindMapNodes(states["0"]);
       }
     });
 
@@ -93,30 +88,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
 
 
-  // Calculate which two states to blend between based on dragOffset or historyPosition
-  const getBlendedStates = () => {
-    // Ensure mindMapStates has data
-    if (!mindMapStates || Object.keys(mindMapStates).length === 0) {
-      return { baseNodes: [], nextNodes: [], blendFactor: 0 };
-    }
-
-    // Use dragOffset for smooth interpolation while dragging, historyPosition when not dragging
-    const exactPosition = isDragging ? dragOffset / 100 : historyPosition;
-    const basePos = Math.floor(exactPosition);
-    const nextPos = Math.ceil(exactPosition);
-    const blendFactor = exactPosition - basePos;
-    
-    const baseKey = Math.max(-3, Math.min(3, basePos)).toString();
-    const nextKey = Math.max(-3, Math.min(3, nextPos)).toString();
-    
-    const baseNodes = mindMapStates[baseKey] || mindMapStates["0"] || [];
-    const nextNodes = mindMapStates[nextKey] || mindMapStates["0"] || [];
-    
-    return { baseNodes, nextNodes, blendFactor };
-  };
-  
-  const { baseNodes, nextNodes, blendFactor } = getBlendedStates();
-  const allNodes: Node[] = baseNodes || []; // Use base nodes for now (we can add blending back later)
+  // Use the single mind map state directly
+  const allNodes: Node[] = mindMapNodes;
 
   const connections = [
     { from: "brain", to: "psychology" },
@@ -249,14 +222,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     };
   }, []);
 
-  // Show all relevant nodes during transitions
+  // Show all nodes when building is complete
   useEffect(() => {
-    if (!isBuilding && baseNodes && nextNodes) {
-      const allRelevantIds = [...baseNodes, ...nextNodes].map(n => n.id);
-      const uniqueIds = [...new Set(allRelevantIds)];
-      setVisibleNodes(uniqueIds);
+    if (!isBuilding && mindMapNodes.length > 0) {
+      const allNodeIds = mindMapNodes.map(n => n.id);
+      setVisibleNodes(allNodeIds);
     }
-  }, [dragOffset, historyPosition, isBuilding, baseNodes, nextNodes]);
+  }, [isBuilding, mindMapNodes]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -477,60 +449,33 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   }, []);
 
-  // Handle mouse events for dragging the divider
+  // Handle mouse events for dragging the vertical divider only
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
     setDragStartPos({ x: e.clientX, y: e.clientY });
-    setDragDirection(null);
     e.preventDefault();
   };
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging) return;
     
-    // Determine drag direction on first move
-    if (!dragDirection) {
-      const deltaX = Math.abs(e.clientX - dragStartPos.x);
-      const deltaY = Math.abs(e.clientY - dragStartPos.y);
-      
-      // Need at least 10px movement to determine direction
-      if (deltaX > 10 || deltaY > 10) {
-        setDragDirection(deltaX > deltaY ? 'horizontal' : 'vertical');
-      }
-      return;
-    }
-    
-    // Handle based on locked direction
-    if (dragDirection === 'vertical') {
-      const windowHeight = window.innerHeight;
-      const newHeight = (e.clientY / windowHeight) * 100;
-      const constrainedHeight = Math.min(Math.max(newHeight, 10), 100);
-      setMapHeight(constrainedHeight);
-    } else if (dragDirection === 'horizontal') {
-      const deltaX = e.clientX - dragStartPos.x;
-      // Update drag offset for smooth interpolation (limit to ±300px)
-      setDragOffset(Math.max(-300, Math.min(300, deltaX)));
-      
-      // Update discrete history position (every 100px = 1 step)
-      const steps = Math.round(deltaX / 100);
-      setHistoryPosition(Math.max(-3, Math.min(3, steps))); // -3 (past) to +3 (future)
-    }
+    // Only handle vertical dragging
+    const windowHeight = window.innerHeight;
+    const newHeight = (e.clientY / windowHeight) * 100;
+    const constrainedHeight = Math.min(Math.max(newHeight, 10), 100);
+    setMapHeight(constrainedHeight);
   };
 
   const handleMouseUp = () => {
     setIsDragging(false);
-    setDragDirection(null);
-    // Reset dragOffset since we now use historyPosition when not dragging
-    setDragOffset(0);
   };
 
-  // Add global mouse event listeners
+  // Add global mouse event listeners for vertical dragging only
   useEffect(() => {
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
-      const cursor = dragDirection === 'horizontal' ? 'col-resize' : 'row-resize';
-      document.body.style.cursor = cursor;
+      document.body.style.cursor = 'row-resize';
       document.body.style.userSelect = 'none';
     } else {
       document.removeEventListener('mousemove', handleMouseMove);
@@ -545,7 +490,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [isDragging, dragDirection]);
+  }, [isDragging]);
 
   // Cleanup blur timeout on unmount
   useEffect(() => {
@@ -894,7 +839,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         className={`w-full h-6 hover:h-7 transition-all duration-200 flex items-center justify-center relative group ${
           isDragging ? 'h-7' : ''
         }`}
-        style={{ cursor: dragDirection === 'horizontal' ? 'col-resize' : 'row-resize' }}
+        style={{ cursor: 'row-resize' }}
         onMouseDown={handleMouseDown}
       >
         <div className="w-full h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
@@ -906,31 +851,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           <div className="w-4 h-0.5 bg-white/40 rounded-full"></div>
         </div>
         
-        {/* History position indicator */}
-        {historyPosition !== 0 && (
-          <div className="absolute left-8 bg-gray-800 text-white text-xs px-3 py-1.5 rounded-full border border-white/20 animate-pulse">
-            {historyPosition < 0 
-              ? `← ${Math.abs(historyPosition)} ${Math.abs(historyPosition) === 1 ? 'step' : 'steps'} back` 
-              : `${historyPosition} ${historyPosition === 1 ? 'step' : 'steps'} ahead →`}
-          </div>
-        )}
-        
-        {/* Return to current button */}
-        {historyPosition !== 0 && (
-          <button
-            onClick={() => {
-              setHistoryPosition(0);
-              setDragOffset(0);
-            }}
-            className="absolute right-8 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-full border border-blue-500/50 hover:border-blue-400 transition-all duration-200 hover:scale-105"
-          >
-            Return to current →
-          </button>
-        )}
-        
         {/* Tooltip */}
         <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
-          Drag up/down to resize • Drag left/right for history
+          Drag up/down to resize
         </div>
       </div>
 
