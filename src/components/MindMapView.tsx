@@ -6,10 +6,10 @@ interface Node {
   label: string;
   x: number;
   y: number;
-  size: "small" | "medium" | "large";
   color: "blue" | "violet" | "red" | "teal";
   subNodes?: { label: string }[];
-  tension?: number;
+  subprojects?: string[]; // Array of project IDs that are subprojects of this node
+  tension?: number; // Represents stress/urgency level for this project (1-5 scale)
 }
 
 interface MindMapViewProps {
@@ -20,69 +20,15 @@ export const MindMapView = ({ onContinueChat }: MindMapViewProps) => {
   const [input, setInput] = useState("");
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [showLargeNode, setShowLargeNode] = useState<Node | null>(null);
+  const [clickedProjectId, setClickedProjectId] = useState<string | null>(null);
 
-  const nodes: Node[] = [
-    {
-      id: "brain",
-      label: "How brain\nworks",
-      x: 25,
-      y: 25,
-      size: "medium",
-      color: "blue",
-      subNodes: [
-        { label: "YT videos" },
-        { label: "Notebook LM" },
-        { label: "AI is\ncooking..." },
-      ],
-    },
-    {
-      id: "design",
-      label: "UX/IU\ndesign",
-      x: 55,
-      y: 30,
-      size: "medium",
-      color: "blue",
-      subNodes: [
-        { label: "Subconsciol\nqueries" },
-        { label: "STM & LTM" },
-      ],
-      tension: 2,
-    },
-    {
-      id: "psychology",
-      label: "Psychology",
-      x: 35,
-      y: 55,
-      size: "large",
-      color: "blue",
-      subNodes: [
-        { label: "STM & LTM" },
-        { label: "Emotion\nInterdration" },
-        { label: "Neuron\nconnections" },
-      ],
-      tension: 1,
-    },
-    {
-      id: "habits",
-      label: "Habits",
-      x: 65,
-      y: 60,
-      size: "large",
-      color: "red",
-      subNodes: [
-        { label: "Learning from\nExperience" },
-        { label: "Automation" },
-      ],
-    },
-    {
-      id: "clearity",
-      label: "Clearity",
-      x: 80,
-      y: 20,
-      size: "large",
-      color: "teal",
-    },
-  ];
+  // All nodes are medium-sized circles, no size options
+  const allNodes: Node[] = [];
+
+  // Filter nodes based on clicked project
+  const nodes = clickedProjectId 
+    ? allNodes.filter(node => node.subprojects?.includes(clickedProjectId))
+    : allNodes;
 
   const connections = [
     { from: "brain", to: "design" },
@@ -99,14 +45,8 @@ export const MindMapView = ({ onContinueChat }: MindMapViewProps) => {
     }
   };
 
-  const getSizeClass = (size: string) => {
-    switch (size) {
-      case "small": return "w-16 h-16 text-xs";
-      case "medium": return "w-32 h-32 text-sm";
-      case "large": return "w-40 h-40 text-base";
-      default: return "w-32 h-32";
-    }
-  };
+  // All regular nodes are medium-sized (no size options)
+  const getNodeClass = () => "w-32 h-32 text-sm";
 
   const getColorClass = (color: string) => {
     switch (color) {
@@ -199,9 +139,10 @@ export const MindMapView = ({ onContinueChat }: MindMapViewProps) => {
                 onClick={() => {
                   setSelectedNode(selectedNode === node.id ? null : node.id);
                   setShowLargeNode(node);
+                  setClickedProjectId(node.id);
                 }}
                 className={`
-                  ${getSizeClass(node.size)} ${getColorClass(node.color)}
+                  ${getNodeClass()} ${getColorClass(node.color)}
                   relative rounded-full border-2 bg-background/40 backdrop-blur-sm
                   flex items-center justify-center text-center
                   transition-all duration-500
@@ -237,16 +178,44 @@ export const MindMapView = ({ onContinueChat }: MindMapViewProps) => {
               </button>
             </div>
           ))}
+
+          {/* Special Clearity Node - appears when a project is clicked */}
+          {clickedProjectId && (
+            <div
+              className="absolute transition-transform duration-500 ease-out"
+              style={{
+                left: "95%",
+                top: "15%",
+                transform: "translate(-50%, -50%) scale(0.642857)",
+              }}
+            >
+              <div
+                className="text-6xl font-bold border-teal-400 shadow-[0_0_20px_-5px_rgba(45,212,191,0.4)] relative rounded-full border-2 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center text-center transition-all duration-500 hover:scale-110 hover:bg-gray-800/60 cursor-pointer ring-4 ring-offset-16 ring-offset-transparent ring-teal-400/40 shadow-[0_0_40px_-10px_rgba(45,212,191,0.8)] border-4 border-teal-400"
+                style={{ width: "432px", height: "432px" }}
+                onClick={() => {
+                  setClickedProjectId(null);
+                  setSelectedNode(null);
+                  setShowLargeNode(null);
+                }}
+              >
+                <span className="font-medium leading-tight px-1 whitespace-pre-line text-white">
+                  {allNodes.find(n => n.id === clickedProjectId)?.label || "Clearity"}
+                </span>
+                
+                {/* Empty circle around Clearity */}
+                <div 
+                  className="absolute inset-0 rounded-full border-6 border-teal-400 pointer-events-none shadow-[0_0_30px_-5px_rgba(45,212,191,0.8)]"
+                  style={{
+                    transform: 'scale(1.2)',
+                    margin: '-10%'
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Sample AI response */}
-        <div className="max-w-4xl mx-auto mt-8 animate-fade-in">
-          <div className="px-6 py-4 rounded-2xl bg-primary/10 backdrop-blur-sm border border-primary/20">
-            <p className="text-sm leading-relaxed text-foreground/90">
-              Perfect — this is exactly the right mindset. If you want to design Reload around how the brain actually works, you need to understand how people think, remember, and focus...
-            </p>
-          </div>
-        </div>
+
       </div>
 
       {/* Large Node Display Overlay */}
