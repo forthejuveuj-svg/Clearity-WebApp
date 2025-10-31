@@ -691,13 +691,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     const screenWidth = window.innerWidth;
     
     if (screenWidth >= 1024) {
-      // Desktop sizes - all regular nodes are medium
-      return { width: 176, height: 176 }; // 11rem (44 * 4)
+      // Desktop sizes - smaller regular nodes
+      return { width: 144, height: 144 }; // 9rem (36 * 4) - reduced from 11rem
     }
     
     if (screenWidth >= 768) {
       // Tablet: scale between 768-1024px
-      const baseWidths = { min: 112, max: 176 }; // 7rem to 11rem for regular nodes
+      const baseWidths = { min: 96, max: 144 }; // 6rem to 9rem for regular nodes - reduced
       
       const scaleFactor = Math.max(0, Math.min(1, (screenWidth - 768) / (1024 - 768)));
       const width = baseWidths.min + (baseWidths.max - baseWidths.min) * scaleFactor;
@@ -705,12 +705,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       return { width, height: width };
     }
     
-    // Phone screens (< 768px): bigger circles for better visibility
+    // Phone screens (< 768px): smaller circles
     const phoneScale = screenWidth / 768; // e.g., 375px / 768 = 0.49
-    const tabletBase = 112;
+    const tabletBase = 96; // reduced from 112
     
-    // Multiply by 1.3 to make circles 30% bigger on phones
-    const width = tabletBase * phoneScale * 1.3;
+    // Multiply by 1.2 to make circles 20% bigger on phones (reduced from 30%)
+    const width = tabletBase * phoneScale * 1.2;
     return { width, height: width };
   };
 
@@ -875,6 +875,19 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               transform: `translate(-50%, -50%) ${getScaleTransform()}`,
             }}
           >
+            {/* Problem indicator - positioned outside the clickable area with higher z-index */}
+            {node.hasProblem && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsProblemsOpen(true);
+                }}
+                className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center border-2 border-gray-900 shadow-lg hover:bg-red-600 hover:scale-110 transition-all duration-200 cursor-pointer z-30"
+              >
+                <span className="text-white font-bold text-sm">{getProblemCount(node)}</span>
+              </button>
+            )}
+
             <div
               onClick={() => handleNodeClick(node)}
               className={`
@@ -885,139 +898,124 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 hover:scale-110 hover:bg-gray-800/60
                 cursor-pointer
                 ring-4 ring-offset-16 ring-offset-transparent ${getRingClass(node.color)}
+                z-10
               `}
               style={{
                 width: `${getCircleSize().width}px`,
                 height: `${getCircleSize().height}px`
               }}
             >
-              <span className="font-medium leading-tight px-1 whitespace-pre-line text-white">
+              <span className="font-medium leading-tight px-1 whitespace-pre-line text-white pointer-events-none">
                 {node.label}
               </span>
 
-              {/* Problem indicator */}
-              {node.hasProblem && (
-                <button
-                  onClick={() => setIsProblemsOpen(true)}
-                  onMouseEnter={(e) => e.stopPropagation()}
-                  onMouseLeave={(e) => e.stopPropagation()}
-                  className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center border-2 border-gray-900 shadow-lg hover:bg-red-600 hover:scale-110 transition-all duration-200 cursor-pointer z-10"
-                >
-                  <span className="text-white font-bold text-sm">{getProblemCount(node)}</span>
-                </button>
-              )}
-
               {/* Subprojects indicator */}
               {(node.subNodes && node.subNodes.length > 0) && (
-                <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-blue-500/80 rounded-full flex items-center justify-center border-2 border-gray-900 shadow-lg">
+                <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-blue-500/80 rounded-full flex items-center justify-center border-2 border-gray-900 shadow-lg pointer-events-none">
                   <span className="text-white font-bold text-xs">{node.subNodes.length}</span>
                 </div>
               )}
-
-              {/* Small thought labels around each circle */}
-              {node.thoughts && node.thoughts.map((thought, idx) => {
-                // Default angles for all nodes
-                const angles = [60, 90, 120];
-                const angle = angles[idx];
-                // Responsive radius: scales with screen size
-                const screenWidth = window.innerWidth;
-                let radius;
-                
-                if (screenWidth >= 1024) {
-                  // Desktop
-                  radius = 155;
-                } else if (screenWidth >= 768) {
-                  // Tablet: scale between 768-1024px
-                  const minRadius = 105;
-                  const maxRadius = 155;
-                  const scaleFactor = Math.max(0, Math.min(1, (screenWidth - 768) / (1024 - 768)));
-                  radius = minRadius + (maxRadius - minRadius) * scaleFactor;
-                } else {
-                  // Phone: scale proportionally and make bigger
-                  const phoneScale = screenWidth / 768;
-                  const tabletRadius = 105;
-                  radius = tabletRadius * phoneScale * 1.3; // 30% bigger
-                }
-                const angleRad = (angle * Math.PI) / 180;
-                const x = Math.cos(angleRad) * radius;
-                const y = Math.sin(angleRad) * radius;
-                
-                return (
-                  <div 
-                    key={idx}
-                    className={`absolute font-semibold whitespace-nowrap px-3 py-1.5 lg:px-6 lg:py-3 rounded-full border backdrop-blur-sm transition-all duration-1000 ease-out hover:scale-125 hover:brightness-150 hover:shadow-lg cursor-pointer ${getThoughtColor(node.color)}`}
-                    style={{
-                      left: `calc(50% + ${x}px)`,
-                      top: `calc(50% + ${y}px)`,
-                      transform: 'translate(-50%, -50%)',
-                      fontSize: window.innerWidth >= 1024 
-                        ? (mapHeight >= 50 ? '1.25rem' : mapHeight >= 30 ? '1.5rem' : '1.75rem')
-                        : window.innerWidth >= 768
-                        ? '0.875rem' // text-sm for tablet
-                        : '0.75rem' // text-xs for phone (matches circle text)
-                    }}
-                  >
-                    {thought}
-                  </div>
-                );
-              })}
             </div>
+
+            {/* Small thought labels around each circle - positioned outside clickable area */}
+            {node.thoughts && node.thoughts.map((thought, idx) => {
+              // Default angles for all nodes
+              const angles = [60, 90, 120];
+              const angle = angles[idx];
+              // Responsive radius: scales with screen size
+              const screenWidth = window.innerWidth;
+              let radius;
+              
+              if (screenWidth >= 1024) {
+                // Desktop - adjusted for smaller circles
+                radius = 135;
+              } else if (screenWidth >= 768) {
+                // Tablet: scale between 768-1024px
+                const minRadius = 90;
+                const maxRadius = 135;
+                const scaleFactor = Math.max(0, Math.min(1, (screenWidth - 768) / (1024 - 768)));
+                radius = minRadius + (maxRadius - minRadius) * scaleFactor;
+              } else {
+                // Phone: scale proportionally
+                const phoneScale = screenWidth / 768;
+                const tabletRadius = 90;
+                radius = tabletRadius * phoneScale * 1.2;
+              }
+              const angleRad = (angle * Math.PI) / 180;
+              const x = Math.cos(angleRad) * radius;
+              const y = Math.sin(angleRad) * radius;
+              
+              return (
+                <div 
+                  key={idx}
+                  className={`absolute font-semibold whitespace-nowrap px-3 py-1.5 lg:px-6 lg:py-3 rounded-full border backdrop-blur-sm transition-all duration-1000 ease-out hover:scale-125 hover:brightness-150 hover:shadow-lg cursor-pointer z-20 ${getThoughtColor(node.color)}`}
+                  style={{
+                    left: `calc(50% + ${x}px)`,
+                    top: `calc(50% + ${y}px)`,
+                    transform: 'translate(-50%, -50%)',
+                    fontSize: window.innerWidth >= 1024 
+                      ? (mapHeight >= 50 ? '1.25rem' : mapHeight >= 30 ? '1.5rem' : '1.75rem')
+                      : window.innerWidth >= 768
+                      ? '0.875rem' // text-sm for tablet
+                      : '0.75rem' // text-xs for phone (matches circle text)
+                  }}
+                >
+                  {thought}
+                </div>
+              );
+            })}
           </div>
         ))}
 
-        {/* Render parent node - always in DOM but hidden until project clicked */}
+        {/* Large indicator node in top right - shows current context */}
         <div
-          key="parent-node"
-          className={`absolute transition-all duration-500 ease-out ${
-            clickedProjectNode ? 'opacity-100 scale-100' : 'opacity-0 scale-0'
-          }`}
+          key="context-node"
+          className="absolute transition-all duration-500 ease-out z-40"
           style={{
-            left: "95%",
-            top: "15%",
+            left: "85%",
+            top: "10%",
             transform: `translate(-50%, -50%) ${getScaleTransform()}`,
           }}
         >
             <div
-              className="text-6xl font-bold lg:text-6xl md:text-xl sm:text-base border-teal-400 shadow-[0_0_20px_-5px_rgba(45,212,191,0.4)]
-                relative rounded-full border-4 bg-gray-900/60 backdrop-blur-sm
+              className="text-4xl font-bold lg:text-4xl md:text-2xl sm:text-lg border-teal-400 shadow-[0_0_20px_-5px_rgba(45,212,191,0.4)]
+                relative rounded-full border-4 bg-gray-900/80 backdrop-blur-sm
                 flex items-center justify-center text-center
                 transition-all duration-500
-                hover:scale-110 hover:bg-gray-800/60
+                hover:scale-110 hover:bg-gray-800/80
                 cursor-pointer
-                ring-4 ring-offset-16 ring-offset-transparent ring-teal-400/40 shadow-[0_0_40px_-10px_rgba(45,212,191,0.8)]"
+                ring-4 ring-offset-8 ring-offset-transparent ring-teal-400/40 shadow-[0_0_40px_-10px_rgba(45,212,191,0.8)]"
               style={{
-                width: "432px",
-                height: "432px"
+                width: "200px",
+                height: "200px"
               }}
               onClick={() => {
-                // Go back in session history when clicking the large parent node
+                // Go back in session history when clicking the context node
                 if (currentSessionIndex > 0) {
                   goBackInHistory();
-                } else {
-                  // Reset clicked project to hide the large node
+                } else if (clickedProjectNode) {
+                  // Reset clicked project to clear focus
                   setClickedProjectNode(null);
                   messageModeHandler.reset();
                 }
               }}
             >
-              <span className="font-medium leading-tight px-1 whitespace-pre-line text-white">
+              <span className="font-medium leading-tight px-2 whitespace-pre-line text-white text-center">
                 {clickedProjectNode ? clickedProjectNode.label : (parentNodeTitle || "Clearity")}
               </span>
 
-              {/* Empty circle around parent node (like Clearity in old version) */}
+              {/* Subtle outer ring */}
               <div 
-                className="absolute inset-0 rounded-full border-6 border-teal-400 pointer-events-none shadow-[0_0_30px_-5px_rgba(45,212,191,0.8)]"
+                className="absolute inset-0 rounded-full border-2 border-teal-400/30 pointer-events-none"
                 style={{
-                  transform: 'scale(1.2)',
-                  margin: '-10%'
+                  transform: 'scale(1.15)',
                 }}
               />
             </div>
           </div>
-        )
 
 
-        {/* Navigation Controls */}
+        {/* Navigation Controls - simplified */}
         <div className="absolute top-4 left-4 flex items-center gap-2 z-20">
           <button
             onClick={goBackInHistory}
@@ -1036,19 +1034,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           >
             <ArrowRight className="w-5 h-5 text-white" />
           </button>
-          
-          {parentNodeTitle && (
-            <div className="px-3 py-1 rounded-lg bg-teal-500/20 backdrop-blur-sm border border-teal-400/30">
-              <span className="text-sm text-teal-300">Viewing: {parentNodeTitle}</span>
-            </div>
-          )}
-          
-          {/* Session info (for debugging) */}
-          {sessionHistory.length > 1 && (
-            <div className="px-2 py-1 rounded bg-gray-700/50 text-xs text-white/70">
-              {currentSessionIndex + 1}/{sessionHistory.length}
-            </div>
-          )}
         </div>
 
         {/* Building progress indicator */}
