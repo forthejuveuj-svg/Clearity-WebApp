@@ -204,17 +204,7 @@ export async function generateMindMapJson() {
 
 function getFallbackJson() {
   return {
-    nodes: [
-      {
-        id: "sample-project",
-        label: "Sample\nProject",
-        x: 30,
-        y: 50,
-        color: "blue",
-        thoughts: ["planning", "development", "testing"],
-        hasProblem: false
-      }
-    ],
+    nodes: [],
     parentNode: null, // Default to hidden
     _timestamp: Date.now()
   };

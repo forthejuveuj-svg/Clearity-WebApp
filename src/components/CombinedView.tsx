@@ -205,39 +205,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   };
 
   const loadSubprojects = async (nodeId: string) => {
-    // Mock function - replace with actual Supabase call
-    // Generate non-overlapping positions for 3 subprojects
-    const positions = generateNonOverlappingPositions(3);
-
-    const mockSubprojects: Node[] = [
-      {
-        id: `${nodeId}_sub_1`,
-        label: `Subproject 1 of ${nodeId}`,
-        x: positions[0].x,
-        y: positions[0].y,
-        color: "blue",
-        subNodes: [{ label: "Task A" }, { label: "Task B" }]
-      },
-      {
-        id: `${nodeId}_sub_2`,
-        label: `Subproject 2 of ${nodeId}`,
-        x: positions[1].x,
-        y: positions[1].y,
-        color: "violet",
-        thoughts: ["Important detail", "Remember this"]
-      },
-      {
-        id: `${nodeId}_sub_3`,
-        label: `Subproject 3 of ${nodeId}`,
-        x: positions[2].x,
-        y: positions[2].y,
-        color: "teal",
-        hasProblem: true,
-        problemType: "blocker"
-      }
-    ];
-
-    return mockSubprojects;
+    // TODO: Replace with actual Supabase call to load subprojects
+    // For now, return empty array until subproject functionality is implemented
+    return [];
   };
 
   const clearAllSessions = () => {
