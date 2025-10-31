@@ -1015,17 +1015,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           </div>
 
 
-        {/* Navigation Controls - forward only */}
-        <div className="absolute top-4 left-4 flex items-center gap-2 z-20">
-          <button
-            onClick={goForwardInHistory}
-            disabled={currentSessionIndex >= sessionHistory.length - 1}
-            className="p-2 rounded-lg bg-gray-800/80 backdrop-blur-sm border border-white/10 hover:bg-gray-700/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
-            title="Go forward to next view"
-          >
-            <ArrowRight className="w-5 h-5 text-white" />
-          </button>
-        </div>
+
 
         {/* Building progress indicator */}
         {isBuilding && (

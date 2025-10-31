@@ -59,8 +59,21 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex items-center justify-between">
-      {/* Settings */}
+      {/* Logo and Settings */}
       <div className="flex items-center gap-3">
+        <button 
+          onClick={() => {
+            if (onLogoClick) {
+              onLogoClick();
+            } else {
+              navigate('/');
+            }
+          }}
+          className="w-10 h-10 rounded-full shadow-lg overflow-hidden hover:scale-110 transition-transform duration-300"
+          aria-label="Go to Home"
+        >
+          <img src={ClearityLogo} alt="Clearity Logo" className="w-full h-full object-cover" />
+        </button>
         
         {user && (
           <div className="relative" ref={userMenuRef}>
