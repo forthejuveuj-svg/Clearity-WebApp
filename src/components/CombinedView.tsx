@@ -56,7 +56,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   // Reset message mode handler when component mounts
   useEffect(() => {
     messageModeHandler.reset();
@@ -66,7 +66,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
   const [parentNodeTitle, setParentNodeTitle] = useState<string | null>(null);
   const [clickedProjectNode, setClickedProjectNode] = useState<Node | null>(null);
-  
+
   // Simple session management
   const [sessionHistory, setSessionHistory] = useState<Array<{
     id: string;
@@ -82,13 +82,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       if (data) {
         // Set regular nodes (all nodes are regular now)
         setMindMapNodes(data.nodes || []);
-        
+
         // Set parent node title if provided
         setParentNodeTitle(data.parentNode || null);
-        
+
         // Save current state to session when nodes are reloaded
         saveCurrentSession(data.nodes || []);
-        
+
         console.log('Mind map nodes reloaded after successful processing');
       }
     });
@@ -102,11 +102,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       parentNodeId,
       timestamp: Date.now()
     };
-    
+
     const updatedHistory = [...sessionHistory.slice(0, currentSessionIndex + 1), newSession];
     setSessionHistory(updatedHistory);
     setCurrentSessionIndex(updatedHistory.length - 1);
-    
+
     // Save to localStorage
     localStorage.setItem('mindmap_sessions', JSON.stringify(updatedHistory));
     localStorage.setItem('mindmap_current_index', currentSessionIndex.toString());
@@ -116,14 +116,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     try {
       const stored = localStorage.getItem('mindmap_sessions');
       const storedIndex = localStorage.getItem('mindmap_current_index');
-      
+
       if (stored && storedIndex) {
         const sessions = JSON.parse(stored);
         const index = parseInt(storedIndex);
-        
+
         setSessionHistory(sessions);
         setCurrentSessionIndex(index);
-        
+
         if (sessions[index]) {
           setMindMapNodes(sessions[index].nodes);
         }
@@ -139,7 +139,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       setCurrentSessionIndex(newIndex);
       setMindMapNodes(sessionHistory[newIndex].nodes);
       setClickedProjectNode(null);
-      
+
       localStorage.setItem('mindmap_current_index', newIndex.toString());
     }
   };
@@ -150,7 +150,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       setCurrentSessionIndex(newIndex);
       setMindMapNodes(sessionHistory[newIndex].nodes);
       setClickedProjectNode(null);
-      
+
       localStorage.setItem('mindmap_current_index', newIndex.toString());
     }
   };
@@ -185,7 +185,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         problemType: "blocker"
       }
     ];
-    
+
     return mockSubprojects;
   };
 
@@ -201,16 +201,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   useEffect(() => {
     // First try to load from localStorage
     loadSessionFromStorage();
-    
+
     // Then load fresh data from database
     generateMindMapJson().then(data => {
       if (data) {
         // Set regular nodes (all nodes are regular now)
         setMindMapNodes(data.nodes || []);
-        
+
         // Set parent node title if provided
         setParentNodeTitle(data.parentNode || null);
-        
+
         // Save initial session if no sessions exist
         if (sessionHistory.length === 0) {
           saveCurrentSession(data.nodes || []);
@@ -243,7 +243,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       // Initialize even if initialMessage is empty
       if (initialMessage) {
         setMessages([{ role: "user", content: initialMessage }]);
-        
+
         // Process initial message with message mode handler
         const processInitialMessage = async () => {
           setIsProcessing(true);
@@ -255,7 +255,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 role: "assistant",
                 content: result.output || "Processing completed successfully."
               }]);
-              
+
               // Reload nodes when processing is successful
               reloadNodes();
             } else {
@@ -286,7 +286,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     if (initialMessage && hasInitialized && userId && messages.length > 0 && messages[messages.length - 1].content !== initialMessage) {
       // Add new user message
       setMessages(prev => [...prev, { role: "user", content: initialMessage }]);
-      
+
       // Process with message mode handler
       const processNewMessage = async () => {
         setIsProcessing(true);
@@ -298,7 +298,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               role: "assistant",
               content: result.output || "Processing completed successfully."
             }]);
-            
+
             // Reload nodes when processing is successful
             reloadNodes();
           } else {
@@ -373,7 +373,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       setMessages([...messages, { role: "user", content: userMessage }]);
       setInput("");
       setIsProcessing(true);
-      
+
       if (!userId) {
         setMessages(prev => [...prev, {
           role: "assistant",
@@ -382,7 +382,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         setIsProcessing(false);
         return;
       }
-      
+
       try {
         // Use message mode handler to process the message
         const result = await messageModeHandler.processMessage(userMessage, userId);
@@ -393,7 +393,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             role: "assistant",
             content: result.output || "Processing completed successfully."
           }]);
-          
+
           // Reload nodes when processing is successful
           reloadNodes();
         } else {
@@ -420,15 +420,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     // Check if node has subprojects (indicated by subNodes or specific keywords)
     const hasSubprojects = node.subNodes && node.subNodes.length > 0;
     const projectKeywords = ['project', 'course', 'learning', 'study', 'work', 'build', 'create'];
-    const isProject = projectKeywords.some(keyword => 
+    const isProject = projectKeywords.some(keyword =>
       node.label.toLowerCase().includes(keyword)
     );
-    
+
     if (hasSubprojects || isProject) {
       try {
         // Load subprojects from database (or use existing subNodes)
         let subprojects: Node[];
-        
+
         if (hasSubprojects) {
           // Convert existing subNodes to full Node objects
           subprojects = node.subNodes!.map((subNode, index) => ({
@@ -442,24 +442,24 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           // Load from database
           subprojects = await loadSubprojects(node.id);
         }
-        
+
         // Save current state and navigate to subprojects
         saveCurrentSession(subprojects, node.id);
         setMindMapNodes(subprojects);
         setParentNodeTitle(node.label);
-        
+
         console.log(`Navigated to subprojects of ${node.label}`);
-        
+
       } catch (error) {
         console.error('Failed to load subprojects:', error);
       }
     } else {
       // Regular project focus behavior
       setClickedProjectNode(node);
-      
+
       // Determine if project is started (simple heuristic based on node color or other properties)
       const isStarted = node.color === 'blue' || node.color === 'teal'; // Assume blue/teal = started
-      
+
       // Silently switch to project mode - user doesn't see any indication
       messageModeHandler.setProjectFocus({
         id: node.id,
@@ -472,12 +472,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const handleNavigateToChat = async (task: any) => {
     // Switch to mindmap view
     setCurrentView('mindmap');
-    
+
     const taskMessage = `Let's discuss "${task.title}". What would you like to know or work on?`;
-    
+
     // Add task message to chat
     setMessages(prev => [...prev, { role: "user", content: taskMessage }]);
-    
+
     if (userId) {
       setIsProcessing(true);
       try {
@@ -492,7 +492,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             role: "assistant",
             content: response.output
           }]);
-          
+
           // Reload nodes when processing is successful
           reloadNodes();
         } else {
@@ -564,17 +564,17 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     if (isRecording) {
       try {
         await stopRecording();
-        
+
         // Add voice message with clip count
         const clipCount = audioSnippets.length;
         const voiceMessageContent = `🎤 Voice message recorded (${clipCount} clips of 8 seconds each)`;
-        
-        setMessages(prev => [...prev, { 
-          role: "user", 
+
+        setMessages(prev => [...prev, {
+          role: "user",
           content: voiceMessageContent,
           audioSnippets: audioSnippets // Store snippets for playback
         }]);
-        
+
         // Add AI response after delay
         setTimeout(() => {
           setMessages(prev => [...prev, {
@@ -605,7 +605,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }
       setBlurTimeoutId(null);
     }, 150); // 150ms delay to allow button clicks
-    
+
     setBlurTimeoutId(timeoutId);
   };
 
@@ -644,7 +644,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging) return;
-    
+
     // Only handle vertical dragging
     const windowHeight = window.innerHeight;
     const newHeight = (e.clientY / windowHeight) * 100;
@@ -689,26 +689,26 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   const getCircleSize = () => {
     const screenWidth = window.innerWidth;
-    
+
     if (screenWidth >= 1024) {
       // Desktop sizes - smaller regular nodes
       return { width: 144, height: 144 }; // 9rem (36 * 4) - reduced from 11rem
     }
-    
+
     if (screenWidth >= 768) {
       // Tablet: scale between 768-1024px
       const baseWidths = { min: 96, max: 144 }; // 6rem to 9rem for regular nodes - reduced
-      
+
       const scaleFactor = Math.max(0, Math.min(1, (screenWidth - 768) / (1024 - 768)));
       const width = baseWidths.min + (baseWidths.max - baseWidths.min) * scaleFactor;
-      
+
       return { width, height: width };
     }
-    
+
     // Phone screens (< 768px): smaller circles
     const phoneScale = screenWidth / 768; // e.g., 375px / 768 = 0.49
     const tabletBase = 96; // reduced from 112
-    
+
     // Multiply by 1.2 to make circles 20% bigger on phones (reduced from 30%)
     const width = tabletBase * phoneScale * 1.2;
     return { width, height: width };
@@ -716,16 +716,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   const getSizeClass = () => {
     const screenWidth = window.innerWidth;
-    
+
     // All regular nodes are medium size
     if (screenWidth >= 1024) {
       return "text-2xl";
     }
-    
+
     if (screenWidth >= 768) {
       return "text-base";
     }
-    
+
     // Phone: smaller text
     return "text-xs";
   };
@@ -796,101 +796,101 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   return (
     <div className="h-screen w-screen flex flex-col relative overflow-hidden bg-gradient-to-br from-black via-slate-900 to-black fixed inset-0">
-        {/* Mind Map or Task Manager Section */}
-        <div 
-          className="relative overflow-hidden"
-          style={{ height: `${mapHeight}vh` }}
-        >
+      {/* Mind Map or Task Manager Section */}
+      <div
+        className="relative overflow-hidden"
+        style={{ height: `${mapHeight}vh` }}
+      >
         {currentView === 'mindmap' ? (
           // Mind Map View
           <>
-        {/* Background particles */}
-        <div className="absolute inset-0 opacity-20">
-          {[...Array(15)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 bg-blue-400/40 rounded-full animate-float"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 6}s`,
-                animationDuration: `${6 + Math.random() * 4}s`,
-              }}
-            />
-          ))}
-        </div>
+            {/* Background particles */}
+            <div className="absolute inset-0 opacity-20">
+              {[...Array(15)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute w-1 h-1 bg-blue-400/40 rounded-full animate-float"
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    top: `${Math.random() * 100}%`,
+                    animationDelay: `${Math.random() * 6}s`,
+                    animationDuration: `${6 + Math.random() * 4}s`,
+                  }}
+                />
+              ))}
+            </div>
 
-        {/* Beautiful Neural Connection lines */}
-        {allNodes && allNodes.length > 0 && connections.map((conn, idx) => {
-          const fromNode = allNodes.find(n => n.id === conn.from);
-          const toNode = allNodes.find(n => n.id === conn.to);
-          if (!fromNode || !toNode) return null;
+            {/* Beautiful Neural Connection lines */}
+            {allNodes && allNodes.length > 0 && connections.map((conn, idx) => {
+              const fromNode = allNodes.find(n => n.id === conn.from);
+              const toNode = allNodes.find(n => n.id === conn.to);
+              if (!fromNode || !toNode) return null;
 
-          return (
-            <svg 
-              key={idx}
-              className="absolute inset-0 w-full h-full pointer-events-none"
-              style={{ zIndex: 10 }}
-            >
-              <defs>
-                <linearGradient id={`neuralGradient-${idx}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="rgba(147, 197, 253, 0.8)" />
-                  <stop offset="50%" stopColor="rgba(59, 130, 246, 0.6)" />
-                  <stop offset="100%" stopColor="rgba(147, 197, 253, 0.8)" />
-                </linearGradient>
-                <filter id={`neuralGlow-${idx}`}>
-                  <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-                  <feMerge> 
-                    <feMergeNode in="coloredBlur"/>
-                    <feMergeNode in="SourceGraphic"/>
-                  </feMerge>
-                </filter>
-              </defs>
-              
-              <path
-                d={`M ${fromNode.x}% ${fromNode.y}% L ${toNode.x}% ${toNode.y}%`}
-                stroke={`url(#neuralGradient-${idx})`}
-                strokeWidth="3"
-                fill="none"
-                strokeLinecap="round"
-                filter={`url(#neuralGlow-${idx})`}
+              return (
+                <svg
+                  key={idx}
+                  className="absolute inset-0 w-full h-full pointer-events-none"
+                  style={{ zIndex: 10 }}
+                >
+                  <defs>
+                    <linearGradient id={`neuralGradient-${idx}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="rgba(147, 197, 253, 0.8)" />
+                      <stop offset="50%" stopColor="rgba(59, 130, 246, 0.6)" />
+                      <stop offset="100%" stopColor="rgba(147, 197, 253, 0.8)" />
+                    </linearGradient>
+                    <filter id={`neuralGlow-${idx}`}>
+                      <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+                      <feMerge>
+                        <feMergeNode in="coloredBlur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+
+                  <path
+                    d={`M ${fromNode.x}% ${fromNode.y}% L ${toNode.x}% ${toNode.y}%`}
+                    stroke={`url(#neuralGradient-${idx})`}
+                    strokeWidth="3"
+                    fill="none"
+                    strokeLinecap="round"
+                    filter={`url(#neuralGlow-${idx})`}
+                    style={{
+                      strokeDasharray: '12,6',
+                      animation: `neuralPulse 4s ease-in-out infinite`,
+                      animationDelay: `${idx * 0.3}s`
+                    }}
+                  />
+                </svg>
+              );
+            })}
+
+            {/* Render regular nodes */}
+            {allNodes && allNodes.map((node) => (
+              <div
+                key={node.id}
+                className="absolute transition-transform duration-500 ease-out"
                 style={{
-                  strokeDasharray: '12,6',
-                  animation: `neuralPulse 4s ease-in-out infinite`,
-                  animationDelay: `${idx * 0.3}s`
+                  left: `${node.x}%`,
+                  top: `${node.y}%`,
+                  transform: `translate(-50%, -50%) ${getScaleTransform()}`,
                 }}
-              />
-            </svg>
-          );
-        })}
-
-        {/* Render regular nodes */}
-        {allNodes && allNodes.map((node) => (
-          <div
-            key={node.id}
-            className="absolute transition-transform duration-500 ease-out"
-            style={{
-              left: `${node.x}%`,
-              top: `${node.y}%`,
-              transform: `translate(-50%, -50%) ${getScaleTransform()}`,
-            }}
-          >
-            {/* Problem indicator - positioned outside the clickable area with higher z-index */}
-            {node.hasProblem && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsProblemsOpen(true);
-                }}
-                className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center border-2 border-gray-900 shadow-lg hover:bg-red-600 hover:scale-110 transition-all duration-200 cursor-pointer z-30"
               >
-                <span className="text-white font-bold text-sm">{getProblemCount(node)}</span>
-              </button>
-            )}
+                {/* Problem indicator - positioned outside the clickable area with higher z-index */}
+                {node.hasProblem && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsProblemsOpen(true);
+                    }}
+                    className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center border-2 border-gray-900 shadow-lg hover:bg-red-600 hover:scale-110 transition-all duration-200 cursor-pointer z-30"
+                  >
+                    <span className="text-white font-bold text-sm">{getProblemCount(node)}</span>
+                  </button>
+                )}
 
-            <div
-              onClick={() => handleNodeClick(node)}
-              className={`
+                <div
+                  onClick={() => handleNodeClick(node)}
+                  className={`
                 ${getSizeClass()} ${getColorClass(node.color)}
                 relative rounded-full border-2 bg-gray-900/60 backdrop-blur-sm
                 flex items-center justify-center text-center
@@ -900,142 +900,139 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 ring-4 ring-offset-16 ring-offset-transparent ${getRingClass(node.color)}
                 z-10
               `}
-              style={{
-                width: `${getCircleSize().width}px`,
-                height: `${getCircleSize().height}px`
-              }}
-            >
-              <span className="font-medium leading-tight px-1 whitespace-pre-line text-white pointer-events-none">
-                {node.label}
-              </span>
-
-              {/* Subprojects indicator */}
-              {(node.subNodes && node.subNodes.length > 0) && (
-                <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-blue-500/80 rounded-full flex items-center justify-center border-2 border-gray-900 shadow-lg pointer-events-none">
-                  <span className="text-white font-bold text-xs">{node.subNodes.length}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Small thought labels around each circle - positioned outside clickable area */}
-            {node.thoughts && node.thoughts.map((thought, idx) => {
-              // Default angles for all nodes
-              const angles = [60, 90, 120];
-              const angle = angles[idx];
-              // Responsive radius: scales with screen size
-              const screenWidth = window.innerWidth;
-              let radius;
-              
-              if (screenWidth >= 1024) {
-                // Desktop - adjusted for smaller circles
-                radius = 135;
-              } else if (screenWidth >= 768) {
-                // Tablet: scale between 768-1024px
-                const minRadius = 90;
-                const maxRadius = 135;
-                const scaleFactor = Math.max(0, Math.min(1, (screenWidth - 768) / (1024 - 768)));
-                radius = minRadius + (maxRadius - minRadius) * scaleFactor;
-              } else {
-                // Phone: scale proportionally
-                const phoneScale = screenWidth / 768;
-                const tabletRadius = 90;
-                radius = tabletRadius * phoneScale * 1.2;
-              }
-              const angleRad = (angle * Math.PI) / 180;
-              const x = Math.cos(angleRad) * radius;
-              const y = Math.sin(angleRad) * radius;
-              
-              return (
-                <div 
-                  key={idx}
-                  className={`absolute font-semibold whitespace-nowrap px-3 py-1.5 lg:px-6 lg:py-3 rounded-full border backdrop-blur-sm transition-all duration-1000 ease-out hover:scale-125 hover:brightness-150 hover:shadow-lg cursor-pointer z-20 ${getThoughtColor(node.color)}`}
                   style={{
-                    left: `calc(50% + ${x}px)`,
-                    top: `calc(50% + ${y}px)`,
-                    transform: 'translate(-50%, -50%)',
-                    fontSize: window.innerWidth >= 1024 
-                      ? (mapHeight >= 50 ? '1.25rem' : mapHeight >= 30 ? '1.5rem' : '1.75rem')
-                      : window.innerWidth >= 768
-                      ? '0.875rem' // text-sm for tablet
-                      : '0.75rem' // text-xs for phone (matches circle text)
+                    width: `${getCircleSize().width}px`,
+                    height: `${getCircleSize().height}px`
                   }}
                 >
-                  {thought}
-                </div>
-              );
-            })}
-          </div>
-        ))}
+                  <span className="font-medium leading-tight px-1 whitespace-pre-line text-white pointer-events-none">
+                    {node.label}
+                  </span>
 
-        {/* Large indicator node in top right - shows current context */}
-        <div
-          key="context-node"
-          className="absolute transition-all duration-500 ease-out z-40"
-          style={{
-            left: "92%",
-            top: "15%",
-            transform: `translate(-50%, -50%) ${getScaleTransform()}`,
-          }}
-        >
+                  {/* Subprojects indicator */}
+                  {(node.subNodes && node.subNodes.length > 0) && (
+                    <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-blue-500/80 rounded-full flex items-center justify-center border-2 border-gray-900 shadow-lg pointer-events-none">
+                      <span className="text-white font-bold text-xs">{node.subNodes.length}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Small thought labels around each circle - positioned outside clickable area */}
+                {node.thoughts && node.thoughts.map((thought, idx) => {
+                  // Default angles for all nodes
+                  const angles = [60, 90, 120];
+                  const angle = angles[idx];
+                  // Responsive radius: scales with screen size
+                  const screenWidth = window.innerWidth;
+                  let radius;
+
+                  if (screenWidth >= 1024) {
+                    // Desktop - adjusted for smaller circles
+                    radius = 135;
+                  } else if (screenWidth >= 768) {
+                    // Tablet: scale between 768-1024px
+                    const minRadius = 90;
+                    const maxRadius = 135;
+                    const scaleFactor = Math.max(0, Math.min(1, (screenWidth - 768) / (1024 - 768)));
+                    radius = minRadius + (maxRadius - minRadius) * scaleFactor;
+                  } else {
+                    // Phone: scale proportionally
+                    const phoneScale = screenWidth / 768;
+                    const tabletRadius = 90;
+                    radius = tabletRadius * phoneScale * 1.2;
+                  }
+                  const angleRad = (angle * Math.PI) / 180;
+                  const x = Math.cos(angleRad) * radius;
+                  const y = Math.sin(angleRad) * radius;
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`absolute font-semibold whitespace-nowrap px-3 py-1.5 lg:px-6 lg:py-3 rounded-full border backdrop-blur-sm transition-all duration-1000 ease-out hover:scale-125 hover:brightness-150 hover:shadow-lg cursor-pointer z-20 ${getThoughtColor(node.color)}`}
+                      style={{
+                        left: `calc(50% + ${x}px)`,
+                        top: `calc(50% + ${y}px)`,
+                        transform: 'translate(-50%, -50%)',
+                        fontSize: window.innerWidth >= 1024
+                          ? (mapHeight >= 50 ? '1.25rem' : mapHeight >= 30 ? '1.5rem' : '1.75rem')
+                          : window.innerWidth >= 768
+                            ? '0.875rem' // text-sm for tablet
+                            : '0.75rem' // text-xs for phone (matches circle text)
+                      }}
+                    >
+                      {thought}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+
+            {/* Large indicator node in top right - shows current context */}
             <div
-              className="text-2xl font-bold lg:text-2xl md:text-xl sm:text-lg border-teal-400/60 shadow-[0_0_15px_-5px_rgba(45,212,191,0.2)]
+              key="context-node"
+              className="absolute transition-all duration-500 ease-out z-40"
+              style={{
+                left: "92%",
+                top: "20%",
+                transform: `translate(-50%, -50%) ${getScaleTransform()}`,
+              }}
+            >
+              <div
+                className={`text-2xl font-bold lg:text-2xl md:text-xl sm:text-lg border-teal-400/60 shadow-[0_0_15px_-5px_rgba(45,212,191,0.2)]
                 relative rounded-full border-2 bg-gray-900/40 backdrop-blur-sm
                 flex items-center justify-center text-center
                 transition-all duration-500
-                hover:scale-105 hover:bg-gray-800/50
-                cursor-pointer
-                ring-2 ring-offset-8 ring-offset-transparent ring-teal-400/20 shadow-[0_0_25px_-10px_rgba(45,212,191,0.3)]"
-              style={{
-                width: "400px",
-                height: "400px"
-              }}
-              onClick={() => {
-                // Go back in session history when clicking the context node
-                if (currentSessionIndex > 0) {
-                  goBackInHistory();
-                } else if (clickedProjectNode) {
-                  // Reset clicked project to clear focus
-                  setClickedProjectNode(null);
-                  messageModeHandler.reset();
-                }
-              }}
-            >
-              <span className="font-medium leading-tight px-4 whitespace-pre-line text-white text-center">
-                {clickedProjectNode ? clickedProjectNode.label : (parentNodeTitle || "Clearity")}
-              </span>
-
-              {/* Subtle outer ring */}
-              <div 
-                className="absolute inset-0 rounded-full border border-teal-400/20 pointer-events-none"
+                ring-2 ring-offset-8 ring-offset-transparent ring-teal-400/20 shadow-[0_0_25px_-10px_rgba(45,212,191,0.3)]
+                ${parentNodeTitle ? 'hover:scale-105 hover:bg-gray-800/50 cursor-pointer' : 'cursor-default'}`}
                 style={{
-                  transform: 'scale(1.1)',
+                  width: "400px",
+                  height: "400px"
                 }}
-              />
-            </div>
-          </div>
+                onClick={() => {
+                  // Only allow clicking when we're in a subproject view (parentNodeTitle exists)
+                  if (parentNodeTitle) {
+                    if (currentSessionIndex > 0) {
+                      goBackInHistory();
+                    }
+                  }
+                }}
+              >
+                <span className="font-medium leading-tight px-4 whitespace-pre-line text-white text-center">
+                  {parentNodeTitle || "Clearity"}
+                </span>
 
-
-
-
-        {/* Building progress indicator */}
-        {isBuilding && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2">
-            <div className="px-4 py-2 rounded-full bg-gray-800/80 backdrop-blur-sm border border-blue-400/30">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-                <span className="text-sm text-white">Building your mind map... {buildProgress}%</span>
+                {/* Subtle outer ring */}
+                <div
+                  className="absolute inset-0 rounded-full border border-teal-400/20 pointer-events-none"
+                  style={{
+                    transform: 'scale(1.1)',
+                  }}
+                />
               </div>
             </div>
-          </div>
-        )}
 
-      </>
+
+
+
+            {/* Building progress indicator */}
+            {isBuilding && (
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2">
+                <div className="px-4 py-2 rounded-full bg-gray-800/80 backdrop-blur-sm border border-blue-400/30">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                    <span className="text-sm text-white">Building your mind map... {buildProgress}%</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </>
         ) : (
           // Task Manager View
           <div className="h-full w-full bg-gray-900">
             <TaskManagerModal
               isOpen={true}
-              onClose={() => {}}
+              onClose={() => { }}
               onNavigateToChat={handleNavigateToChat}
               isFullScreen={true}
               scale={1}
@@ -1046,22 +1043,21 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       </div>
 
       {/* Draggable Divider */}
-      <div 
-        className={`w-full h-6 hover:h-7 transition-all duration-200 flex items-center justify-center relative group ${
-          isDragging ? 'h-7' : ''
-        }`}
+      <div
+        className={`w-full h-6 hover:h-7 transition-all duration-200 flex items-center justify-center relative group ${isDragging ? 'h-7' : ''
+          }`}
         style={{ cursor: 'row-resize' }}
         onMouseDown={handleMouseDown}
       >
         <div className="w-full h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-        
+
         {/* Drag handle - center (works for both directions) */}
         <div className="absolute flex flex-col items-center gap-0.5 opacity-30 group-hover:opacity-60 transition-opacity duration-200">
           <div className="w-4 h-0.5 bg-white/40 rounded-full"></div>
           <div className="w-4 h-0.5 bg-white/40 rounded-full"></div>
           <div className="w-4 h-0.5 bg-white/40 rounded-full"></div>
         </div>
-        
+
         {/* Tooltip */}
         <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
           Drag up/down to resize
@@ -1069,66 +1065,64 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       </div>
 
       {/* Chat Section - Takes remaining space */}
-      <div 
+      <div
         className="relative bg-gradient-to-t from-gray-900/80 via-gray-900/60 to-transparent backdrop-blur-md"
         style={{ height: `${100 - mapHeight}vh` }}
       >
-          {/* Chat messages */}
-          <div className="h-full flex flex-col max-w-4xl mx-auto">
-            <div className="overflow-y-auto px-4 py-3 pb-20 space-y-2">
-              {messages.map((message, idx) => (
+        {/* Chat messages */}
+        <div className="h-full flex flex-col max-w-4xl mx-auto">
+          <div className="overflow-y-auto px-4 py-3 pb-20 space-y-2">
+            {messages.map((message, idx) => (
+              <div
+                key={idx}
+                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
+                style={{ animationDelay: `${idx * 0.1}s` }}
+              >
                 <div
-                  key={idx}
-                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
-                  style={{ animationDelay: `${idx * 0.1}s` }}
-                >
-                  <div
-                    className={`relative max-w-[75%] ${
-                      message.role === "user"
-                        ? "px-4 py-2 text-sm bg-gray-700 text-white ml-auto rounded-3xl rounded-br-lg"
-                        : "text-white"
+                  className={`relative max-w-[75%] ${message.role === "user"
+                      ? "px-4 py-2 text-sm bg-gray-700 text-white ml-auto rounded-3xl rounded-br-lg"
+                      : "text-white"
                     }`}
-                  >
-                    {message.role === "assistant" ? (
-                      <TypingAnimation
-                        text={message.content}
-                        speed={20}
-                        className="whitespace-pre-line leading-relaxed text-sm"
-                        onComplete={() => {
-                          setTypingMessages(prev => {
-                            const newSet = new Set(prev);
-                            newSet.delete(idx);
-                            return newSet;
-                          });
-                        }}
-                      />
-                    ) : (
-                      <div>
-                        <p className="whitespace-pre-line leading-relaxed">{message.content}</p>
-                        {message.audioSnippets && message.audioSnippets.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {message.audioSnippets.map((snippet, index) => (
-                              <button
-                                key={snippet.id}
-                                onClick={() => playSnippet(snippet.id)}
-                                className="px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs rounded border border-blue-500/40 hover:border-blue-400/60 transition-colors"
-                              >
-                                ▶ Clip {message.audioSnippets.length - index}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                >
+                  {message.role === "assistant" ? (
+                    <TypingAnimation
+                      text={message.content}
+                      speed={20}
+                      className="whitespace-pre-line leading-relaxed text-sm"
+                      onComplete={() => {
+                        setTypingMessages(prev => {
+                          const newSet = new Set(prev);
+                          newSet.delete(idx);
+                          return newSet;
+                        });
+                      }}
+                    />
+                  ) : (
+                    <div>
+                      <p className="whitespace-pre-line leading-relaxed">{message.content}</p>
+                      {message.audioSnippets && message.audioSnippets.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {message.audioSnippets.map((snippet, index) => (
+                            <button
+                              key={snippet.id}
+                              onClick={() => playSnippet(snippet.id)}
+                              className="px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs rounded border border-blue-500/40 hover:border-blue-400/60 transition-colors"
+                            >
+                              ▶ Clip {message.audioSnippets.length - index}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
+          </div>
 
           {/* Input bar - floating at the bottom */}
-          <div className={`absolute left-0 right-0 px-4 pb-3 pointer-events-none transition-all duration-300 ${
-            mapHeight > 85 ? 'bottom-[-100px] opacity-0' : 'bottom-0 opacity-100'
-          }`}>
+          <div className={`absolute left-0 right-0 px-4 pb-3 pointer-events-none transition-all duration-300 ${mapHeight > 85 ? 'bottom-[-100px] opacity-0' : 'bottom-0 opacity-100'
+            }`}>
             {/* Gradient overlay when input is expanded to block content underneath */}
             {isInputExpanded && (
               <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/95 to-transparent pointer-events-none" />
@@ -1172,14 +1166,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                     </button>
                   </div>
                 )}
-                
+
                 {/* Icon when collapsed */}
                 {!isInputExpanded && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <MessageSquare className="w-5 h-5 text-white/60" />
                   </div>
                 )}
-                
+
                 <input
                   type="text"
                   value={isRecording ? `Recording... ${formatRecordingTime(recordingTime)}` : input}
@@ -1192,25 +1186,24 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                              text-sm text-white placeholder:text-white/50
                              focus:outline-none focus:ring-2 focus:border-blue-500/50
                              transition-all duration-300 hover:border-white/30
-                             ${isRecording 
-                               ? 'border-red-500/50 text-red-300 cursor-not-allowed' 
-                               : isProcessing
-                               ? 'border-purple-500/50 text-purple-300 cursor-not-allowed'
-                               : 'border-white/20 focus:ring-blue-500/50'
-                             }
+                             ${isRecording
+                      ? 'border-red-500/50 text-red-300 cursor-not-allowed'
+                      : isProcessing
+                        ? 'border-purple-500/50 text-purple-300 cursor-not-allowed'
+                        : 'border-white/20 focus:ring-blue-500/50'
+                    }
                              ${isInputExpanded ? 'pr-20' : 'cursor-pointer'}`}
                   style={{ paddingRight: isInputExpanded ? '80px' : '20px' }}
                 />
-                
+
                 <div className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 transition-opacity duration-300 ${isInputExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                   <button
                     type="button"
                     onClick={handleMicrophoneClick}
-                    className={`p-2 rounded-2xl transition-all duration-300 hover:scale-110 ${
-                      isRecording 
-                        ? 'bg-red-500/20 border border-red-500/30 animate-pulse' 
+                    className={`p-2 rounded-2xl transition-all duration-300 hover:scale-110 ${isRecording
+                        ? 'bg-red-500/20 border border-red-500/30 animate-pulse'
                         : 'bg-white/5 hover:bg-white/10'
-                    }`}
+                      }`}
                   >
                     {isRecording ? (
                       <MicOff className="w-4 h-4 text-red-400" />
@@ -1218,7 +1211,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                       <Mic className="w-4 h-4 text-white/60" />
                     )}
                   </button>
-                  
+
                   <button
                     type="submit"
                     disabled={!input.trim() || isRecording || isProcessing}
@@ -1242,8 +1235,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
 
       {/* Problems Modal */}
-      <ProblemsModal 
-        isOpen={isProblemsOpen} 
+      <ProblemsModal
+        isOpen={isProblemsOpen}
         onClose={() => setIsProblemsOpen(false)}
         onProblemConverted={(problemId, projectId) => {
           console.log(`Problem ${problemId} converted to project ${projectId}`);
