@@ -139,6 +139,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       setCurrentSessionIndex(newIndex);
       setMindMapNodes(sessionHistory[newIndex].nodes);
       setClickedProjectNode(null);
+      
+      // Clear parent node title when going back to main view (index 0) or when session has no parentNodeId
+      if (newIndex === 0 || !sessionHistory[newIndex].parentNodeId) {
+        setParentNodeTitle(null);
+      }
 
       localStorage.setItem('mindmap_current_index', newIndex.toString());
     }
