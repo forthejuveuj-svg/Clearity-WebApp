@@ -9,7 +9,6 @@ interface Node {
   color: "blue" | "violet" | "red" | "teal";
   subNodes?: { label: string }[];
   subprojects?: string[]; // Array of project IDs that are subprojects of this node
-  tension?: number; // Represents stress/urgency level for this project (1-5 scale)
 }
 
 interface MindMapViewProps {
@@ -155,12 +154,7 @@ export const MindMapView = ({ onContinueChat }: MindMapViewProps) => {
                   {node.label}
                 </span>
 
-                {/* Tension indicator */}
-                {node.tension && (
-                  <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-accent flex items-center justify-center text-xs font-bold animate-pulse">
-                    {node.tension}
-                  </div>
-                )}
+
 
                 {/* Sub-nodes */}
                 {selectedNode === node.id && node.subNodes && (
@@ -179,40 +173,40 @@ export const MindMapView = ({ onContinueChat }: MindMapViewProps) => {
             </div>
           ))}
 
-          {/* Special Clearity Node - appears when a project is clicked */}
-          {clickedProjectId && (
+          {/* Large Clearity Node - always exists but hidden/shown */}
+          <div
+            className={`absolute transition-all duration-500 ease-out ${
+              clickedProjectId ? 'opacity-100 scale-100' : 'opacity-0 scale-0'
+            }`}
+            style={{
+              left: "95%",
+              top: "15%",
+              transform: "translate(-50%, -50%) scale(0.642857)",
+            }}
+          >
             <div
-              className="absolute transition-transform duration-500 ease-out"
-              style={{
-                left: "95%",
-                top: "15%",
-                transform: "translate(-50%, -50%) scale(0.642857)",
+              className="text-6xl font-bold border-teal-400 shadow-[0_0_20px_-5px_rgba(45,212,191,0.4)] relative rounded-full border-2 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center text-center transition-all duration-500 hover:scale-110 hover:bg-gray-800/60 cursor-pointer ring-4 ring-offset-16 ring-offset-transparent ring-teal-400/40 shadow-[0_0_40px_-10px_rgba(45,212,191,0.8)] border-4 border-teal-400"
+              style={{ width: "432px", height: "432px" }}
+              onClick={() => {
+                setClickedProjectId(null);
+                setSelectedNode(null);
+                setShowLargeNode(null);
               }}
             >
-              <div
-                className="text-6xl font-bold border-teal-400 shadow-[0_0_20px_-5px_rgba(45,212,191,0.4)] relative rounded-full border-2 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center text-center transition-all duration-500 hover:scale-110 hover:bg-gray-800/60 cursor-pointer ring-4 ring-offset-16 ring-offset-transparent ring-teal-400/40 shadow-[0_0_40px_-10px_rgba(45,212,191,0.8)] border-4 border-teal-400"
-                style={{ width: "432px", height: "432px" }}
-                onClick={() => {
-                  setClickedProjectId(null);
-                  setSelectedNode(null);
-                  setShowLargeNode(null);
+              <span className="font-medium leading-tight px-1 whitespace-pre-line text-white">
+                {clickedProjectId ? (allNodes.find(n => n.id === clickedProjectId)?.label || "Clearity") : "Clearity"}
+              </span>
+              
+              {/* Empty circle around Clearity */}
+              <div 
+                className="absolute inset-0 rounded-full border-6 border-teal-400 pointer-events-none shadow-[0_0_30px_-5px_rgba(45,212,191,0.8)]"
+                style={{
+                  transform: 'scale(1.2)',
+                  margin: '-10%'
                 }}
-              >
-                <span className="font-medium leading-tight px-1 whitespace-pre-line text-white">
-                  {allNodes.find(n => n.id === clickedProjectId)?.label || "Clearity"}
-                </span>
-                
-                {/* Empty circle around Clearity */}
-                <div 
-                  className="absolute inset-0 rounded-full border-6 border-teal-400 pointer-events-none shadow-[0_0_30px_-5px_rgba(45,212,191,0.8)]"
-                  style={{
-                    transform: 'scale(1.2)',
-                    margin: '-10%'
-                  }}
-                />
-              </div>
+              />
             </div>
-          )}
+          </div>
         </div>
 
 
