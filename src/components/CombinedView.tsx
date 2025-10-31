@@ -802,17 +802,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           </div>
         ))}
 
-        {/* Render parent node if title is provided */}
-        {parentNodeTitle && (
-          <div
-            key="parent-node"
-            className="absolute transition-transform duration-500 ease-out"
-            style={{
-              left: "85%",
-              top: "15%",
-              transform: `translate(-50%, -50%) ${getScaleTransform()}`,
-            }}
-          >
+        {/* Render parent node - always visible */}
+        <div
+          key="parent-node"
+          className="absolute transition-transform duration-500 ease-out"
+          style={{
+            left: "95%",
+            top: "15%",
+            transform: `translate(-50%, -50%) ${getScaleTransform()}`,
+          }}
+        >
             <div
               className="text-6xl font-bold lg:text-6xl md:text-xl sm:text-base border-teal-400 shadow-[0_0_20px_-5px_rgba(45,212,191,0.4)]
                 relative rounded-full border-4 bg-gray-900/60 backdrop-blur-sm
@@ -827,7 +826,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               }}
             >
               <span className="font-medium leading-tight px-1 whitespace-pre-line text-white">
-                {parentNodeTitle}
+                {parentNodeTitle || "Clearity"}
               </span>
 
               {/* Empty circle around parent node (like Clearity in old version) */}
@@ -840,7 +839,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               />
             </div>
           </div>
-        )}
+        )
 
 
         {/* Building progress indicator */}
