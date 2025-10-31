@@ -65,6 +65,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Single mind map state - data comes directly from database
   const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
   const [parentNodeTitle, setParentNodeTitle] = useState<string | null>(null);
+  const [clickedProjectNode, setClickedProjectNode] = useState<Node | null>(null);
 
   // Function to reload mind map nodes from database
   const reloadNodes = () => {
@@ -299,6 +300,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     );
     
     if (isProject) {
+      // Set clicked project node to show large node
+      setClickedProjectNode(node);
+      
       // Determine if project is started (simple heuristic based on node color or other properties)
       const isStarted = node.color === 'blue' || node.color === 'teal'; // Assume blue/teal = started
       
@@ -802,10 +806,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           </div>
         ))}
 
-        {/* Render parent node - always visible */}
+        {/* Render parent node - always in DOM but hidden until project clicked */}
         <div
           key="parent-node"
-          className="absolute transition-transform duration-500 ease-out"
+          className={`absolute transition-all duration-500 ease-out ${
+            clickedProjectNode ? 'opacity-100 scale-100' : 'opacity-0 scale-0'
+          }`}
           style={{
             left: "95%",
             top: "15%",
@@ -824,9 +830,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 width: "432px",
                 height: "432px"
               }}
+              onClick={() => {
+                // Reset clicked project to hide the large node
+                setClickedProjectNode(null);
+                messageModeHandler.reset();
+              }}
             >
               <span className="font-medium leading-tight px-1 whitespace-pre-line text-white">
-                {parentNodeTitle || "Clearity"}
+                {clickedProjectNode ? clickedProjectNode.label : (parentNodeTitle || "Clearity")}
               </span>
 
               {/* Empty circle around parent node (like Clearity in old version) */}
