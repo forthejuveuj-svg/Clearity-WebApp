@@ -978,16 +978,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           }}
         >
             <div
-              className="text-4xl font-bold lg:text-4xl md:text-2xl sm:text-lg border-teal-400 shadow-[0_0_20px_-5px_rgba(45,212,191,0.4)]
-                relative rounded-full border-4 bg-gray-900/80 backdrop-blur-sm
+              className="text-5xl font-bold lg:text-5xl md:text-3xl sm:text-xl border-teal-400/60 shadow-[0_0_15px_-5px_rgba(45,212,191,0.2)]
+                relative rounded-full border-2 bg-gray-900/40 backdrop-blur-sm
                 flex items-center justify-center text-center
                 transition-all duration-500
-                hover:scale-110 hover:bg-gray-800/80
+                hover:scale-105 hover:bg-gray-800/50
                 cursor-pointer
-                ring-4 ring-offset-8 ring-offset-transparent ring-teal-400/40 shadow-[0_0_40px_-10px_rgba(45,212,191,0.8)]"
+                ring-2 ring-offset-8 ring-offset-transparent ring-teal-400/20 shadow-[0_0_25px_-10px_rgba(45,212,191,0.3)]"
               style={{
-                width: "200px",
-                height: "200px"
+                width: "320px",
+                height: "320px"
               }}
               onClick={() => {
                 // Go back in session history when clicking the context node
@@ -1000,32 +1000,23 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 }
               }}
             >
-              <span className="font-medium leading-tight px-2 whitespace-pre-line text-white text-center">
+              <span className="font-medium leading-tight px-3 whitespace-pre-line text-white text-center">
                 {clickedProjectNode ? clickedProjectNode.label : (parentNodeTitle || "Clearity")}
               </span>
 
               {/* Subtle outer ring */}
               <div 
-                className="absolute inset-0 rounded-full border-2 border-teal-400/30 pointer-events-none"
+                className="absolute inset-0 rounded-full border border-teal-400/20 pointer-events-none"
                 style={{
-                  transform: 'scale(1.15)',
+                  transform: 'scale(1.1)',
                 }}
               />
             </div>
           </div>
 
 
-        {/* Navigation Controls - simplified */}
+        {/* Navigation Controls - forward only */}
         <div className="absolute top-4 left-4 flex items-center gap-2 z-20">
-          <button
-            onClick={goBackInHistory}
-            disabled={currentSessionIndex <= 0}
-            className="p-2 rounded-lg bg-gray-800/80 backdrop-blur-sm border border-white/10 hover:bg-gray-700/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
-            title="Go back to previous view"
-          >
-            <ArrowLeft className="w-5 h-5 text-white" />
-          </button>
-          
           <button
             onClick={goForwardInHistory}
             disabled={currentSessionIndex >= sessionHistory.length - 1}
