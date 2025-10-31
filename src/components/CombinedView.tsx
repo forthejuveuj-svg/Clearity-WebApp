@@ -978,11 +978,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           }}
         >
             <div
-<<<<<<< HEAD
               className="text-2xl font-bold lg:text-2xl md:text-xl sm:text-lg border-teal-400/60 shadow-[0_0_15px_-5px_rgba(45,212,191,0.2)]
-=======
-              className="text-5xl font-bold lg:text-5xl md:text-3xl sm:text-xl border-teal-400/60 shadow-[0_0_15px_-5px_rgba(45,212,191,0.2)]
->>>>>>> 5cd1df73d741fb509026283764699ccadd56d399
                 relative rounded-full border-2 bg-gray-900/40 backdrop-blur-sm
                 flex items-center justify-center text-center
                 transition-all duration-500
@@ -990,13 +986,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 cursor-pointer
                 ring-2 ring-offset-8 ring-offset-transparent ring-teal-400/20 shadow-[0_0_25px_-10px_rgba(45,212,191,0.3)]"
               style={{
-<<<<<<< HEAD
                 width: "400px",
                 height: "400px"
-=======
-                width: "320px",
-                height: "320px"
->>>>>>> 5cd1df73d741fb509026283764699ccadd56d399
               }}
               onClick={() => {
                 // Go back in session history when clicking the context node
@@ -1009,11 +1000,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 }
               }}
             >
-<<<<<<< HEAD
               <span className="font-medium leading-tight px-4 whitespace-pre-line text-white text-center">
-=======
-              <span className="font-medium leading-tight px-3 whitespace-pre-line text-white text-center">
->>>>>>> 5cd1df73d741fb509026283764699ccadd56d399
                 {clickedProjectNode ? clickedProjectNode.label : (parentNodeTitle || "Clearity")}
               </span>
 
