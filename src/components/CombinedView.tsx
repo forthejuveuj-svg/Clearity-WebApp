@@ -155,31 +155,77 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   };
 
+  // Function to generate non-overlapping positions for nodes
+  const generateNonOverlappingPositions = (count: number) => {
+    const positions: { x: number; y: number }[] = [];
+    const minDistance = 25; // Minimum distance between nodes (in percentage)
+    const maxAttempts = 100; // Maximum attempts to find a valid position
+
+    // Define safe boundaries (avoid edges and large node area)
+    const boundaries = {
+      minX: 15, // 15% from left
+      maxX: 70, // 70% from left (avoid large node on right)
+      minY: 15, // 15% from top
+      maxY: 85  // 85% from top
+    };
+
+    for (let i = 0; i < count; i++) {
+      let validPosition = false;
+      let attempts = 0;
+      let newPos = { x: 0, y: 0 };
+
+      while (!validPosition && attempts < maxAttempts) {
+        // Generate random position within boundaries
+        newPos = {
+          x: Math.random() * (boundaries.maxX - boundaries.minX) + boundaries.minX,
+          y: Math.random() * (boundaries.maxY - boundaries.minY) + boundaries.minY
+        };
+
+        // Check if position is far enough from existing positions
+        validPosition = positions.every(pos => {
+          const distance = Math.sqrt(
+            Math.pow(newPos.x - pos.x, 2) + Math.pow(newPos.y - pos.y, 2)
+          );
+          return distance >= minDistance;
+        });
+
+        attempts++;
+      }
+
+      // If we couldn't find a valid position, use the last generated one
+      positions.push(newPos);
+    }
+
+    return positions;
+  };
+
   const loadSubprojects = async (nodeId: string) => {
     // Mock function - replace with actual Supabase call
-    // Simulate loading subprojects from database
+    // Generate non-overlapping positions for 3 subprojects
+    const positions = generateNonOverlappingPositions(3);
+
     const mockSubprojects: Node[] = [
       {
         id: `${nodeId}_sub_1`,
         label: `Subproject 1 of ${nodeId}`,
-        x: Math.random() * 60 + 20,
-        y: Math.random() * 60 + 20,
+        x: positions[0].x,
+        y: positions[0].y,
         color: "blue",
         subNodes: [{ label: "Task A" }, { label: "Task B" }]
       },
       {
         id: `${nodeId}_sub_2`,
         label: `Subproject 2 of ${nodeId}`,
-        x: Math.random() * 60 + 20,
-        y: Math.random() * 60 + 20,
+        x: positions[1].x,
+        y: positions[1].y,
         color: "violet",
         thoughts: ["Important detail", "Remember this"]
       },
       {
         id: `${nodeId}_sub_3`,
         label: `Subproject 3 of ${nodeId}`,
-        x: Math.random() * 60 + 20,
-        y: Math.random() * 60 + 20,
+        x: positions[2].x,
+        y: positions[2].y,
         color: "teal",
         hasProblem: true,
         problemType: "blocker"
@@ -430,12 +476,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         let subprojects: Node[];
 
         if (hasSubprojects) {
-          // Convert existing subNodes to full Node objects
+          // Convert existing subNodes to full Node objects with non-overlapping positions
+          const positions = generateNonOverlappingPositions(node.subNodes!.length);
           subprojects = node.subNodes!.map((subNode, index) => ({
             id: `${node.id}_sub_${index}`,
             label: subNode.label,
-            x: Math.random() * 60 + 20,
-            y: Math.random() * 60 + 20,
+            x: positions[index].x,
+            y: positions[index].y,
             color: ["blue", "violet", "red", "teal"][index % 4] as "blue" | "violet" | "red" | "teal"
           }));
         } else {
@@ -967,49 +1014,48 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               </div>
             ))}
 
-            {/* Large indicator node in top right - shows current context */}
-            <div
-              key="context-node"
-              className="absolute transition-all duration-500 ease-out z-40"
-              style={{
-                left: "92%",
-                top: "20%",
-                transform: `translate(-50%, -50%) ${getScaleTransform()}`,
-              }}
-            >
+            {/* Large indicator node in top right - shows current context - only visible when in subproject view */}
+            {parentNodeTitle && (
               <div
-                className={`text-2xl font-bold lg:text-2xl md:text-xl sm:text-lg border-teal-400/60 shadow-[0_0_15px_-5px_rgba(45,212,191,0.2)]
-                relative rounded-full border-2 bg-gray-900/40 backdrop-blur-sm
-                flex items-center justify-center text-center
-                transition-all duration-500
-                ring-2 ring-offset-8 ring-offset-transparent ring-teal-400/20 shadow-[0_0_25px_-10px_rgba(45,212,191,0.3)]
-                ${parentNodeTitle ? 'hover:scale-105 hover:bg-gray-800/50 cursor-pointer' : 'cursor-default'}`}
+                key="context-node"
+                className="absolute transition-all duration-500 ease-out z-40"
                 style={{
-                  width: "400px",
-                  height: "400px"
+                  left: "92%",
+                  top: "20%",
+                  transform: `translate(-50%, -50%) ${getScaleTransform()}`,
                 }}
-                onClick={() => {
-                  // Only allow clicking when we're in a subproject view (parentNodeTitle exists)
-                  if (parentNodeTitle) {
+              >
+                <div
+                  className="text-2xl font-bold lg:text-2xl md:text-xl sm:text-lg border-teal-400/60 shadow-[0_0_15px_-5px_rgba(45,212,191,0.2)]
+                  relative rounded-full border-2 bg-gray-900/40 backdrop-blur-sm
+                  flex items-center justify-center text-center
+                  transition-all duration-500
+                  ring-2 ring-offset-8 ring-offset-transparent ring-teal-400/20 shadow-[0_0_25px_-10px_rgba(45,212,191,0.3)]
+                  hover:scale-105 hover:bg-gray-800/50 cursor-pointer"
+                  style={{
+                    width: "400px",
+                    height: "400px"
+                  }}
+                  onClick={() => {
                     if (currentSessionIndex > 0) {
                       goBackInHistory();
                     }
-                  }
-                }}
-              >
-                <span className="font-medium leading-tight px-4 whitespace-pre-line text-white text-center">
-                  {parentNodeTitle || "Clearity"}
-                </span>
-
-                {/* Subtle outer ring */}
-                <div
-                  className="absolute inset-0 rounded-full border border-teal-400/20 pointer-events-none"
-                  style={{
-                    transform: 'scale(1.1)',
                   }}
-                />
+                >
+                  <span className="font-medium leading-tight px-4 whitespace-pre-line text-white text-center">
+                    {parentNodeTitle}
+                  </span>
+
+                  {/* Subtle outer ring */}
+                  <div
+                    className="absolute inset-0 rounded-full border border-teal-400/20 pointer-events-none"
+                    style={{
+                      transform: 'scale(1.1)',
+                    }}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
 
 
@@ -1080,8 +1126,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               >
                 <div
                   className={`relative max-w-[75%] ${message.role === "user"
-                      ? "px-4 py-2 text-sm bg-gray-700 text-white ml-auto rounded-3xl rounded-br-lg"
-                      : "text-white"
+                    ? "px-4 py-2 text-sm bg-gray-700 text-white ml-auto rounded-3xl rounded-br-lg"
+                    : "text-white"
                     }`}
                 >
                   {message.role === "assistant" ? (
@@ -1201,8 +1247,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                     type="button"
                     onClick={handleMicrophoneClick}
                     className={`p-2 rounded-2xl transition-all duration-300 hover:scale-110 ${isRecording
-                        ? 'bg-red-500/20 border border-red-500/30 animate-pulse'
-                        : 'bg-white/5 hover:bg-white/10'
+                      ? 'bg-red-500/20 border border-red-500/30 animate-pulse'
+                      : 'bg-white/5 hover:bg-white/10'
                       }`}
                   >
                     {isRecording ? (
