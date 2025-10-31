@@ -19,6 +19,7 @@ interface MindMapViewProps {
 export const MindMapView = ({ onContinueChat }: MindMapViewProps) => {
   const [input, setInput] = useState("");
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [showLargeNode, setShowLargeNode] = useState<Node | null>(null);
 
   const nodes: Node[] = [
     {
@@ -195,7 +196,10 @@ export const MindMapView = ({ onContinueChat }: MindMapViewProps) => {
               }}
             >
               <button
-                onClick={() => setSelectedNode(selectedNode === node.id ? null : node.id)}
+                onClick={() => {
+                  setSelectedNode(selectedNode === node.id ? null : node.id);
+                  setShowLargeNode(node);
+                }}
                 className={`
                   ${getSizeClass(node.size)} ${getColorClass(node.color)}
                   relative rounded-full border-2 bg-background/40 backdrop-blur-sm
@@ -244,6 +248,53 @@ export const MindMapView = ({ onContinueChat }: MindMapViewProps) => {
           </div>
         </div>
       </div>
+
+      {/* Large Node Display Overlay */}
+      {showLargeNode && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+          <div 
+            className="absolute top-0 right-0"
+            style={{
+              transform: "translate(25%, -25%)",
+            }}
+          >
+            <div
+              className={`
+                ${getColorClass(showLargeNode.color)}
+                w-80 h-80 rounded-full border-4 bg-background/60 backdrop-blur-md
+                flex items-center justify-center text-center
+                animate-scale-in shadow-2xl
+              `}
+            >
+              <div className="px-8">
+                <h2 className="text-4xl font-bold leading-tight whitespace-pre-line mb-4">
+                  {showLargeNode.label}
+                </h2>
+                {showLargeNode.subNodes && (
+                  <div className="flex flex-wrap gap-2 justify-center mt-6">
+                    {showLargeNode.subNodes.map((sub, subIdx) => (
+                      <div
+                        key={subIdx}
+                        className="px-3 py-2 rounded-lg bg-background/80 backdrop-blur-sm border border-primary/30 text-sm whitespace-pre-line"
+                      >
+                        {sub.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Close button */}
+            <button
+              onClick={() => setShowLargeNode(null)}
+              className="absolute top-16 left-16 w-10 h-10 rounded-full bg-background/80 backdrop-blur-sm border border-primary/30 flex items-center justify-center hover:bg-background/90 transition-colors"
+            >
+              <span className="text-xl">×</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Input bar */}
       <div className="relative z-10 px-6 pb-8 max-w-4xl mx-auto w-full">
