@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Mic, MicOff, ArrowUp, MessageSquare, AlertTriangle, X, Check, Reply } from "lucide-react";
+import { Mic, MicOff, ArrowUp, MessageSquare, AlertTriangle, X, Check, Reply, ArrowLeft, ArrowRight } from "lucide-react";
 import { TypingAnimation } from "./TypingAnimation";
 import { ProblemsModal } from "./ProblemsModal";
 import { TaskManagerModal } from "./TaskManagerModal";
@@ -66,6 +66,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
   const [parentNodeTitle, setParentNodeTitle] = useState<string | null>(null);
   const [clickedProjectNode, setClickedProjectNode] = useState<Node | null>(null);
+  
+  // Simple session management
+  const [sessionHistory, setSessionHistory] = useState<Array<{
+    id: string;
+    nodes: Node[];
+    parentNodeId?: string;
+    timestamp: number;
+  }>>([]);
+  const [currentSessionIndex, setCurrentSessionIndex] = useState(-1);
 
   // Function to reload mind map nodes from database
   const reloadNodes = () => {
@@ -77,13 +86,123 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         // Set parent node title if provided
         setParentNodeTitle(data.parentNode || null);
         
+        // Save current state to session when nodes are reloaded
+        saveCurrentSession(data.nodes || []);
+        
         console.log('Mind map nodes reloaded after successful processing');
       }
     });
   };
 
+  // Simple session management functions
+  const saveCurrentSession = (nodes: Node[], parentNodeId?: string) => {
+    const newSession = {
+      id: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      nodes: [...nodes],
+      parentNodeId,
+      timestamp: Date.now()
+    };
+    
+    const updatedHistory = [...sessionHistory.slice(0, currentSessionIndex + 1), newSession];
+    setSessionHistory(updatedHistory);
+    setCurrentSessionIndex(updatedHistory.length - 1);
+    
+    // Save to localStorage
+    localStorage.setItem('mindmap_sessions', JSON.stringify(updatedHistory));
+    localStorage.setItem('mindmap_current_index', currentSessionIndex.toString());
+  };
+
+  const loadSessionFromStorage = () => {
+    try {
+      const stored = localStorage.getItem('mindmap_sessions');
+      const storedIndex = localStorage.getItem('mindmap_current_index');
+      
+      if (stored && storedIndex) {
+        const sessions = JSON.parse(stored);
+        const index = parseInt(storedIndex);
+        
+        setSessionHistory(sessions);
+        setCurrentSessionIndex(index);
+        
+        if (sessions[index]) {
+          setMindMapNodes(sessions[index].nodes);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load sessions from localStorage:', error);
+    }
+  };
+
+  const goBackInHistory = () => {
+    if (currentSessionIndex > 0) {
+      const newIndex = currentSessionIndex - 1;
+      setCurrentSessionIndex(newIndex);
+      setMindMapNodes(sessionHistory[newIndex].nodes);
+      setClickedProjectNode(null);
+      
+      localStorage.setItem('mindmap_current_index', newIndex.toString());
+    }
+  };
+
+  const goForwardInHistory = () => {
+    if (currentSessionIndex < sessionHistory.length - 1) {
+      const newIndex = currentSessionIndex + 1;
+      setCurrentSessionIndex(newIndex);
+      setMindMapNodes(sessionHistory[newIndex].nodes);
+      setClickedProjectNode(null);
+      
+      localStorage.setItem('mindmap_current_index', newIndex.toString());
+    }
+  };
+
+  const loadSubprojects = async (nodeId: string) => {
+    // Mock function - replace with actual Supabase call
+    // Simulate loading subprojects from database
+    const mockSubprojects: Node[] = [
+      {
+        id: `${nodeId}_sub_1`,
+        label: `Subproject 1 of ${nodeId}`,
+        x: Math.random() * 60 + 20,
+        y: Math.random() * 60 + 20,
+        color: "blue",
+        subNodes: [{ label: "Task A" }, { label: "Task B" }]
+      },
+      {
+        id: `${nodeId}_sub_2`,
+        label: `Subproject 2 of ${nodeId}`,
+        x: Math.random() * 60 + 20,
+        y: Math.random() * 60 + 20,
+        color: "violet",
+        thoughts: ["Important detail", "Remember this"]
+      },
+      {
+        id: `${nodeId}_sub_3`,
+        label: `Subproject 3 of ${nodeId}`,
+        x: Math.random() * 60 + 20,
+        y: Math.random() * 60 + 20,
+        color: "teal",
+        hasProblem: true,
+        problemType: "blocker"
+      }
+    ];
+    
+    return mockSubprojects;
+  };
+
+  const clearAllSessions = () => {
+    setSessionHistory([]);
+    setCurrentSessionIndex(-1);
+    localStorage.removeItem('mindmap_sessions');
+    localStorage.removeItem('mindmap_current_index');
+    console.log('All sessions cleared');
+  };
+
   // Load mind map nodes on component mount
   useEffect(() => {
+    // First try to load from localStorage
+    loadSessionFromStorage();
+    
+    // Then load fresh data from database
     generateMindMapJson().then(data => {
       if (data) {
         // Set regular nodes (all nodes are regular now)
@@ -91,6 +210,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         
         // Set parent node title if provided
         setParentNodeTitle(data.parentNode || null);
+        
+        // Save initial session if no sessions exist
+        if (sessionHistory.length === 0) {
+          saveCurrentSession(data.nodes || []);
+        }
       }
     });
 
@@ -291,16 +415,46 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   };
 
-  // Handle node clicks for project focus (invisible to user)
-  const handleNodeClick = (node: Node) => {
-    // Simple heuristic: if node label contains project-like keywords, treat as project
+  // Handle node clicks for project focus and subproject navigation
+  const handleNodeClick = async (node: Node) => {
+    // Check if node has subprojects (indicated by subNodes or specific keywords)
+    const hasSubprojects = node.subNodes && node.subNodes.length > 0;
     const projectKeywords = ['project', 'course', 'learning', 'study', 'work', 'build', 'create'];
     const isProject = projectKeywords.some(keyword => 
       node.label.toLowerCase().includes(keyword)
     );
     
-    if (isProject) {
-      // Set clicked project node to show large node
+    if (hasSubprojects || isProject) {
+      try {
+        // Load subprojects from database (or use existing subNodes)
+        let subprojects: Node[];
+        
+        if (hasSubprojects) {
+          // Convert existing subNodes to full Node objects
+          subprojects = node.subNodes!.map((subNode, index) => ({
+            id: `${node.id}_sub_${index}`,
+            label: subNode.label,
+            x: Math.random() * 60 + 20,
+            y: Math.random() * 60 + 20,
+            color: ["blue", "violet", "red", "teal"][index % 4] as "blue" | "violet" | "red" | "teal"
+          }));
+        } else {
+          // Load from database
+          subprojects = await loadSubprojects(node.id);
+        }
+        
+        // Save current state and navigate to subprojects
+        saveCurrentSession(subprojects, node.id);
+        setMindMapNodes(subprojects);
+        setParentNodeTitle(node.label);
+        
+        console.log(`Navigated to subprojects of ${node.label}`);
+        
+      } catch (error) {
+        console.error('Failed to load subprojects:', error);
+      }
+    } else {
+      // Regular project focus behavior
       setClickedProjectNode(node);
       
       // Determine if project is started (simple heuristic based on node color or other properties)
@@ -312,8 +466,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         name: node.label,
         status: isStarted ? 'started' : 'not_started'
       });
-      
-      // No message added - mode switch is invisible to user
     }
   };
 
@@ -755,6 +907,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 </button>
               )}
 
+              {/* Subprojects indicator */}
+              {(node.subNodes && node.subNodes.length > 0) && (
+                <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-blue-500/80 rounded-full flex items-center justify-center border-2 border-gray-900 shadow-lg">
+                  <span className="text-white font-bold text-xs">{node.subNodes.length}</span>
+                </div>
+              )}
+
               {/* Small thought labels around each circle */}
               {node.thoughts && node.thoughts.map((thought, idx) => {
                 // Default angles for all nodes
@@ -831,9 +990,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 height: "432px"
               }}
               onClick={() => {
-                // Reset clicked project to hide the large node
-                setClickedProjectNode(null);
-                messageModeHandler.reset();
+                // Go back in session history when clicking the large parent node
+                if (currentSessionIndex > 0) {
+                  goBackInHistory();
+                } else {
+                  // Reset clicked project to hide the large node
+                  setClickedProjectNode(null);
+                  messageModeHandler.reset();
+                }
               }}
             >
               <span className="font-medium leading-tight px-1 whitespace-pre-line text-white">
@@ -852,6 +1016,40 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           </div>
         )
 
+
+        {/* Navigation Controls */}
+        <div className="absolute top-4 left-4 flex items-center gap-2 z-20">
+          <button
+            onClick={goBackInHistory}
+            disabled={currentSessionIndex <= 0}
+            className="p-2 rounded-lg bg-gray-800/80 backdrop-blur-sm border border-white/10 hover:bg-gray-700/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
+            title="Go back to previous view"
+          >
+            <ArrowLeft className="w-5 h-5 text-white" />
+          </button>
+          
+          <button
+            onClick={goForwardInHistory}
+            disabled={currentSessionIndex >= sessionHistory.length - 1}
+            className="p-2 rounded-lg bg-gray-800/80 backdrop-blur-sm border border-white/10 hover:bg-gray-700/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
+            title="Go forward to next view"
+          >
+            <ArrowRight className="w-5 h-5 text-white" />
+          </button>
+          
+          {parentNodeTitle && (
+            <div className="px-3 py-1 rounded-lg bg-teal-500/20 backdrop-blur-sm border border-teal-400/30">
+              <span className="text-sm text-teal-300">Viewing: {parentNodeTitle}</span>
+            </div>
+          )}
+          
+          {/* Session info (for debugging) */}
+          {sessionHistory.length > 1 && (
+            <div className="px-2 py-1 rounded bg-gray-700/50 text-xs text-white/70">
+              {currentSessionIndex + 1}/{sessionHistory.length}
+            </div>
+          )}
+        </div>
 
         {/* Building progress indicator */}
         {isBuilding && (
