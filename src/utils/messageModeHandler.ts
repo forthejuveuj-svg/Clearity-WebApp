@@ -68,8 +68,7 @@ export class MessageModeHandler {
         case 'minddump':
           response = await APIService.minddump({
             text,
-            user_id: userId,
-            use_relator: false
+            user_id: userId
           });
           // After successful minddump, switch to follow-up mode
           if (response.success) {

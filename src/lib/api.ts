@@ -18,7 +18,6 @@ interface RPCResponse<T = any> {
 interface MindDumpParams {
   text: string;
   user_id: string;
-  use_relator?: boolean;
 }
 
 interface FixNodesParams {

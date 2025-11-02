@@ -508,8 +508,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       try {
         const response = await APIService.minddump({
           text: taskMessage,
-          user_id: userId,
-          use_relator: false
+          user_id: userId
         });
 
         if (response.success) {
