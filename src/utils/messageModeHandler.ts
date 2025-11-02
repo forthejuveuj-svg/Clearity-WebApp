@@ -58,16 +58,73 @@ export class MessageModeHandler {
     this.state.messageCount = 0;
   }
 
+  /**
+   * Detect @ mentions in the text and extract the mode override and cleaned text
+   */
+  private detectModeOverride(text: string): { mode: 'minddump' | 'fix_nodes' | null; cleanedText: string } {
+    const modePattern = /@(minddump|fix_nodes)\s*/gi;
+    const match = text.match(modePattern);
+    
+    if (match) {
+      const modeStr = match[0].toLowerCase().replace('@', '').trim();
+      const cleanedText = text.replace(modePattern, '').trim();
+      
+      if (modeStr === 'minddump') {
+        return { mode: 'minddump', cleanedText };
+      } else if (modeStr === 'fix_nodes') {
+        return { mode: 'fix_nodes', cleanedText };
+      }
+    }
+    
+    return { mode: null, cleanedText: text };
+  }
+
   async processMessage(text: string, userId: string): Promise<{ success: boolean; output?: string; error?: string }> {
     this.state.messageCount++;
 
     try {
       let response;
+      
+      // Detect mode override from @ mentions
+      const { mode: modeOverride, cleanedText } = this.detectModeOverride(text);
+      const textToSend = cleanedText;
 
+      // Determine which RPC to call - use override if present, otherwise use current mode
+      let effectiveMode = this.state.mode;
+      
+      if (modeOverride === 'minddump') {
+        // Force minddump regardless of current mode
+        response = await APIService.minddump({
+          text: textToSend,
+          user_id: userId
+        });
+        // After successful minddump, switch to follow-up mode
+        if (response.success) {
+          this.state.mode = 'minddump_followup';
+        }
+        return {
+          success: response.success,
+          output: response.output || response.result || "Processing completed successfully.",
+          error: response.error
+        };
+      } else if (modeOverride === 'fix_nodes') {
+        // Force fix_nodes regardless of current mode
+        response = await APIService.fixNodes({
+          text: textToSend,
+          user_id: userId
+        });
+        return {
+          success: response.success,
+          output: response.output || response.result || "Processing completed successfully.",
+          error: response.error
+        };
+      }
+
+      // No override - use normal mode logic
       switch (this.state.mode) {
         case 'minddump':
           response = await APIService.minddump({
-            text,
+            text: textToSend,
             user_id: userId
           });
           // After successful minddump, switch to follow-up mode
@@ -78,14 +135,14 @@ export class MessageModeHandler {
 
         case 'minddump_followup':
           response = await APIService.fixNodes({
-            text,
+            text: textToSend,
             user_id: userId
           });
           break;
 
         case 'project_creator':
           response = await APIService.projectManager({
-            text
+            text: textToSend
           });
           // After project creation, automatically return to minddump mode
           if (response.success) {
@@ -95,7 +152,7 @@ export class MessageModeHandler {
 
         case 'project_manager':
           response = await APIService.taskManagerAssess({
-            user_message: text,
+            user_message: textToSend,
             task_object: this.state.selectedProject || {},
             context: { project_id: this.state.selectedProject?.id }
           });
