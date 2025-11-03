@@ -119,7 +119,6 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
   // Limit to top 5 suggestions only
   const topSuggestions = suggestions.slice(0, 5);
   
-  // Get position for dropdown - positioned ABOVE input
   const getDropdownPosition = () => {
     if (!inputRef.current) return { top: 0, left: 0, width: 0 };
     
@@ -133,20 +132,16 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
   };
 
   const position = getDropdownPosition();
-  
-  // Calculate height based on number of items (max 5)
-  const itemHeight = 32; // Height per item (py-1.5 + text)
-  const dropdownHeight = topSuggestions.length * itemHeight;
 
   return (
     <div
       ref={dropdownRef}
       className="fixed rounded-lg shadow-2xl overflow-hidden"
       style={{
-        top: `${position.top - dropdownHeight - 10}px`,
+        top: `${position.top}px`,
         left: `${position.left}px`,
         width: `${position.width}px`,
-        height: `${dropdownHeight}px`,
+        transform: 'translateY(calc(-100% - 10px))',
         backgroundColor: 'rgba(0, 0, 0, 0.95)',
         border: '1px solid rgba(255, 255, 255, 0.15)',
         backdropFilter: 'blur(8px)',
