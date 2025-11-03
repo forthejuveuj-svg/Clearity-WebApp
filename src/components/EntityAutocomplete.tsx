@@ -74,6 +74,7 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
           break;
         
         case 'Enter':
+        case 'Tab':
           if (suggestions[selectedIndex]) {
             e.preventDefault();
             handleSelectEntity(suggestions[selectedIndex]);
@@ -111,15 +112,15 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
     setIsOpen(false);
   };
 
-  // Get position for dropdown
+  // Get position for dropdown (above input)
   const getDropdownPosition = () => {
-    if (!inputRef.current) return { top: 0, left: 0 };
+    if (!inputRef.current) return { bottom: 0, left: 0, width: 0 };
     
     const rect = inputRef.current.getBoundingClientRect();
     return {
-      top: rect.bottom + 5,
+      bottom: window.innerHeight - rect.top + 5,
       left: rect.left,
-      maxWidth: rect.width
+      width: rect.width
     };
   };
 
@@ -132,43 +133,47 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
   return (
     <div
       ref={dropdownRef}
-      className="fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 max-h-64 overflow-y-auto"
+      className="fixed z-[100] rounded-lg shadow-2xl max-h-48 overflow-y-auto backdrop-blur-sm"
       style={{
-        top: `${position.top}px`,
+        bottom: `${position.bottom}px`,
         left: `${position.left}px`,
-        minWidth: '300px',
-        maxWidth: `${position.maxWidth}px`
+        width: `${position.width}px`,
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        border: '1px solid rgba(255, 255, 255, 0.1)'
       }}
     >
       {loading && (
-        <div className="px-4 py-2 text-sm text-gray-500">Loading...</div>
+        <div className="px-3 py-1.5 text-xs text-gray-400">Loading...</div>
       )}
       
       {suggestions.map((entity, index) => (
         <div
           key={`${entity.type}-${entity.id}`}
           className={`
-            px-4 py-2 cursor-pointer flex items-center justify-between
+            px-3 py-1.5 cursor-pointer flex items-center justify-between
+            transition-colors duration-150
             ${index === selectedIndex 
-              ? 'bg-blue-100 dark:bg-blue-900' 
-              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+              ? 'bg-white/20' 
+              : 'hover:bg-white/10'
             }
+            ${index === 0 ? 'rounded-t-lg' : ''}
+            ${index === suggestions.length - 1 ? 'rounded-b-lg' : ''}
           `}
           onClick={() => handleSelectEntity(entity)}
           onMouseEnter={() => setSelectedIndex(index)}
         >
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className="text-xs font-medium text-white truncate">
               {entity.name}
             </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-[10px] text-gray-400 flex-shrink-0">
               {entity.displayType}
             </span>
           </div>
           
           {/* Type badge */}
           <span className={`
-            text-xs px-2 py-1 rounded
+            text-[10px] px-1.5 py-0.5 rounded flex-shrink-0
             ${getTypeBadgeColor(entity.type)}
           `}>
             {entity.displayType}
@@ -179,19 +184,19 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
   );
 };
 
-// Helper function for type badge colors
+// Helper function for type badge colors (dark theme)
 function getTypeBadgeColor(type: string): string {
   const colors: Record<string, string> = {
-    'projects': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    'tasks': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-    'knowledge_nodes': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-    'problems': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    'skills': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-    'resources': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-    'preferences': 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
-    'events': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+    'projects': 'bg-blue-500/20 text-blue-300',
+    'tasks': 'bg-green-500/20 text-green-300',
+    'knowledge_nodes': 'bg-purple-500/20 text-purple-300',
+    'problems': 'bg-red-500/20 text-red-300',
+    'skills': 'bg-yellow-500/20 text-yellow-300',
+    'resources': 'bg-indigo-500/20 text-indigo-300',
+    'preferences': 'bg-pink-500/20 text-pink-300',
+    'events': 'bg-orange-500/20 text-orange-300'
   };
   
-  return colors[type] || 'bg-gray-100 text-gray-800';
+  return colors[type] || 'bg-gray-500/20 text-gray-300';
 }
 
