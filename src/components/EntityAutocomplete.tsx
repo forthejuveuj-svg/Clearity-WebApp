@@ -64,7 +64,7 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
         case 'ArrowDown':
           e.preventDefault();
           setSelectedIndex(prev => 
-            prev < suggestions.length - 1 ? prev + 1 : prev
+            prev < Math.min(suggestions.length, 5) - 1 ? prev + 1 : prev
           );
           break;
         
@@ -75,7 +75,7 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
         
         case 'Enter':
         case 'Tab':
-          if (suggestions[selectedIndex]) {
+          if (suggestions[selectedIndex] && selectedIndex < 5) {
             e.preventDefault();
             handleSelectEntity(suggestions[selectedIndex]);
           }
@@ -92,9 +92,9 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, suggestions, selectedIndex]);
 
-  // Scroll selected item into view
+  // Scroll selected item into view (not needed since we only show 5 items)
   useEffect(() => {
-    if (isOpen && dropdownRef.current) {
+    if (isOpen && dropdownRef.current && selectedIndex < 5) {
       const selectedElement = dropdownRef.current.children[selectedIndex] as HTMLElement;
       if (selectedElement) {
         selectedElement.scrollIntoView({ block: 'nearest' });
@@ -116,35 +116,37 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
     return null;
   }
 
-  // Get position for dropdown (above input)
+  // Limit to top 5 suggestions only
+  const topSuggestions = suggestions.slice(0, 5);
+  
+  // Get position for dropdown - positioned ABOVE input
   const getDropdownPosition = () => {
-    if (!inputRef.current) return { bottom: '100%', left: 0, width: 0 };
+    if (!inputRef.current) return { top: 0, left: 0, width: 0 };
     
     const rect = inputRef.current.getBoundingClientRect();
-    const viewportHeight = window.innerHeight;
-    
-    // Position dropdown ABOVE the input
-    // bottom = distance from bottom of viewport to top of input + 10px gap
-    const bottomPosition = viewportHeight - rect.top + 10;
     
     return {
-      bottom: bottomPosition,
+      top: rect.top,
       left: rect.left,
       width: rect.width
     };
   };
 
   const position = getDropdownPosition();
+  
+  // Calculate height based on number of items (max 5)
+  const itemHeight = 32; // Height per item (py-1.5 + text)
+  const dropdownHeight = topSuggestions.length * itemHeight;
 
   return (
     <div
       ref={dropdownRef}
-      className="fixed rounded-lg shadow-2xl overflow-y-auto"
+      className="fixed rounded-lg shadow-2xl overflow-hidden"
       style={{
-        bottom: `${position.bottom}px`,
+        top: `${position.top - dropdownHeight - 10}px`,
         left: `${position.left}px`,
         width: `${position.width}px`,
-        maxHeight: '200px',
+        height: `${dropdownHeight}px`,
         backgroundColor: 'rgba(0, 0, 0, 0.95)',
         border: '1px solid rgba(255, 255, 255, 0.15)',
         backdropFilter: 'blur(8px)',
@@ -156,7 +158,7 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
         <div className="px-3 py-1.5 text-xs text-gray-400">Loading...</div>
       )}
       
-      {suggestions.map((entity, index) => (
+      {topSuggestions.map((entity, index) => (
         <div
           key={`${entity.type}-${entity.id}`}
           className={`
