@@ -112,39 +112,44 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
     setIsOpen(false);
   };
 
+  if (!isOpen || suggestions.length === 0) {
+    return null;
+  }
+
   // Get position for dropdown (above input)
   const getDropdownPosition = () => {
-    if (!inputRef.current) return { top: 0, left: 0, width: 0 };
+    if (!inputRef.current) return { bottom: '100%', left: 0, width: 0 };
     
     const rect = inputRef.current.getBoundingClientRect();
-    // Calculate max height for dropdown (200px max)
-    const maxDropdownHeight = 200;
+    const viewportHeight = window.innerHeight;
+    
+    // Position dropdown ABOVE the input
+    // bottom = distance from bottom of viewport to top of input + 10px gap
+    const bottomPosition = viewportHeight - rect.top + 10;
     
     return {
-      top: rect.top - maxDropdownHeight - 10, // 10px margin above input
+      bottom: bottomPosition,
       left: rect.left,
       width: rect.width
     };
   };
-
-  if (!isOpen || suggestions.length === 0) {
-    return null;
-  }
 
   const position = getDropdownPosition();
 
   return (
     <div
       ref={dropdownRef}
-      className="fixed rounded-lg shadow-2xl max-h-[200px] overflow-y-auto"
+      className="fixed rounded-lg shadow-2xl overflow-y-auto"
       style={{
-        top: `${position.top}px`,
+        bottom: `${position.bottom}px`,
         left: `${position.left}px`,
         width: `${position.width}px`,
+        maxHeight: '200px',
         backgroundColor: 'rgba(0, 0, 0, 0.95)',
         border: '1px solid rgba(255, 255, 255, 0.15)',
         backdropFilter: 'blur(8px)',
-        zIndex: 9999
+        zIndex: 99999,
+        pointerEvents: 'auto'
       }}
     >
       {loading && (
