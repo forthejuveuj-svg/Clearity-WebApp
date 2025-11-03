@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { config } from '@/lib/config';
 
 interface WorkflowQuestion {
   session_id: string;
@@ -43,7 +44,34 @@ interface UseWebSocketReturn {
   disconnect: () => void;
 }
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+// Get backend URL from config and ensure it's the correct format
+const getBackendUrl = () => {
+  let url = config.backendUrl || 'http://localhost:8000';
+  
+  // Remove trailing slash if present
+  url = url.replace(/\/$/, '');
+  
+  // If behind nginx proxy (production), remove port since nginx handles routing
+  // In production, VITE_BACKEND_URL should be set to the domain without port
+  // e.g., https://clearity.space (nginx proxies to localhost:8000)
+  if (url.includes('clearity.space') || url.includes(window.location.hostname)) {
+    // Remove port if it's the same host as the frontend
+    try {
+      const urlObj = new URL(url);
+      if (urlObj.hostname === window.location.hostname && urlObj.port) {
+        url = `${urlObj.protocol}//${urlObj.hostname}`;
+      }
+    } catch (e) {
+      // Invalid URL, use as is
+    }
+  }
+  
+  // Log the URL being used for debugging
+  console.log('WebSocket backend URL:', url);
+  return url;
+};
+
+const BACKEND_URL = getBackendUrl();
 
 export const useWebSocket = (
   onComplete?: (results: any) => void,
@@ -57,10 +85,16 @@ export const useWebSocket = (
 
   // Initialize WebSocket connection
   useEffect(() => {
+    console.log('Connecting to WebSocket at:', BACKEND_URL);
     const socket = io(BACKEND_URL, {
-      transports: ['websocket', 'polling'],
+      path: '/socket.io/',
+      transports: ['polling', 'websocket'], // Try polling first, then upgrade to websocket
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      autoConnect: true,
+      forceNew: false,
+      upgrade: true,
+      rememberUpgrade: true,
     });
 
     socketRef.current = socket;
@@ -71,10 +105,15 @@ export const useWebSocket = (
       setConnected(true);
     });
 
-    socket.on('disconnect', () => {
-      console.log('WebSocket disconnected');
+    socket.on('disconnect', (reason) => {
+      console.log('WebSocket disconnected:', reason);
       setConnected(false);
       setSessionId(null);
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('WebSocket connection error:', error);
+      console.error('Attempted to connect to:', BACKEND_URL);
     });
 
     socket.on('connection_established', (data) => {
@@ -187,14 +226,11 @@ export const useWebSocket = (
     const result = await response.json();
 
     if (!result.success) {
-      toast.error('Failed to start workflow', {
-        description: result.error,
-      });
+      console.error('Failed to start workflow:', result.error);
       throw new Error(result.error);
     }
 
     console.log('Workflow started:', result);
-    toast.success('Project workflow started');
   }, [connected]);
 
   // Disconnect
