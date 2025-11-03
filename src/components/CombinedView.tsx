@@ -45,7 +45,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [input, setInput] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isBuilding, setIsBuilding] = useState(true);
   const [buildProgress, setBuildProgress] = useState(0);
   const [visibleNodes, setVisibleNodes] = useState<string[]>([]);
@@ -398,7 +398,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       name: entity.name,
       type: entity.type
     });
-    inputRef.current?.focus();
+    textareaRef.current?.focus();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -722,6 +722,20 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }
     };
   }, [blurTimeoutId]);
+
+  // Auto-resize textarea as content changes
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      // Reset height to auto to get the correct scrollHeight
+      textarea.style.height = 'auto';
+      // Set height to scrollHeight, with a max height limit
+      const maxHeight = 200; // max height in pixels (about 8-9 lines)
+      textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
+      // Enable scrolling if content exceeds max height
+      textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    }
+  }, [input]);
 
   const getCircleSize = () => {
     const screenWidth = window.innerWidth;
@@ -1209,19 +1223,27 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   </div>
                 )}
 
-                <input
-                  ref={inputRef}
-                  type="text"
+                <textarea
+                  ref={textareaRef}
                   value={isRecording ? `Recording... ${formatRecordingTime(recordingTime)}` : input}
                   onChange={(e) => !isRecording && !isProcessing && setInput(e.target.value)}
                   onFocus={handleInputFocus}
                   onBlur={handleInputBlur}
+                  onKeyDown={(e) => {
+                    // Submit on Enter (without Shift)
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSubmit(e as any);
+                    }
+                  }}
                   placeholder={isInputExpanded && !isRecording && !isProcessing ? messageModeHandler.getPlaceholder() : ""}
                   disabled={isRecording || isProcessing}
+                  rows={1}
                   className={`w-full px-5 py-3 bg-gray-900 border rounded-3xl 
                              text-sm text-white placeholder:text-white/50
                              focus:outline-none focus:ring-2 focus:border-blue-500/50
                              transition-all duration-300 hover:border-white/30
+                             resize-none
                              ${isRecording
                       ? 'border-red-500/50 text-red-300 cursor-not-allowed'
                       : isProcessing
@@ -1229,17 +1251,17 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                         : 'border-white/20 focus:ring-blue-500/50'
                     }
                              ${isInputExpanded ? 'pr-20' : 'cursor-pointer'}`}
-                  style={{ paddingRight: isInputExpanded ? '80px' : '20px' }}
+                  style={{ paddingRight: isInputExpanded ? '80px' : '20px', minHeight: '48px' }}
                 />
 
                 {/* Entity Autocomplete */}
                 <EntityAutocomplete
                   inputValue={input}
                   onSelectEntity={handleEntitySelect}
-                  inputRef={inputRef}
+                  inputRef={textareaRef as any}
                 />
 
-                <div className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 transition-opacity duration-300 ${isInputExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                <div className={`absolute right-3 bottom-3 flex items-center gap-2 transition-opacity duration-300 ${isInputExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                   <button
                     type="button"
                     onClick={handleMicrophoneClick}
