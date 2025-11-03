@@ -138,6 +138,7 @@ function createProjectNode(project, knowledgeNodes = [], problems = []) {
 
   const node = {
     id: projectToId(project.name),
+    projectId: project.id, // Store the actual database ID
     label: project.name.length > 12 ? project.name.replace(/\s+/g, '\n') : project.name,
     x: position.x,
     y: position.y,
@@ -155,30 +156,75 @@ function getDateKey(date) {
   return date.toISOString().split('T')[0]; // YYYY-MM-DD format
 }
 
-export async function generateMindMapJson() {
+export async function generateMindMapJson(options = {}) {
   try {
     console.log('=== DEBUGGING generateMindMapJson ===');
+    const { showSubprojects = false, parentProjectId = null } = options;
     const { projects, knowledgeNodes, problems } = await fetchSupabaseData();
 
     console.log('Fetched data:', {
       projects: projects.length,
       knowledgeNodes: knowledgeNodes.length,
-      problems: problems.length
+      problems: problems.length,
+      showSubprojects,
+      parentProjectId
     });
 
     // Clear used positions
     usedPositions.length = 0;
 
-    // Create nodes from current projects
-    const nodes = [];
-    projects.forEach(project => {
-      const node = createProjectNode(project, knowledgeNodes, problems);
-      if (node) nodes.push(node);
-    });
-
-    // Determine parent node title - defaults to hidden (null)
-    // This will be set by backend data when a parent node should be shown
+    let filteredProjects = [];
     let parentNode = null;
+
+    if (parentProjectId) {
+      // Show subprojects for a specific parent project
+      const parentProject = projects.find(p => p.id === parentProjectId);
+      if (parentProject) {
+        parentNode = parentProject.name;
+        // Filter to only subprojects of this parent
+        filteredProjects = projects.filter(p => 
+          p.subproject_from && 
+          (p.subproject_from.includes(parentProject.name) || p.subproject_from.includes(parentProject.id))
+        );
+      }
+    } else if (showSubprojects) {
+      // Show all projects (both parents and subprojects) - used after minddump
+      filteredProjects = projects;
+    } else {
+      // Default: Show only parent projects (no subproject_from or empty array)
+      filteredProjects = projects.filter(p => 
+        !p.subproject_from || 
+        p.subproject_from.length === 0 ||
+        (Array.isArray(p.subproject_from) && p.subproject_from.every(item => !item || item.trim() === ''))
+      );
+    }
+
+    // Create nodes from filtered projects
+    const nodes = [];
+    filteredProjects.forEach(project => {
+      const node = createProjectNode(project, knowledgeNodes, problems);
+      if (node) {
+        // Add metadata to indicate if this is a subproject
+        node.isSubproject = project.subproject_from && project.subproject_from.length > 0;
+        node.parentProjectNames = project.subproject_from || [];
+        
+        // Find and attach subprojects if in default view
+        if (!showSubprojects && !parentProjectId) {
+          const subprojects = projects.filter(p => 
+            p.subproject_from && 
+            (p.subproject_from.includes(project.name) || p.subproject_from.includes(project.id))
+          );
+          if (subprojects.length > 0) {
+            node.subNodes = subprojects.map(sp => ({ 
+              label: sp.name,
+              id: sp.id 
+            }));
+          }
+        }
+        
+        nodes.push(node);
+      }
+    });
 
     console.log(`Created ${nodes.length} nodes`);
     console.log(`Parent node: ${parentNode}`);

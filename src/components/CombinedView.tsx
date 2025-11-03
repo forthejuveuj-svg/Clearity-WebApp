@@ -19,16 +19,19 @@ interface Message {
 
 interface Node {
   id: string;
+  projectId?: string; // Actual database ID
   label: string;
   x: number;
   y: number;
   color: "blue" | "violet" | "red" | "teal";
-  subNodes?: { label: string }[];
+  subNodes?: { label: string; id?: string }[];
   tension?: number;
   thoughts?: string[];
   hasProblem?: boolean;
   problemType?: "anxiety" | "blocker" | "stress";
   problemData?: any[];
+  isSubproject?: boolean;
+  parentProjectNames?: string[];
 }
 
 interface CombinedViewProps {
@@ -69,6 +72,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
   const [parentNodeTitle, setParentNodeTitle] = useState<string | null>(null);
   const [clickedProjectNode, setClickedProjectNode] = useState<Node | null>(null);
+  const [showSubprojects, setShowSubprojects] = useState(false); // Track if we should show subprojects
 
   // Simple session management
   const [sessionHistory, setSessionHistory] = useState<Array<{
@@ -80,8 +84,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [currentSessionIndex, setCurrentSessionIndex] = useState(-1);
 
   // Function to reload mind map nodes from database
-  const reloadNodes = () => {
-    generateMindMapJson().then(data => {
+  const reloadNodes = (options = {}) => {
+    generateMindMapJson(options).then(data => {
       if (data) {
         // Set regular nodes (all nodes are regular now)
         setMindMapNodes(data.nodes || []);
@@ -146,6 +150,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       // Clear parent node title when going back to main view (index 0) or when session has no parentNodeId
       if (newIndex === 0 || !sessionHistory[newIndex].parentNodeId) {
         setParentNodeTitle(null);
+        // When going back to main view, don't show subprojects unless we came from minddump
+        // Keep showSubprojects state as-is (it will be true if we came from minddump)
       }
 
       localStorage.setItem('mindmap_current_index', newIndex.toString());
@@ -208,9 +214,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   };
 
   const loadSubprojects = async (nodeId: string) => {
-    // TODO: Replace with actual Supabase call to load subprojects
-    // For now, return empty array until subproject functionality is implemented
-    return [];
+    try {
+      // Load subprojects for a specific parent project
+      const data = await generateMindMapJson({ parentProjectId: nodeId });
+      return data.nodes || [];
+    } catch (error) {
+      console.error('Error loading subprojects:', error);
+      return [];
+    }
   };
 
   const clearAllSessions = () => {
@@ -226,8 +237,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     // First try to load from localStorage
     loadSessionFromStorage();
 
-    // Then load fresh data from database
-    generateMindMapJson().then(data => {
+    // Then load fresh data from database (default: only show parent projects)
+    generateMindMapJson({ showSubprojects: false }).then(data => {
       if (data) {
         // Set regular nodes (all nodes are regular now)
         setMindMapNodes(data.nodes || []);
@@ -280,8 +291,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 content: result.output || "Processing completed successfully."
               }]);
 
-              // Reload nodes when processing is successful
-              reloadNodes();
+              // After minddump, show both projects and subprojects
+              setShowSubprojects(true);
+              // Reload nodes when processing is successful - show all projects after minddump
+              reloadNodes({ showSubprojects: true });
             } else {
               setMessages(prev => [...prev, {
                 role: "assistant",
@@ -323,8 +336,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               content: result.output || "Processing completed successfully."
             }]);
 
-            // Reload nodes when processing is successful
-            reloadNodes();
+            // After minddump, show both projects and subprojects
+            setShowSubprojects(true);
+            // Reload nodes when processing is successful - show all projects after minddump
+            reloadNodes({ showSubprojects: true });
           } else {
             setMessages(prev => [...prev, {
               role: "assistant",
@@ -429,8 +444,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             content: result.output || "Processing completed successfully."
           }]);
 
-          // Reload nodes when processing is successful
-          reloadNodes();
+          // After minddump, show both projects and subprojects
+          setShowSubprojects(true);
+          // Reload nodes when processing is successful - show all projects after minddump
+          reloadNodes({ showSubprojects: true });
         } else {
           // Handle error case
           setMessages(prev => [...prev, {
@@ -459,38 +476,36 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       node.label.toLowerCase().includes(keyword)
     );
 
-    if (hasSubprojects || isProject) {
+    // Only navigate to subprojects if NOT in showSubprojects mode (i.e., in default parent-only view)
+    if ((hasSubprojects || isProject) && !showSubprojects) {
       try {
-        // Load subprojects from database (or use existing subNodes)
-        let subprojects: Node[];
+        // Load subprojects from database using the actual project ID
+        const projectIdToUse = node.projectId || node.id;
+        const subprojects = await loadSubprojects(projectIdToUse);
 
-        if (hasSubprojects) {
-          // Convert existing subNodes to full Node objects with non-overlapping positions
-          const positions = generateNonOverlappingPositions(node.subNodes!.length);
-          subprojects = node.subNodes!.map((subNode, index) => ({
-            id: `${node.id}_sub_${index}`,
-            label: subNode.label,
-            x: positions[index].x,
-            y: positions[index].y,
-            color: ["blue", "violet", "red", "teal"][index % 4] as "blue" | "violet" | "red" | "teal"
-          }));
+        if (subprojects.length > 0) {
+          // Save current state and navigate to subprojects
+          saveCurrentSession(subprojects, projectIdToUse);
+          setMindMapNodes(subprojects);
+          setParentNodeTitle(node.label);
+
+          console.log(`Navigated to subprojects of ${node.label}`);
         } else {
-          // Load from database
-          subprojects = await loadSubprojects(node.id);
+          console.log(`No subprojects found for ${node.label}`);
+          // Still treat as regular project focus if no subprojects
+          setClickedProjectNode(node);
+          const isStarted = node.color === 'blue' || node.color === 'teal';
+          messageModeHandler.setProjectFocus({
+            id: node.projectId || node.id,
+            name: node.label,
+            status: isStarted ? 'started' : 'not_started'
+          });
         }
-
-        // Save current state and navigate to subprojects
-        saveCurrentSession(subprojects, node.id);
-        setMindMapNodes(subprojects);
-        setParentNodeTitle(node.label);
-
-        console.log(`Navigated to subprojects of ${node.label}`);
-
       } catch (error) {
         console.error('Failed to load subprojects:', error);
       }
     } else {
-      // Regular project focus behavior
+      // Regular project focus behavior (in showSubprojects mode or when node has no subprojects)
       setClickedProjectNode(node);
 
       // Determine if project is started (simple heuristic based on node color or other properties)
@@ -498,7 +513,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
       // Silently switch to project mode - user doesn't see any indication
       messageModeHandler.setProjectFocus({
-        id: node.id,
+        id: node.projectId || node.id,
         name: node.label,
         status: isStarted ? 'started' : 'not_started'
       });
