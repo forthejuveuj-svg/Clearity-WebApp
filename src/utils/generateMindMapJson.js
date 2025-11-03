@@ -4,10 +4,19 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-async function fetchSupabaseData() {
+async function fetchSupabaseData(onJWTError = null) {
   try {
     // Get current user session
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    // Check for JWT errors in session retrieval
+    if (sessionError) {
+      console.error('Session error:', sessionError);
+      if (onJWTError && isJWTError(sessionError)) {
+        onJWTError('Session expired. Please log in again.');
+        throw sessionError;
+      }
+    }
     
     if (!session?.user) {
       console.log('No authenticated user, returning empty data');
@@ -22,14 +31,28 @@ async function fetchSupabaseData() {
       supabase.from('problems').select('*').eq('status', 'active').order('created_at', { ascending: false })
     ]);
 
-    // Check for errors
-    if (projectsResult.error) {
+    // Check for JWT errors in database queries
+    const errors = [projectsResult.error, knowledgeNodesResult.error, problemsResult.error].filter(Boolean);
+    
+    for (const error of errors) {
+      console.error('Database query error:', error);
+      
+      if (isJWTError(error)) {
+        if (onJWTError) {
+          onJWTError('Session expired. Please log in again.');
+        }
+        throw error; // Throw JWT errors to trigger logout
+      }
+    }
+
+    // Log non-JWT errors but continue
+    if (projectsResult.error && !isJWTError(projectsResult.error)) {
       console.error('Error fetching projects:', projectsResult.error);
     }
-    if (knowledgeNodesResult.error) {
+    if (knowledgeNodesResult.error && !isJWTError(knowledgeNodesResult.error)) {
       console.error('Error fetching knowledge nodes:', knowledgeNodesResult.error);
     }
-    if (problemsResult.error) {
+    if (problemsResult.error && !isJWTError(problemsResult.error)) {
       console.error('Error fetching problems:', problemsResult.error);
     }
 
@@ -40,8 +63,40 @@ async function fetchSupabaseData() {
     };
   } catch (error) {
     console.error('Error fetching from Supabase:', error);
+    
+    // Re-throw JWT errors to be handled by caller
+    if (isJWTError(error)) {
+      throw error;
+    }
+    
     return { projects: [], knowledgeNodes: [], problems: [] };
   }
+}
+
+// Helper function to detect JWT errors
+function isJWTError(error) {
+  if (!error) return false;
+  
+  const errorMessage = typeof error === 'string' ? error : 
+    error.message || error.error_description || error.details || JSON.stringify(error);
+  
+  const jwtErrorPatterns = [
+    'JWT expired',
+    'jwt expired', 
+    'token expired',
+    'invalid jwt',
+    'Invalid JWT',
+    'JWT malformed',
+    'jwt malformed',
+    'Authentication failed',
+    'Unauthorized',
+    'Invalid token',
+    'Token has expired'
+  ];
+  
+  return jwtErrorPatterns.some(pattern => 
+    errorMessage.toLowerCase().includes(pattern.toLowerCase())
+  );
 }
 
 function projectToId(name) {
@@ -159,8 +214,8 @@ function getDateKey(date) {
 export async function generateMindMapJson(options = {}) {
   try {
     console.log('=== DEBUGGING generateMindMapJson ===');
-    const { showSubprojects = false, parentProjectId = null } = options;
-    const { projects, knowledgeNodes, problems } = await fetchSupabaseData();
+    const { showSubprojects = false, parentProjectId = null, onJWTError = null } = options;
+    const { projects, knowledgeNodes, problems } = await fetchSupabaseData(onJWTError);
 
     console.log('Fetched data:', {
       projects: projects.length,

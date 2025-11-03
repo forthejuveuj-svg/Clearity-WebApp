@@ -11,6 +11,8 @@ import { messageModeHandler } from "@/utils/messageModeHandler";
 import { EntityAutocomplete } from "./EntityAutocomplete";
 import { EntitySuggestion } from "@/hooks/useEntityAutocomplete";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { SessionExpiryNotification, useSessionExpiryNotification } from "./SessionExpiryNotification";
+import { handleJWTError } from "@/utils/jwtErrorHandler";
 
 interface Message {
   role: "user" | "assistant";
@@ -46,11 +48,34 @@ interface CombinedViewProps {
 }
 
 export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateToChat: onNavigateToChatProp, onViewChange, initialView = 'mindmap', onClearCache }: CombinedViewProps) => {
-  const { userId } = useAuth();
+  const { userId, signOut } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // JWT error handling
+  const { notification, showNotification, hideNotification } = useSessionExpiryNotification();
+
+  // Handle JWT errors by showing notification and logging out
+  const handleJWTErrorWithNotification = async (error: any) => {
+    console.warn('JWT error detected in CombinedView:', error);
+    
+    // Show notification
+    showNotification('Session expired. Please log in again.');
+    
+    // Auto logout after a short delay to let user see the message
+    setTimeout(async () => {
+      try {
+        await signOut();
+      } catch (logoutError) {
+        console.error('Error during automatic logout:', logoutError);
+        // Force logout by clearing localStorage and reloading
+        localStorage.clear();
+        window.location.reload();
+      }
+    }, 1500); // 1.5 second delay
+  };
 
   const [visibleNodes, setVisibleNodes] = useState<string[]>([]);
   const [mapHeight, setMapHeight] = useState(60); // Percentage of screen height for mind map
@@ -142,7 +167,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Function to reload mind map nodes from database (after minddump or other operations)
   const reloadNodes = (options = {}) => {
-    generateMindMapJson(options).then(data => {
+    const optionsWithJWTHandler = {
+      ...options,
+      onJWTError: (message: string) => {
+        showNotification(message);
+        setTimeout(() => handleJWTErrorWithNotification(new Error(message)), 1000);
+      }
+    };
+
+    generateMindMapJson(optionsWithJWTHandler).then(data => {
       if (data) {
         // Set nodes from fresh database data
         setMindMapNodes(data.nodes || []);
@@ -159,7 +192,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }
     }).catch(error => {
       console.error('Error reloading nodes from database:', error);
-      // On error, don't update state - keep current view
+      
+      // Check if it's a JWT error and handle it
+      if (error && handleJWTError) {
+        handleJWTError(error, signOut).then(wasJWTError => {
+          if (wasJWTError) {
+            showNotification('Session expired. Please log in again.');
+          }
+        });
+      }
     });
   };
 
@@ -206,9 +247,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Function to completely clear all sessions and cache (reusable for future implementations)
   // This function can be called from external components or hooks to reset the mindmap state
-  // NOTE: This only clears navigation/position cache, not login credentials or user preferences
+  // CRITICAL: This only clears navigation/position cache, NEVER touches auth credentials
   const clearAllSessionsAndCache = () => {
-    // Clear state
+    // Clear component state
     setSessionHistory([]);
     setCurrentSessionIndex(-1);
     setMindMapNodes([]);
@@ -217,11 +258,18 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     setCurrentProjectId(null);
     setShowSubprojects(false);
 
-    // Clear localStorage (only mindmap-related cache, preserve auth and other app data)
-    localStorage.removeItem('mindmap_sessions');
-    localStorage.removeItem('mindmap_current_index');
+    // SAFE localStorage clearing - only remove specific mindmap keys
+    // NEVER use localStorage.clear() as it would remove auth tokens
+    const keysToRemove = ['mindmap_sessions', 'mindmap_current_index'];
+    keysToRemove.forEach(key => {
+      try {
+        localStorage.removeItem(key);
+      } catch (error) {
+        console.warn(`Failed to remove ${key}:`, error);
+      }
+    });
 
-    console.log('Mindmap sessions and navigation cache cleared (login credentials preserved)');
+    console.log('Mindmap cache cleared (auth credentials and other app data preserved)');
   };
 
   // Get cached sessions from today only
@@ -427,12 +475,25 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   const loadSubprojects = async (nodeId: string) => {
     try {
-      // Always load subprojects from database (not cache)
-      const data = await generateMindMapJson({ parentProjectId: nodeId });
+      // Always load subprojects from database (not cache) with JWT error handling
+      const data = await generateMindMapJson({ 
+        parentProjectId: nodeId,
+        onJWTError: (message: string) => {
+          showNotification(message);
+          setTimeout(() => handleJWTErrorWithNotification(new Error(message)), 1000);
+        }
+      });
       console.log(`Loaded ${data.nodes?.length || 0} subprojects for project ${nodeId} from database`);
       return data.nodes || [];
     } catch (error) {
       console.error('Error loading subprojects from database:', error);
+      
+      // Check if it's a JWT error
+      const wasJWTError = await handleJWTError(error, signOut);
+      if (wasJWTError) {
+        showNotification('Session expired. Please log in again.');
+      }
+      
       return [];
     }
   };
@@ -455,8 +516,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           return;
         }
 
-        // Load current database state
-        const dbData = await generateMindMapJson();
+        // Load current database state with JWT error handling
+        const dbData = await generateMindMapJson({
+          onJWTError: (message: string) => {
+            showNotification(message);
+            // Trigger logout after showing notification
+            setTimeout(() => handleJWTErrorWithNotification(new Error(message)), 1000);
+          }
+        });
         const dbNodes = dbData?.nodes || [];
 
         // Check if we have cached sessions from today
@@ -1107,6 +1174,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   return (
     <div className="h-screen w-screen flex flex-col relative overflow-hidden bg-gradient-to-br from-black via-slate-900 to-black fixed inset-0">
+      {/* Session Expiry Notification */}
+      <SessionExpiryNotification
+        message={notification.message}
+        isVisible={notification.isVisible}
+        onClose={hideNotification}
+        autoHideDuration={5000}
+      />
       {/* Mind Map or Task Manager Section */}
       <div
         className="relative overflow-hidden"

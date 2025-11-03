@@ -7,6 +7,24 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { EntityType } from '@/utils/messageModeHandler';
 
+// Helper function to detect JWT errors
+function isJWTError(error: any): boolean {
+  if (!error) return false;
+  
+  const errorMessage = typeof error === 'string' ? error : 
+    error.message || error.error_description || error.details || JSON.stringify(error);
+  
+  const jwtErrorPatterns = [
+    'JWT expired', 'jwt expired', 'token expired', 'invalid jwt', 'Invalid JWT',
+    'JWT malformed', 'jwt malformed', 'Authentication failed', 'Unauthorized',
+    'Invalid token', 'Token has expired'
+  ];
+  
+  return jwtErrorPatterns.some(pattern => 
+    errorMessage.toLowerCase().includes(pattern.toLowerCase())
+  );
+}
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -41,7 +59,16 @@ export function useEntityAutocomplete() {
 
     try {
       // Get current user session
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      // Check for JWT errors in session
+      if (sessionError) {
+        console.error('Session error in useEntityAutocomplete:', sessionError);
+        if (isJWTError(sessionError)) {
+          // JWT error detected - this will be handled by the parent component
+          throw sessionError;
+        }
+      }
       
       if (!session?.user) {
         setAllEntities([]);
@@ -61,7 +88,11 @@ export function useEntityAutocomplete() {
             .limit(100); // Limit per type
 
           if (error) {
-            continue;
+            // Check for JWT errors in database queries
+            if (isJWTError(error)) {
+              throw error; // Re-throw JWT errors to be handled by parent
+            }
+            continue; // Continue on non-JWT errors
           }
 
           if (data) {
@@ -73,7 +104,10 @@ export function useEntityAutocomplete() {
             })));
           }
         } catch (err) {
-          // Silently continue on error
+          // Re-throw JWT errors, silently continue on others
+          if (isJWTError(err)) {
+            throw err;
+          }
         }
       }
 
