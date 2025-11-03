@@ -24,6 +24,7 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
   const [mentionStart, setMentionStart] = useState(-1);
   const [searchQuery, setSearchQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ bottom: 0, left: 0, width: 0 });
 
   // Detect "@" and extract search query
   useEffect(() => {
@@ -92,6 +93,36 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, suggestions, selectedIndex]);
 
+  // Update dropdown position when textarea height changes
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      const updatePosition = () => {
+        const rect = inputRef.current?.getBoundingClientRect();
+        if (rect) {
+          const viewportHeight = window.innerHeight;
+          const bottomPosition = viewportHeight - rect.top;
+          
+          setDropdownPosition({
+            bottom: bottomPosition,
+            left: rect.left,
+            width: rect.width
+          });
+        }
+      };
+      
+      updatePosition();
+      
+      // Update position on scroll or resize
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+      
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
+      };
+    }
+  }, [isOpen, inputValue, inputRef]);
+
   // Scroll selected item into view (not needed since we only show 5 items)
   useEffect(() => {
     if (isOpen && dropdownRef.current && selectedIndex < 5) {
@@ -118,30 +149,15 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
 
   // Limit to top 5 suggestions only
   const topSuggestions = suggestions.slice(0, 5);
-  
-  const getDropdownPosition = () => {
-    if (!inputRef.current) return { top: 0, left: 0, width: 0 };
-    
-    const rect = inputRef.current.getBoundingClientRect();
-    
-    return {
-      top: rect.top,
-      left: rect.left,
-      width: rect.width
-    };
-  };
-
-  const position = getDropdownPosition();
 
   return (
     <div
       ref={dropdownRef}
       className="fixed rounded-lg shadow-2xl overflow-hidden"
       style={{
-        top: `${position.top}px`,
-        left: `${position.left}px`,
-        width: `${position.width}px`,
-        transform: 'translateY(calc(-100% - 10px))',
+        bottom: `${dropdownPosition.bottom + 10}px`,
+        left: `${dropdownPosition.left}px`,
+        width: `${dropdownPosition.width}px`,
         backgroundColor: 'rgba(0, 0, 0, 0.95)',
         border: '1px solid rgba(255, 255, 255, 0.15)',
         backdropFilter: 'blur(8px)',
