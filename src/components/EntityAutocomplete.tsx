@@ -114,11 +114,14 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
 
   // Get position for dropdown (above input)
   const getDropdownPosition = () => {
-    if (!inputRef.current) return { bottom: 0, left: 0, width: 0 };
+    if (!inputRef.current) return { top: 0, left: 0, width: 0 };
     
     const rect = inputRef.current.getBoundingClientRect();
+    // Calculate max height for dropdown (200px max)
+    const maxDropdownHeight = 200;
+    
     return {
-      bottom: window.innerHeight - rect.top + 5,
+      top: rect.top - maxDropdownHeight - 10, // 10px margin above input
       left: rect.left,
       width: rect.width
     };
@@ -133,13 +136,15 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
   return (
     <div
       ref={dropdownRef}
-      className="fixed z-[100] rounded-lg shadow-2xl max-h-48 overflow-y-auto backdrop-blur-sm"
+      className="fixed rounded-lg shadow-2xl max-h-[200px] overflow-y-auto"
       style={{
-        bottom: `${position.bottom}px`,
+        top: `${position.top}px`,
         left: `${position.left}px`,
         width: `${position.width}px`,
-        backgroundColor: 'rgba(0, 0, 0, 0.9)',
-        border: '1px solid rgba(255, 255, 255, 0.1)'
+        backgroundColor: 'rgba(0, 0, 0, 0.95)',
+        border: '1px solid rgba(255, 255, 255, 0.15)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 9999
       }}
     >
       {loading && (
