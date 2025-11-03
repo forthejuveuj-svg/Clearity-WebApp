@@ -44,7 +44,6 @@ export function useEntityAutocomplete() {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session?.user) {
-        console.log('No user session found for autocomplete');
         setAllEntities([]);
         setLoading(false);
         return;
@@ -62,7 +61,6 @@ export function useEntityAutocomplete() {
             .limit(100); // Limit per type
 
           if (error) {
-            console.warn(`Error fetching ${entityType}:`, error);
             continue;
           }
 
@@ -75,11 +73,10 @@ export function useEntityAutocomplete() {
             })));
           }
         } catch (err) {
-          console.warn(`Exception fetching ${entityType}:`, err);
+          // Silently continue on error
         }
       }
 
-      console.log(`Loaded ${entities.length} entities for autocomplete`);
       setAllEntities(entities);
     } catch (err) {
       console.error('Error fetching entities:', err);

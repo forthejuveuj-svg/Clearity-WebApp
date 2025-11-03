@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Mic, MicOff, ArrowUp, MessageSquare, AlertTriangle, X, Check, Reply, ArrowLeft, ArrowRight } from "lucide-react";
 import { TypingAnimation } from "./TypingAnimation";
 import { ProblemsModal } from "./ProblemsModal";
@@ -8,6 +8,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { APIService } from "@/lib/api";
 import { generateMindMapJson } from "../utils/generateMindMapJson";
 import { messageModeHandler } from "@/utils/messageModeHandler";
+import { EntityAutocomplete } from "./EntityAutocomplete";
+import { EntitySuggestion } from "@/hooks/useEntityAutocomplete";
 
 interface Message {
   role: "user" | "assistant";
@@ -43,6 +45,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
   const [isBuilding, setIsBuilding] = useState(true);
   const [buildProgress, setBuildProgress] = useState(0);
   const [visibleNodes, setVisibleNodes] = useState<string[]>([]);
@@ -386,6 +389,17 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       setVisibleNodes(allNodeIds);
     }
   }, [isBuilding, mindMapNodes, parentNodeTitle]);
+
+  // Handler for entity autocomplete selection
+  const handleEntitySelect = (entity: EntitySuggestion, newText: string) => {
+    setInput(newText);
+    messageModeHandler.selectObject({
+      id: entity.id,
+      name: entity.name,
+      type: entity.type
+    });
+    inputRef.current?.focus();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1196,6 +1210,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 )}
 
                 <input
+                  ref={inputRef}
                   type="text"
                   value={isRecording ? `Recording... ${formatRecordingTime(recordingTime)}` : input}
                   onChange={(e) => !isRecording && !isProcessing && setInput(e.target.value)}
@@ -1215,6 +1230,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                     }
                              ${isInputExpanded ? 'pr-20' : 'cursor-pointer'}`}
                   style={{ paddingRight: isInputExpanded ? '80px' : '20px' }}
+                />
+
+                {/* Entity Autocomplete */}
+                <EntityAutocomplete
+                  inputValue={input}
+                  onSelectEntity={handleEntitySelect}
+                  inputRef={inputRef}
                 />
 
                 <div className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 transition-opacity duration-300 ${isInputExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>

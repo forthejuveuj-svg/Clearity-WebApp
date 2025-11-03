@@ -33,18 +33,11 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
     // Find last "@" before cursor
     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
     
-    console.log('Autocomplete check:', { 
-      hasAt: lastAtIndex !== -1, 
-      inputValue, 
-      cursorPos 
-    });
-    
     if (lastAtIndex !== -1) {
       const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
       
       // Check if there's a space after @, if so, close autocomplete
       if (textAfterAt.includes(' ')) {
-        console.log('Space found after @, closing autocomplete');
         setIsOpen(false);
         return;
       }
@@ -54,8 +47,6 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
       setSearchQuery(textAfterAt);
       
       const filtered = filterEntities(textAfterAt);
-      console.log(`Filtered ${filtered.length} entities for query: "${textAfterAt}"`);
-      
       setSuggestions(filtered);
       setIsOpen(filtered.length > 0);
       setSelectedIndex(0);
@@ -133,14 +124,10 @@ export const EntityAutocomplete: React.FC<EntityAutocompleteProps> = ({
   };
 
   if (!isOpen || suggestions.length === 0) {
-    if (inputValue.includes('@')) {
-      console.log('Autocomplete not showing:', { isOpen, suggestionsCount: suggestions.length });
-    }
     return null;
   }
 
   const position = getDropdownPosition();
-  console.log('Rendering autocomplete dropdown with', suggestions.length, 'suggestions at position:', position);
 
   return (
     <div
