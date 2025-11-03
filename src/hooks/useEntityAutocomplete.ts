@@ -3,7 +3,7 @@
  * Fetches all user entities and provides filtering
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { EntityType } from '@/utils/messageModeHandler';
 
@@ -35,7 +35,7 @@ export function useEntityAutocomplete() {
   const [error, setError] = useState<string | null>(null);
 
   // Fetch all entities from database
-  const fetchAllEntities = async () => {
+  const fetchAllEntities = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -44,6 +44,7 @@ export function useEntityAutocomplete() {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session?.user) {
+        console.log('No user session found for autocomplete');
         setAllEntities([]);
         setLoading(false);
         return;
@@ -78,6 +79,7 @@ export function useEntityAutocomplete() {
         }
       }
 
+      console.log(`Loaded ${entities.length} entities for autocomplete`);
       setAllEntities(entities);
     } catch (err) {
       console.error('Error fetching entities:', err);
@@ -85,15 +87,15 @@ export function useEntityAutocomplete() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Load entities on mount
   useEffect(() => {
     fetchAllEntities();
-  }, []);
+  }, [fetchAllEntities]);
 
-  // Filter entities based on search query
-  const filterEntities = (query: string): EntitySuggestion[] => {
+  // Filter entities based on search query - memoized to prevent infinite loops
+  const filterEntities = useCallback((query: string): EntitySuggestion[] => {
     if (!query.trim()) {
       // Return all entities grouped by type
       return allEntities.slice(0, 50); // Limit total results
@@ -107,7 +109,7 @@ export function useEntityAutocomplete() {
         entity.displayType.toLowerCase().includes(searchLower)
       )
       .slice(0, 50); // Limit results
-  };
+  }, [allEntities]);
 
   return {
     allEntities,
