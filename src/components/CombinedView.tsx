@@ -3,7 +3,6 @@ import { Mic, MicOff, ArrowUp, MessageSquare, AlertTriangle, X, Check, Reply, Ar
 import { TypingAnimation } from "./TypingAnimation";
 import { ProblemsModal } from "./ProblemsModal";
 import { TaskManagerModal } from "./TaskManagerModal";
-import { ProjectWorkflowModal } from "./ProjectWorkflowModal";
 import { useAudioRecording } from "@/hooks/useAudioRecording";
 import { useAuth } from "@/hooks/useAuth";
 import { APIService } from "@/lib/api";
@@ -11,8 +10,7 @@ import { generateMindMapJson } from "../utils/generateMindMapJson";
 import { messageModeHandler } from "@/utils/messageModeHandler";
 import { EntityAutocomplete } from "./EntityAutocomplete";
 import { EntitySuggestion } from "@/hooks/useEntityAutocomplete";
-import { createClient } from "@supabase/supabase-js";
-import { config } from "@/lib/config";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 interface Message {
   role: "user" | "assistant";
@@ -71,13 +69,59 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     messageModeHandler.reset();
   }, []);
 
+  // WebSocket for project manager workflow (silent connection)
+  const {
+    connected,
+    sessionId,
+    currentQuestion,
+    progress,
+    sendResponse,
+    startWorkflow,
+  } = useWebSocket(
+    (results) => {
+      // Workflow completed - show summary in chat
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: "Project planning workflow completed! I've broken down your project and assessed the required skills."
+      }]);
+      reloadNodes();
+      setCurrentProjectId(null);
+    },
+    (error) => {
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `Workflow error: ${error}`
+      }]);
+    }
+  );
+
+  // Handle workflow questions in chat
+  useEffect(() => {
+    if (currentQuestion) {
+      // Add question to chat as assistant message
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: currentQuestion.question + (currentQuestion.options ? `\n\nOptions: ${currentQuestion.options.join(', ')}` : '')
+      }]);
+    }
+  }, [currentQuestion]);
+
+  // Handle workflow progress messages in chat
+  useEffect(() => {
+    if (progress && progress.message) {
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: progress.message
+      }]);
+    }
+  }, [progress]);
+
   // Single mind map state - data comes directly from database
   const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
   const [parentNodeTitle, setParentNodeTitle] = useState<string | null>(null);
   const [clickedProjectNode, setClickedProjectNode] = useState<Node | null>(null);
   const [showSubprojects, setShowSubprojects] = useState(false); // Track if we should show subprojects
-  const [workflowModalOpen, setWorkflowModalOpen] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null); // Track focused project for workflow
 
   // Simple session management
   const [sessionHistory, setSessionHistory] = useState<Array<{
@@ -155,6 +199,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       // Clear parent node title when going back to main view (index 0) or when session has no parentNodeId
       if (newIndex === 0 || !sessionHistory[newIndex].parentNodeId) {
         setParentNodeTitle(null);
+        // Clear project ID when navigating away from project view
+        setCurrentProjectId(null);
         // When going back to main view, don't show subprojects unless we came from minddump
         // Keep showSubprojects state as-is (it will be true if we came from minddump)
       }
@@ -439,7 +485,28 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }
 
       try {
-        // Use message mode handler to process the message
+        // Check if we're in project manager mode (project is focused)
+        if (currentProjectId) {
+          // If workflow hasn't started yet, start it
+          if (!sessionId || !connected) {
+            await startWorkflow(currentProjectId, userId);
+            // Wait a moment for session to register
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          
+          // If there's a current question, send response to workflow
+          if (currentQuestion) {
+            sendResponse(userMessage);
+            setIsProcessing(false);
+            return;
+          }
+          
+          // If no question yet, workflow is processing - just wait
+          setIsProcessing(false);
+          return;
+        }
+
+        // Normal minddump mode - Use message mode handler to process the message
         const result = await messageModeHandler.processMessage(userMessage, userId);
 
         if (result.success) {
@@ -493,60 +560,42 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           saveCurrentSession(subprojects, projectIdToUse);
           setMindMapNodes(subprojects);
           setParentNodeTitle(node.label);
+          // Track project ID for project manager mode
+          setCurrentProjectId(projectIdToUse);
 
           console.log(`Navigated to subprojects of ${node.label}`);
         } else {
           console.log(`No subprojects found for ${node.label}`);
           // Still treat as regular project focus if no subprojects
-          await handleProjectSelection(node);
+          setClickedProjectNode(node);
+          const projectIdToUse = node.projectId || node.id;
+          setCurrentProjectId(projectIdToUse);
+          const isStarted = node.color === 'blue' || node.color === 'teal';
+          messageModeHandler.setProjectFocus({
+            id: projectIdToUse,
+            name: node.label,
+            status: isStarted ? 'started' : 'not_started'
+          });
         }
       } catch (error) {
         console.error('Failed to load subprojects:', error);
       }
     } else {
       // Regular project focus behavior (in showSubprojects mode or when node has no subprojects)
-      await handleProjectSelection(node);
+      setClickedProjectNode(node);
+      const projectIdToUse = node.projectId || node.id;
+      setCurrentProjectId(projectIdToUse);
+
+      // Determine if project is started (simple heuristic based on node color or other properties)
+      const isStarted = node.color === 'blue' || node.color === 'teal'; // Assume blue/teal = started
+
+      // Silently switch to project mode - user doesn't see any indication
+      messageModeHandler.setProjectFocus({
+        id: projectIdToUse,
+        name: node.label,
+        status: isStarted ? 'started' : 'not_started'
+      });
     }
-  };
-
-  // Handle project selection - check status and start workflow if needed
-  const handleProjectSelection = async (node: Node) => {
-    setClickedProjectNode(node);
-    const projectIdToUse = node.projectId || node.id;
-    
-    // Try to fetch actual project status from Supabase
-    try {
-      if (config.supabaseUrl && config.supabaseAnonKey && userId && projectIdToUse) {
-        const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey);
-        const { data: project, error } = await supabase
-          .from('projects')
-          .select('id, status')
-          .eq('id', projectIdToUse)
-          .eq('user_id', userId)
-          .single();
-
-        if (!error && project) {
-          // If project status is "not_started" or "planned", automatically start workflow
-          if (project.status === 'not_started' || project.status === 'planned') {
-            setSelectedProjectId(project.id);
-            setWorkflowModalOpen(true);
-            return;
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching project status:', error);
-    }
-
-    // Fallback: Determine if project is started (simple heuristic based on node color)
-    const isStarted = node.color === 'blue' || node.color === 'teal';
-
-    // Silently switch to project mode - user doesn't see any indication
-    messageModeHandler.setProjectFocus({
-      id: projectIdToUse,
-      name: node.label,
-      status: isStarted ? 'started' : 'not_started'
-    });
   };
 
   const handleNavigateToChat = async (task: any) => {
@@ -1352,30 +1401,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           // You might want to refresh the mind map or show a success message here
         }}
       />
-
-      {/* Project Workflow Modal */}
-      {selectedProjectId && userId && (
-        <ProjectWorkflowModal
-          open={workflowModalOpen}
-          onOpenChange={(open) => {
-            setWorkflowModalOpen(open);
-            if (!open) {
-              // Clear selection when modal is closed
-              setSelectedProjectId(null);
-            }
-          }}
-          projectId={selectedProjectId}
-          userId={userId}
-          onComplete={(results) => {
-            console.log('Workflow completed:', results);
-            // Reload nodes to show new subprojects and updates
-            reloadNodes();
-            // Close modal
-            setWorkflowModalOpen(false);
-            setSelectedProjectId(null);
-          }}
-        />
-      )}
     </div>
   );
 };

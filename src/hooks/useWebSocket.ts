@@ -6,7 +6,6 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { toast } from 'sonner';
 
 interface WorkflowQuestion {
   session_id: string;
@@ -66,18 +65,16 @@ export const useWebSocket = (
 
     socketRef.current = socket;
 
-    // Connection event handlers
+    // Connection event handlers (silent - no user notifications)
     socket.on('connect', () => {
       console.log('WebSocket connected:', socket.id);
       setConnected(true);
-      toast.success('Connected to workflow server');
     });
 
     socket.on('disconnect', () => {
       console.log('WebSocket disconnected');
       setConnected(false);
       setSessionId(null);
-      toast.info('Disconnected from workflow server');
     });
 
     socket.on('connection_established', (data) => {
@@ -88,7 +85,6 @@ export const useWebSocket = (
     socket.on('session_registered', (data) => {
       console.log('Session registered:', data);
       setSessionId(data.session_id);
-      toast.success('Workflow session started');
     });
 
     socket.on('workflow_question', (data: WorkflowQuestion) => {
@@ -99,16 +95,11 @@ export const useWebSocket = (
     socket.on('workflow_progress', (data: WorkflowProgress) => {
       console.log('Progress update:', data);
       setProgress(data);
-      toast.info(data.message, {
-        description: data.stage,
-      });
+      // Progress will be handled by CombinedView to show in chat
     });
 
     socket.on('workflow_error', (data: WorkflowError) => {
       console.error('Workflow error:', data);
-      toast.error('Workflow Error', {
-        description: data.error,
-      });
       if (onError) {
         onError(data.error);
       }
@@ -116,7 +107,6 @@ export const useWebSocket = (
 
     socket.on('workflow_complete', (data: WorkflowComplete) => {
       console.log('Workflow complete:', data);
-      toast.success('Workflow completed successfully!');
       setCurrentQuestion(null);
       setProgress(null);
       if (onComplete) {
