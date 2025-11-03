@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Mic, MicOff, ArrowUp, MessageSquare, AlertTriangle, X, Check, Reply, ArrowLeft, ArrowRight } from "lucide-react";
 import { TypingAnimation } from "./TypingAnimation";
 import { ProblemsModal } from "./ProblemsModal";
@@ -56,102 +56,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  
-  // Autocomplete state for @ mentions
-  const [showAutocomplete, setShowAutocomplete] = useState(false);
-  const [autocompleteOptions] = useState(['@minddump', '@fix_nodes']);
-  const [selectedAutocompleteIndex, setSelectedAutocompleteIndex] = useState(0);
-  const [atSymbolPosition, setAtSymbolPosition] = useState<number>(-1);
-  
-  // Ref for textarea auto-resize
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Reset message mode handler when component mounts
   useEffect(() => {
     messageModeHandler.reset();
   }, []);
-
-  // Handle input change and detect @ for autocomplete
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (isRecording || isProcessing) return;
-    
-    const newValue = e.target.value;
-    setInput(newValue);
-    
-    // Detect @ symbol at the end of the text
-    const cursorPos = e.target.selectionStart || 0;
-    const textBeforeCursor = newValue.slice(0, cursorPos);
-    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-    
-    // Check if @ is at the start or preceded by a space and not followed by any non-space characters
-    if (lastAtIndex >= 0) {
-      const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
-      const isAtStartOrAfterSpace = lastAtIndex === 0 || newValue[lastAtIndex - 1] === ' ';
-      const hasNoCompleteWord = !textAfterAt.includes(' ');
-      
-      if (isAtStartOrAfterSpace && hasNoCompleteWord) {
-        setAtSymbolPosition(lastAtIndex);
-        setShowAutocomplete(true);
-        setSelectedAutocompleteIndex(0);
-      } else {
-        setShowAutocomplete(false);
-      }
-    } else {
-      setShowAutocomplete(false);
-    }
-  };
-
-  // Handle autocomplete selection
-  const selectAutocompleteOption = (option: string) => {
-    if (atSymbolPosition >= 0) {
-      // Replace from @ symbol to cursor with the selected option
-      const textBeforeAt = input.slice(0, atSymbolPosition);
-      const cursorPos = textareaRef.current?.selectionStart || input.length;
-      const textAfterCursor = input.slice(cursorPos);
-      const newText = textBeforeAt + option + ' ' + textAfterCursor;
-      
-      setInput(newText);
-      setShowAutocomplete(false);
-      setAtSymbolPosition(-1);
-      
-      // Focus back on textarea
-      setTimeout(() => {
-        if (textareaRef.current) {
-          const newCursorPos = textBeforeAt.length + option.length + 1;
-          textareaRef.current.focus();
-          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
-        }
-      }, 0);
-    }
-  };
-
-  // Handle keyboard navigation in autocomplete
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (showAutocomplete) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedAutocompleteIndex((prev) => 
-          prev < autocompleteOptions.length - 1 ? prev + 1 : prev
-        );
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedAutocompleteIndex((prev) => prev > 0 ? prev - 1 : 0);
-      } else if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        selectAutocompleteOption(autocompleteOptions[selectedAutocompleteIndex]);
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        setShowAutocomplete(false);
-      }
-      return;
-    }
-
-    // Original Enter key handler (only if autocomplete is not shown)
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e as any);
-    }
-  };
 
   // Single mind map state - data comes directly from database
   const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
@@ -596,7 +505,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       try {
         const response = await APIService.minddump({
           text: taskMessage,
-          user_id: userId
+          user_id: userId,
+          use_relator: false
         });
 
         if (response.success) {
@@ -798,20 +708,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }
     };
   }, [blurTimeoutId]);
-
-  // Auto-resize textarea as content changes
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      // Reset height to auto to get the correct scrollHeight
-      textarea.style.height = 'auto';
-      // Set height to scrollHeight, with a max height limit
-      const maxHeight = 200; // max height in pixels (about 8-9 lines)
-      textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
-      // Enable scrolling if content exceeds max height
-      textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
-    }
-  }, [input]);
 
   const getCircleSize = () => {
     const screenWidth = window.innerWidth;
@@ -1299,46 +1195,18 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   </div>
                 )}
 
-                {/* Autocomplete dropdown for @ mentions */}
-                {showAutocomplete && isInputExpanded && (
-                  <div 
-                    className="absolute -top-24 left-0 right-0 bg-gray-800 border border-white/20 rounded-lg shadow-xl overflow-hidden z-50"
-                    onMouseDown={(e) => e.preventDefault()} // Prevent blur when clicking
-                  >
-                    {autocompleteOptions.map((option, index) => (
-                      <div
-                        key={option}
-                        onClick={() => selectAutocompleteOption(option)}
-                        className={`px-4 py-2 cursor-pointer transition-colors flex items-center gap-3 ${
-                          index === selectedAutocompleteIndex
-                            ? 'bg-blue-500/20 text-blue-300'
-                            : 'hover:bg-white/5 text-white/70'
-                        }`}
-                      >
-                        <span className="font-mono text-sm">{option}</span>
-                        <span className="text-xs text-white/40 ml-auto">
-                          {option === '@minddump' ? 'Create new mind map' : 'Fix existing nodes'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <textarea
-                  ref={textareaRef}
+                <input
+                  type="text"
                   value={isRecording ? `Recording... ${formatRecordingTime(recordingTime)}` : input}
-                  onChange={handleInputChange}
+                  onChange={(e) => !isRecording && !isProcessing && setInput(e.target.value)}
                   onFocus={handleInputFocus}
                   onBlur={handleInputBlur}
-                  onKeyDown={handleKeyDown}
                   placeholder={isInputExpanded && !isRecording && !isProcessing ? messageModeHandler.getPlaceholder() : ""}
                   disabled={isRecording || isProcessing}
-                  rows={1}
                   className={`w-full px-5 py-3 bg-gray-900 border rounded-3xl 
                              text-sm text-white placeholder:text-white/50
                              focus:outline-none focus:ring-2 focus:border-blue-500/50
                              transition-all duration-300 hover:border-white/30
-                             resize-none
                              ${isRecording
                       ? 'border-red-500/50 text-red-300 cursor-not-allowed'
                       : isProcessing
@@ -1346,10 +1214,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                         : 'border-white/20 focus:ring-blue-500/50'
                     }
                              ${isInputExpanded ? 'pr-20' : 'cursor-pointer'}`}
-                  style={{ paddingRight: isInputExpanded ? '80px' : '20px', minHeight: '48px' }}
+                  style={{ paddingRight: isInputExpanded ? '80px' : '20px' }}
                 />
 
-                <div className={`absolute right-3 bottom-3 flex items-center gap-2 transition-opacity duration-300 ${isInputExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                <div className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 transition-opacity duration-300 ${isInputExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                   <button
                     type="button"
                     onClick={handleMicrophoneClick}

@@ -18,7 +18,9 @@ interface MindDumpParams {
 
 interface FixNodesParams {
   text: string;
-  user_id?: string;
+  user_id: string;
+  selected_object_id: string;
+  selected_object_type: string;
 }
 
 interface ProjectManagerParams {
@@ -116,10 +118,13 @@ export class APIServiceMock {
     return {
       success: true,
       result: {
-        fixed_nodes: 3,
-        improvements: ['Clarified connections', 'Improved labeling', 'Optimized layout']
+        updated_entity: {
+          id: params.selected_object_id,
+          type: params.selected_object_type,
+          changed_fields: ['status', 'priority_score']
+        }
       },
-      output: `Fixed nodes based on: "${params.text.slice(0, 50)}..."`,
+      output: `✓ Updated selected ${params.selected_object_type} based on: "${params.text.slice(0, 50)}..."`,
       method: 'fix_nodes'
     };
   }

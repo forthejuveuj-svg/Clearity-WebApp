@@ -1,28 +1,32 @@
 /**
- * Simple utility to handle different message modes and RPC calls
+ * Simple utility to handle object selection and RPC calls
  */
 
 import { APIService } from '@/lib/api';
 
-export type MessageMode = 
-  | 'minddump'           // Default mode - initial state
-  | 'minddump_followup'  // Follow-up mode after minddump
-  | 'project_creator'    // When clicking unstarted project
-  | 'project_manager';   // When clicking started project
+export type EntityType = 
+  | 'projects'
+  | 'tasks'
+  | 'knowledge_nodes'
+  | 'problems'
+  | 'skills'
+  | 'resources'
+  | 'preferences'
+  | 'events';
+
+interface SelectedObject {
+  id: string;
+  name: string;
+  type: EntityType;
+}
 
 interface MessageModeState {
-  mode: MessageMode;
+  selectedObject?: SelectedObject;
   messageCount: number;
-  selectedProject?: {
-    id: string;
-    name: string;
-    status: 'started' | 'not_started';
-  };
 }
 
 export class MessageModeHandler {
   private state: MessageModeState = {
-    mode: 'minddump',
     messageCount: 0
   };
 
@@ -32,51 +36,39 @@ export class MessageModeHandler {
 
   reset() {
     this.state = {
-      mode: 'minddump',
-      messageCount: 0
+      messageCount: 0,
+      selectedObject: undefined
     };
   }
 
-  getCurrentMode(): MessageMode {
-    return this.state.mode;
-  }
-
   getPlaceholder(): string {
-    // Keep placeholder consistent - user shouldn't know about modes
+    if (this.state.selectedObject) {
+      return `What do you want to change about ${this.state.selectedObject.name}?`;
+    }
     return "Let's overthink about...";
   }
 
-  setProjectFocus(project: { id: string; name: string; status: 'started' | 'not_started' }) {
-    this.state.selectedProject = project;
-    this.state.mode = project.status === 'started' ? 'project_manager' : 'project_creator';
-    this.state.messageCount = 0;
-  }
-
-  clearProjectFocus() {
-    this.state.selectedProject = undefined;
-    this.state.mode = 'minddump';
+  /**
+   * Select an object to modify
+   */
+  selectObject(object: SelectedObject) {
+    this.state.selectedObject = object;
     this.state.messageCount = 0;
   }
 
   /**
-   * Detect @ mentions in the text and extract the mode override and cleaned text
+   * Clear the selected object
    */
-  private detectModeOverride(text: string): { mode: 'minddump' | 'fix_nodes' | null; cleanedText: string } {
-    const modePattern = /@(minddump|fix_nodes)\s*/gi;
-    const match = text.match(modePattern);
-    
-    if (match) {
-      const modeStr = match[0].toLowerCase().replace('@', '').trim();
-      const cleanedText = text.replace(modePattern, '').trim();
-      
-      if (modeStr === 'minddump') {
-        return { mode: 'minddump', cleanedText };
-      } else if (modeStr === 'fix_nodes') {
-        return { mode: 'fix_nodes', cleanedText };
-      }
-    }
-    
-    return { mode: null, cleanedText: text };
+  clearSelection() {
+    this.state.selectedObject = undefined;
+    this.state.messageCount = 0;
+  }
+
+  /**
+   * Get the currently selected object
+   */
+  getSelectedObject(): SelectedObject | undefined {
+    return this.state.selectedObject;
   }
 
   async processMessage(text: string, userId: string): Promise<{ success: boolean; output?: string; error?: string }> {
@@ -84,86 +76,26 @@ export class MessageModeHandler {
 
     try {
       let response;
-      
-      // Detect mode override from @ mentions
-      const { mode: modeOverride, cleanedText } = this.detectModeOverride(text);
-      const textToSend = cleanedText;
 
-      // Determine which RPC to call - use override if present, otherwise use current mode
-      let effectiveMode = this.state.mode;
-      
-      if (modeOverride === 'minddump') {
-        // Force minddump regardless of current mode
-        response = await APIService.minddump({
-          text: textToSend,
-          user_id: userId
-        });
-        // After successful minddump, switch to follow-up mode
-        if (response.success) {
-          this.state.mode = 'minddump_followup';
-        }
-        return {
-          success: response.success,
-          output: response.output || response.result || "Processing completed successfully.",
-          error: response.error
-        };
-      } else if (modeOverride === 'fix_nodes') {
-        // Force fix_nodes regardless of current mode
+      if (this.state.selectedObject) {
+        // Object is selected - call fix_nodes to update it
         response = await APIService.fixNodes({
-          text: textToSend,
+          text,
+          user_id: userId,
+          selected_object_id: this.state.selectedObject.id,
+          selected_object_type: this.state.selectedObject.type
+        });
+
+        // After successful update, clear selection
+        if (response.success) {
+          this.clearSelection();
+        }
+      } else {
+        // No object selected - call minddump to create new entities
+        response = await APIService.minddump({
+          text,
           user_id: userId
         });
-        return {
-          success: response.success,
-          output: response.output || response.result || "Processing completed successfully.",
-          error: response.error
-        };
-      }
-
-      // No override - use normal mode logic
-      switch (this.state.mode) {
-        case 'minddump':
-          response = await APIService.minddump({
-            text: textToSend,
-            user_id: userId
-          });
-          // After successful minddump, switch to follow-up mode
-          if (response.success) {
-            this.state.mode = 'minddump_followup';
-          }
-          break;
-
-        case 'minddump_followup':
-          response = await APIService.fixNodes({
-            text: textToSend,
-            user_id: userId
-          });
-          break;
-
-        case 'project_creator':
-          response = await APIService.projectManager({
-            text: textToSend
-          });
-          // After project creation, automatically return to minddump mode
-          if (response.success) {
-            this.clearProjectFocus();
-          }
-          break;
-
-        case 'project_manager':
-          response = await APIService.taskManagerAssess({
-            user_message: textToSend,
-            task_object: this.state.selectedProject || {},
-            context: { project_id: this.state.selectedProject?.id }
-          });
-          // After task assessment, automatically return to minddump mode
-          if (response.success) {
-            this.clearProjectFocus();
-          }
-          break;
-
-        default:
-          response = { success: false, error: "Unknown message mode" };
       }
 
       return {
@@ -180,15 +112,10 @@ export class MessageModeHandler {
     }
   }
 
-  getSelectedProject() {
-    return this.state.selectedProject;
-  }
-
-  getModeInfo() {
+  getStateInfo() {
     return {
-      mode: this.state.mode,
       messageCount: this.state.messageCount,
-      selectedProject: this.state.selectedProject
+      selectedObject: this.state.selectedObject
     };
   }
 }

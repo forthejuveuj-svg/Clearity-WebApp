@@ -22,7 +22,9 @@ interface MindDumpParams {
 
 interface FixNodesParams {
   text: string;
-  user_id?: string;
+  user_id: string;
+  selected_object_id: string;
+  selected_object_type: string;
 }
 
 interface ProjectManagerParams {
