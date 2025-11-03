@@ -1,7 +1,7 @@
 /**
  * WebSocket Hook for Project Manager Workflow
  * 
- * Provides real-time communication with backend for interactive workflows
+ * Simple implementation matching dev-front/app.js approach
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -16,136 +16,87 @@ interface WorkflowQuestion {
   context?: Record<string, any>;
 }
 
-interface WorkflowProgress {
-  session_id: string;
-  stage: string;
-  message: string;
-  progress?: number;
-}
-
-interface WorkflowError {
-  session_id: string;
-  error: string;
-  details?: Record<string, any>;
-}
-
-interface WorkflowComplete {
-  session_id: string;
-  results: Record<string, any>;
-}
-
 interface UseWebSocketReturn {
   connected: boolean;
   sessionId: string | null;
   currentQuestion: WorkflowQuestion | null;
-  progress: WorkflowProgress | null;
+  progress: string | null;
   sendResponse: (response: any) => void;
   startWorkflow: (projectId: string, userId: string) => Promise<void>;
-  disconnect: () => void;
 }
 
-// Get backend URL from config and ensure it's the correct format
-const getBackendUrl = () => {
-  let url = config.backendUrl || 'http://localhost:8000';
-  
-  // Remove trailing slash if present
-  url = url.replace(/\/$/, '');
-  
-  // If behind nginx proxy (production), remove port since nginx handles routing
-  // In production, VITE_BACKEND_URL should be set to the domain without port
-  // e.g., https://clearity.space (nginx proxies to localhost:8000)
-  if (url.includes('clearity.space') || url.includes(window.location.hostname)) {
-    // Remove port if it's the same host as the frontend
-    try {
-      const urlObj = new URL(url);
-      if (urlObj.hostname === window.location.hostname && urlObj.port) {
-        url = `${urlObj.protocol}//${urlObj.hostname}`;
-      }
-    } catch (e) {
-      // Invalid URL, use as is
-    }
-  }
-  
-  // Log the URL being used for debugging
-  console.log('WebSocket backend URL:', url);
-  return url;
-};
+// Global socket reference
+let socket: Socket | null = null;
+let currentSessionId: string | null = null;
+let currentQuestionState: WorkflowQuestion | null = null;
 
-const BACKEND_URL = getBackendUrl();
+// Get backend URL
+const BACKEND_URL = config.backendUrl || 'http://localhost:8000';
 
 export const useWebSocket = (
   onComplete?: (results: any) => void,
   onError?: (error: string) => void
 ): UseWebSocketReturn => {
-  const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<WorkflowQuestion | null>(null);
-  const [progress, setProgress] = useState<WorkflowProgress | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
 
-  // Initialize WebSocket connection
+  // Initialize WebSocket connection once
   useEffect(() => {
-    console.log('Connecting to WebSocket at:', BACKEND_URL);
-    const socket = io(BACKEND_URL, {
-      path: '/socket.io/',
-      transports: ['polling', 'websocket'], // Try polling first, then upgrade to websocket
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      autoConnect: true,
-      forceNew: false,
-      upgrade: true,
-      rememberUpgrade: true,
+    // Only initialize if socket doesn't exist
+    if (socket && socket.connected) {
+      setConnected(true);
+      return;
+    }
+
+    if (socket && !socket.connected) {
+      socket.connect();
+      return;
+    }
+
+    // Create new socket
+    console.log('Initializing WebSocket connection to:', BACKEND_URL);
+    socket = io(BACKEND_URL, {
+      transports: ['websocket', 'polling']
     });
 
-    socketRef.current = socket;
-
-    // Connection event handlers (silent - no user notifications)
     socket.on('connect', () => {
-      console.log('WebSocket connected:', socket.id);
+      console.log('WebSocket connected:', socket?.id);
       setConnected(true);
     });
 
-    socket.on('disconnect', (reason) => {
-      console.log('WebSocket disconnected:', reason);
+    socket.on('disconnect', () => {
+      console.log('WebSocket disconnected');
       setConnected(false);
       setSessionId(null);
-    });
-
-    socket.on('connect_error', (error) => {
-      console.error('WebSocket connection error:', error);
-      console.error('Attempted to connect to:', BACKEND_URL);
+      currentSessionId = null;
     });
 
     socket.on('connection_established', (data) => {
       console.log('Connection established:', data);
     });
 
-    // Workflow event handlers
     socket.on('session_registered', (data) => {
       console.log('Session registered:', data);
+      currentSessionId = data.session_id;
       setSessionId(data.session_id);
     });
 
     socket.on('workflow_question', (data: WorkflowQuestion) => {
       console.log('Received question:', data);
+      currentQuestionState = data;
       setCurrentQuestion(data);
     });
 
-    socket.on('workflow_progress', (data: WorkflowProgress) => {
+    socket.on('workflow_progress', (data: any) => {
       console.log('Progress update:', data);
-      setProgress(data);
-      // Progress will be handled by CombinedView to show in chat
+      setProgress(data.message || '');
     });
 
-    socket.on('workflow_error', (data: WorkflowError) => {
-      console.error('Workflow error:', data);
-      if (onError) {
-        onError(data.error);
-      }
-    });
-
-    socket.on('workflow_complete', (data: WorkflowComplete) => {
+    socket.on('workflow_complete', (data: any) => {
       console.log('Workflow complete:', data);
+      currentQuestionState = null;
       setCurrentQuestion(null);
       setProgress(null);
       if (onComplete) {
@@ -153,75 +104,88 @@ export const useWebSocket = (
       }
     });
 
+    socket.on('workflow_error', (data: any) => {
+      console.error('Workflow error:', data);
+      if (onError) {
+        onError(data.error);
+      }
+    });
+
     socket.on('response_received', (data) => {
       console.log('Response acknowledged:', data);
-      setCurrentQuestion(null); // Clear question after response
+      currentQuestionState = null;
+      setCurrentQuestion(null);
     });
 
     socket.on('error', (data) => {
       console.error('Socket error:', data);
-      toast.error('Error', {
-        description: data.message || 'An error occurred',
-      });
     });
 
-    // Cleanup on unmount
+    // Cleanup
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
+      // Don't disconnect on cleanup - keep connection alive
+      // socket?.disconnect();
     };
-  }, [onComplete, onError]);
+  }, []);
 
   // Send response to workflow
   const sendResponse = useCallback((response: any) => {
-    if (!socketRef.current || !sessionId || !currentQuestion) {
-      console.warn('Cannot send response: not ready');
+    if (!socket || !currentSessionId || !currentQuestionState) {
+      console.warn('Cannot send response: socket not ready');
       return;
     }
 
     console.log('Sending response:', response);
-    socketRef.current.emit('workflow_response', {
-      session_id: sessionId,
+    socket.emit('workflow_response', {
+      session_id: currentSessionId,
       response: response,
-      question: currentQuestion.question,
+      question: currentQuestionState.question
     });
-  }, [sessionId, currentQuestion]);
+  }, []);
 
   // Start workflow for a project
   const startWorkflow = useCallback(async (projectId: string, userId: string) => {
-    if (!socketRef.current || !connected) {
-      toast.error('Not connected to server');
+    if (!socket || !socket.connected) {
       throw new Error('WebSocket not connected');
     }
 
     // Generate session ID
     const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    currentSessionId = newSessionId;
 
+    console.log('Registering session:', newSessionId);
     // Register session
-    socketRef.current.emit('register_session', {
+    socket.emit('register_session', {
       user_id: userId,
-      session_id: newSessionId,
+      session_id: newSessionId
     });
 
     // Wait a bit for registration
     await new Promise(resolve => setTimeout(resolve, 500));
 
     // Call RPC to start workflow
+    console.log('Calling RPC:', `${BACKEND_URL}/rpc`);
     const response = await fetch(`${BACKEND_URL}/rpc`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         method: 'projectmanager',
         params: {
           project_id: projectId,
           user_id: userId,
-          session_id: newSessionId,
-        },
-      }),
+          session_id: newSessionId
+        }
+      })
     });
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error('RPC returned non-JSON:', text.substring(0, 200));
+      throw new Error(`Backend returned HTML. Status: ${response.status}. URL: ${BACKEND_URL}/rpc`);
+    }
 
     const result = await response.json();
 
@@ -230,14 +194,8 @@ export const useWebSocket = (
       throw new Error(result.error);
     }
 
-    console.log('Workflow started:', result);
-  }, [connected]);
-
-  // Disconnect
-  const disconnect = useCallback(() => {
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-    }
+    console.log('Workflow started successfully:', result);
+    setSessionId(newSessionId);
   }, []);
 
   return {
@@ -246,14 +204,6 @@ export const useWebSocket = (
     currentQuestion,
     progress,
     sendResponse,
-    startWorkflow,
-    disconnect,
+    startWorkflow
   };
 };
-
-
-
-
-
-
-

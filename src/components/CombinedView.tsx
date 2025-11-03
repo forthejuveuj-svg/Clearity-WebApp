@@ -108,10 +108,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Handle workflow progress messages in chat
   useEffect(() => {
-    if (progress && progress.message) {
+    if (progress) {
       setMessages(prev => [...prev, {
         role: "assistant",
-        content: progress.message
+        content: progress
       }]);
     }
   }, [progress]);
@@ -529,9 +529,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         }
       } catch (error) {
         console.error('Error processing message:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
         setMessages(prev => [...prev, {
           role: "assistant",
-          content: "I'm having trouble connecting to the backend. Please try again later."
+          content: `Error: ${errorMessage}`
         }]);
       } finally {
         setIsProcessing(false);
