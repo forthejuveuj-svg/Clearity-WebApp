@@ -248,19 +248,47 @@ export async function generateMindMapJson(options = {}) {
       parentProjectId,
       showTodayOnly
     });
+    
+    console.log('Raw projects data:', projects);
 
     // Filter for today's projects if showTodayOnly is true
     let filteredByDate = projects;
     if (showTodayOnly) {
       const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      console.log(`Today's date: ${today}`);
+      console.log(`All projects before filtering:`, projects.map(p => ({
+        name: p.name,
+        created_at: p.created_at,
+        last_updated: p.last_updated
+      })));
+      
       filteredByDate = projects.filter(project => {
-        const createdDate = project.created_at ? project.created_at.split('T')[0] : null;
-        const updatedDate = project.last_updated ? project.last_updated.split('T')[0] : null;
+        // Handle different date formats more robustly
+        let createdDate = null;
+        let updatedDate = null;
+        
+        if (project.created_at) {
+          // Handle both ISO format and PostgreSQL timestamp format
+          const createdDateObj = new Date(project.created_at);
+          createdDate = createdDateObj.toISOString().split('T')[0];
+        }
+        
+        if (project.last_updated) {
+          const updatedDateObj = new Date(project.last_updated);
+          updatedDate = updatedDateObj.toISOString().split('T')[0];
+        }
 
         const isFromToday = createdDate === today || updatedDate === today;
-        if (isFromToday) {
-          console.log(`Project "${project.name}" is from today (created: ${createdDate}, updated: ${updatedDate})`);
-        }
+        
+        console.log(`Project "${project.name}":`, {
+          created_at: project.created_at,
+          createdDate,
+          last_updated: project.last_updated,
+          updatedDate,
+          today,
+          isFromToday
+        });
+        
         return isFromToday;
       });
 
