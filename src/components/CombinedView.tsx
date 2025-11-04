@@ -215,14 +215,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   useEffect(() => {
     const initializeData = async () => {
       try {
-        const healthCheck = await APIService.healthCheck();
-        if (!healthCheck.success) {
-          console.log('Backend unavailable - starting with empty canvas');
-          setMindMapNodes([]);
-          setParentNodeTitle(null);
-          return;
-        }
-
+        console.log('Initializing mind map data...');
+        
+        // Skip health check for mind map data - we connect directly to Supabase
         // Always fetch fresh data from database - only show today's projects
         const dbData = await generateMindMapJson({ showTodayOnly: true });
         const dbNodes = dbData?.nodes || [];

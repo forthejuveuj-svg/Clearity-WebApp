@@ -1,74 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-  },
-});
+import { supabase, isJWTError, fetchProjectsFromSupabase } from './supabaseClient.js';
 
 async function fetchSupabaseData(onJWTError = null) {
   try {
-    // Get current user session
-    let { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-    // Check for JWT errors in session retrieval
-    if (sessionError) {
-      console.error('Session error:', sessionError);
-      if (onJWTError && isJWTError(sessionError)) {
-        onJWTError('Session expired. Please log in again.');
-        throw sessionError;
-      }
-    }
-
-    // Try to refresh session if it exists but might be expired
-    if (session?.refresh_token) {
-      try {
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession({
-          refresh_token: session.refresh_token
-        });
-
-        if (refreshError) {
-          console.warn('Session refresh failed:', refreshError);
-          if (isJWTError(refreshError) && onJWTError) {
-            onJWTError('Session expired. Please log in again.');
-            throw refreshError;
-          }
-        } else if (refreshData?.session) {
-          console.log('Session refreshed successfully');
-          session = refreshData.session;
-        }
-      } catch (refreshErr) {
-        console.warn('Session refresh attempt failed:', refreshErr);
-        // Continue with existing session
-      }
-    }
-
-    if (!session?.user) {
-      console.log('No authenticated user, returning empty data');
-      return { projects: [], knowledgeNodes: [], problems: [] };
-    }
-
-    console.log('Fetching data for user:', session.user.id);
-
-    console.log('Making Supabase queries...');
-    console.log('User ID:', session.user.id);
-
-    // First, try a simple query to see what we get
-    const testResult = await supabase
-      .from('projects')
-      .select('*')
-      .limit(1);
-
-    console.log('Test query result:', testResult);
-    console.log('Test query data:', testResult.data);
-
-    // Try to fetch projects with explicit field selection
-    const projectsResult = await supabase
-      .from('projects')
-      .select(`
+    console.log('🚀 Using unified fetchProjectsFromSupabase...');
+    
+    // Use the unified function to fetch projects with all fields
+    const projects = await fetchProjectsFromSupabase({
+      selectFields: `
         id,
         name,
         created_at,
@@ -84,87 +22,36 @@ async function fetchSupabaseData(onJWTError = null) {
         project_files,
         subproject_from,
         user_id
-      `)
-      .order('created_at', { ascending: false });
-
+      `
+    });
+    
+    // Fetch other data using the same supabase client
     const [knowledgeNodesResult, problemsResult] = await Promise.all([
       supabase.from('knowledge_nodes').select('*').order('created_at', { ascending: false }),
       supabase.from('problems').select('*').eq('status', 'active').order('created_at', { ascending: false })
     ]);
 
-    console.log('Supabase query results:');
-    console.log('Projects result:', projectsResult);
-    console.log('Projects data sample:', projectsResult.data?.[0]);
-    console.log('Projects error:', projectsResult.error);
-    console.log('Total projects found:', projectsResult.data?.length);
-
-    // Check for JWT errors in database queries
-    const errors = [projectsResult.error, knowledgeNodesResult.error, problemsResult.error].filter(Boolean);
-
-    for (const error of errors) {
-      console.error('Database query error:', error);
-
-      if (isJWTError(error)) {
-        if (onJWTError) {
-          onJWTError('Session expired. Please log in again.');
-        }
-        throw error; // Throw JWT errors to trigger logout
-      }
-    }
-
-    // Log non-JWT errors but continue
-    if (projectsResult.error && !isJWTError(projectsResult.error)) {
-      console.error('Error fetching projects:', projectsResult.error);
-    }
-    if (knowledgeNodesResult.error && !isJWTError(knowledgeNodesResult.error)) {
-      console.error('Error fetching knowledge nodes:', knowledgeNodesResult.error);
-    }
-    if (problemsResult.error && !isJWTError(problemsResult.error)) {
-      console.error('Error fetching problems:', problemsResult.error);
-    }
-
     return {
-      projects: projectsResult.data || [],
+      projects: projects || [],
       knowledgeNodes: knowledgeNodesResult.data || [],
       problems: problemsResult.data || []
     };
   } catch (error) {
     console.error('Error fetching from Supabase:', error);
-
+    
     // Re-throw JWT errors to be handled by caller
     if (isJWTError(error)) {
+      if (onJWTError) {
+        onJWTError('Session expired. Please log in again.');
+      }
       throw error;
     }
-
+    
     return { projects: [], knowledgeNodes: [], problems: [] };
   }
 }
 
-// Helper function to detect JWT errors
-function isJWTError(error) {
-  if (!error) return false;
 
-  const errorMessage = typeof error === 'string' ? error :
-    error.message || error.error_description || error.details || JSON.stringify(error);
-
-  const jwtErrorPatterns = [
-    'JWT expired',
-    'jwt expired',
-    'token expired',
-    'invalid jwt',
-    'Invalid JWT',
-    'JWT malformed',
-    'jwt malformed',
-    'Authentication failed',
-    'Unauthorized',
-    'Invalid token',
-    'Token has expired'
-  ];
-
-  return jwtErrorPatterns.some(pattern =>
-    errorMessage.toLowerCase().includes(pattern.toLowerCase())
-  );
-}
 
 function projectToId(name) {
   return name.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-').substring(0, 20);
@@ -280,7 +167,8 @@ function getDateKey(date) {
 
 export async function generateMindMapJson(options = {}) {
   try {
-    console.log('=== DEBUGGING generateMindMapJson ===');
+    console.log('🚀 === GENERATEMINMAPJSON FUNCTION CALLED ===');
+    console.log('🚀 Options:', options);
     const { showSubprojects = false, parentProjectId = null, onJWTError = null, showTodayOnly = true } = options;
     const { projects, knowledgeNodes, problems } = await fetchSupabaseData(onJWTError);
 
