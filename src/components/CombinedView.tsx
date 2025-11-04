@@ -215,27 +215,18 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   useEffect(() => {
     const initializeData = async () => {
       try {
-        console.log('Initializing mind map data...');
-        
         // Skip health check for mind map data - we connect directly to Supabase
         // Always fetch fresh data from database - only show today's projects
         const dbData = await generateMindMapJson({ showTodayOnly: true });
         const dbNodes = dbData?.nodes || [];
-        
-        console.log(`Found ${dbNodes.length} projects from today in database`);
-        console.log('Database nodes:', dbNodes);
 
         // Show projects from today
-        console.log('Setting mindMapNodes to:', dbNodes);
         setMindMapNodes(dbNodes);
         setParentNodeTitle(dbData.parentNode || null);
         
         // Save this as a new session (for navigation history)
         if (dbNodes.length > 0) {
           saveCurrentSession(dbNodes, null);
-          console.log(`Loaded ${dbNodes.length} nodes from today's database entries`);
-        } else {
-          console.log('No projects found from today - starting with empty canvas');
         }
         
       } catch (error) {
@@ -245,7 +236,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         if (error?.message?.toLowerCase().includes('jwt') || 
             error?.message?.toLowerCase().includes('token') ||
             error?.message?.toLowerCase().includes('unauthorized')) {
-          console.log('JWT error detected - user needs to re-login');
+          // JWT error - user needs to re-login
         }
         
         setMindMapNodes([]);
@@ -348,21 +339,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Show nodes only when they exist
   useEffect(() => {
-    console.log('=== Node Visibility Update ===');
-    console.log('mindMapNodes:', mindMapNodes.length, mindMapNodes.map(n => ({ id: n.id, name: n.label })));
-    console.log('parentNodeTitle:', parentNodeTitle);
-    
     if (mindMapNodes.length > 0) {
       const allNodeIds = mindMapNodes.map(n => n.id);
       // Include parent node if it exists
       if (parentNodeTitle) {
         allNodeIds.push("parent-node");
       }
-      console.log('Setting visibleNodes to:', allNodeIds);
       setVisibleNodes(allNodeIds);
     } else {
       // Clear visible nodes when mindMapNodes is empty
-      console.log('Clearing visible nodes - no mindMapNodes');
       setVisibleNodes([]);
     }
   }, [mindMapNodes, parentNodeTitle]);

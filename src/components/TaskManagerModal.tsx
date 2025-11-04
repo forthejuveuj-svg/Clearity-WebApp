@@ -594,22 +594,7 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
     const targetMinutes = targetHours * 60;
     const productivityValue = Math.min(100, (completedMinutes / targetMinutes) * 100);
     
-    // Debug logging
-    console.log('Productivity Debug:', {
-      selectedDate,
-      allScheduledTasks: allScheduledTasks.length,
-      scheduledTasksForDay: scheduledTasksForDay.length,
-      completedTasks: scheduledTasksForDay.filter(item => item.task.completed).length,
-      completedMinutes,
-      targetMinutes,
-      productivity: Math.round(productivityValue),
-      scheduledTasksKeys: Object.keys(scheduledTasks),
-      sampleTask: scheduledTasksForDay[0] ? {
-        id: scheduledTasksForDay[0].task.id,
-        completed: scheduledTasksForDay[0].task.completed,
-        duration: scheduledTasksForDay[0].duration
-      } : null
-    });
+
     
     return Math.round(productivityValue);
   };
@@ -618,7 +603,7 @@ export const TaskManagerModal = ({ isOpen, onClose, onNavigateToChat, isFullScre
 
   // Force re-render when scheduledTasks changes
   useEffect(() => {
-    console.log('ScheduledTasks changed:', scheduledTasks);
+    // Trigger re-render when scheduledTasks changes
   }, [scheduledTasks]);
 
   // Scroll to 9 AM when modal opens

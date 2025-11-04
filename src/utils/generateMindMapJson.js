@@ -2,9 +2,6 @@ import { isJWTError, fetchAllDataFromSupabase, filterElements } from './supabase
 
 async function fetchSupabaseData(onJWTError = null) {
   try {
-    console.log('🚀 Using unified fetchAllDataFromSupabase...');
-
-    // Fetch ALL data using the unified function
     const data = await fetchAllDataFromSupabase({
       selectFields: `
         id,
@@ -133,10 +130,7 @@ function createProjectNode(project, knowledgeNodes = [], problems = []) {
     p.project_id === project.id && p.status === 'active'
   );
 
-  // Debug logging
-  console.log(`Project: ${project.name} (ID: ${project.id})`);
-  console.log(`- Knowledge nodes: ${relatedKnowledge.length}`, relatedKnowledge);
-  console.log(`- Problems: ${projectProblems.length}`, projectProblems);
+
 
   const node = {
     id: projectToId(project.name),
@@ -150,7 +144,7 @@ function createProjectNode(project, knowledgeNodes = [], problems = []) {
     problemData: projectProblems.length > 0 ? projectProblems : undefined
   };
 
-  console.log('Created node:', node);
+
   return node;
 }
 
@@ -160,21 +154,8 @@ function getDateKey(date) {
 
 export async function generateMindMapJson(options = {}) {
   try {
-    console.log('🚀 === GENERATEMINMAPJSON FUNCTION CALLED ===');
-    console.log('🚀 Options:', options);
     const { showSubprojects = false, parentProjectId = null, onJWTError = null, showTodayOnly = true } = options;
     const { projects, knowledgeNodes, problems } = await fetchSupabaseData(onJWTError);
-
-    console.log('Fetched data:', {
-      projects: projects.length,
-      knowledgeNodes: knowledgeNodes.length,
-      problems: problems.length,
-      showSubprojects,
-      parentProjectId,
-      showTodayOnly
-    });
-
-    console.log('Raw projects data:', projects);
 
     // Apply filtering based on options using unified filterElements
     let filteredProjects;
@@ -191,8 +172,13 @@ export async function generateMindMapJson(options = {}) {
         filteredProjects = [];
       }
     } else if (showTodayOnly) {
-      // Filter by today's date
-      filteredProjects = filterElements(projects, 'created_at', 'today');
+      // Filter by today's date - only check created_at
+      const today = new Date().toISOString().split('T')[0];
+      
+      filteredProjects = projects.filter(project => {
+        const createdDate = project.created_at ? new Date(project.created_at).toISOString().split('T')[0] : null;
+        return createdDate === today;
+      });
     } else {
       // Default: show parent projects only (empty subproject_from)
       filteredProjects = filterElements(projects, 'subproject_from', 'empty');
@@ -237,8 +223,7 @@ export async function generateMindMapJson(options = {}) {
       }
     });
 
-    console.log(`Created ${nodes.length} nodes`);
-    console.log(`Parent node: ${parentNode}`);
+
 
     const result = {
       nodes,
@@ -246,16 +231,12 @@ export async function generateMindMapJson(options = {}) {
       _timestamp: Date.now()
     };
 
-    console.log('Final result:', result);
-    console.log('=== END DEBUGGING ===');
+
 
     return result;
   } catch (error) {
     console.error('Error generating mind map:', error);
-    console.log('Falling back to getFallbackJson()');
-    const fallback = getFallbackJson();
-    console.log('Fallback data:', fallback);
-    return fallback;
+    return getFallbackJson();
   }
 }
 

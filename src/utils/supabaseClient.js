@@ -14,17 +14,17 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
 // Helper function to detect JWT errors
 export function isJWTError(error) {
   if (!error) return false;
-  
-  const errorMessage = typeof error === 'string' ? error : 
+
+  const errorMessage = typeof error === 'string' ? error :
     error.message || error.error_description || error.details || JSON.stringify(error);
-  
+
   const jwtErrorPatterns = [
     'JWT expired', 'jwt expired', 'token expired', 'invalid jwt', 'Invalid JWT',
     'JWT malformed', 'jwt malformed', 'Authentication failed', 'Unauthorized',
     'Invalid token', 'Token has expired'
   ];
-  
-  return jwtErrorPatterns.some(pattern => 
+
+  return jwtErrorPatterns.some(pattern =>
     errorMessage.toLowerCase().includes(pattern.toLowerCase())
   );
 }
@@ -32,56 +32,58 @@ export function isJWTError(error) {
 // Unified function to fetch all data from Supabase
 export async function fetchAllDataFromSupabase(options = {}) {
   const { selectFields = '*' } = options;
-  
+
   try {
-    console.log('🚀 Fetching all data from Supabase...');
-    console.log('🚀 Options:', { selectFields });
-    
     // Get current user session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError) {
       console.error('Session error:', sessionError);
       if (isJWTError(sessionError)) {
         throw sessionError;
       }
     }
-    
+
     if (!session?.user) {
-      console.log('No authenticated user');
       return { projects: [], knowledgeNodes: [], problems: [] };
     }
-    
-    console.log('🚀 User ID:', session.user.id);
-    
+
     // Fetch all data in parallel
     const [projectsResult, knowledgeNodesResult, problemsResult] = await Promise.all([
       supabase.from('projects').select(selectFields).order('created_at', { ascending: false }),
       supabase.from('knowledge_nodes').select('*').order('created_at', { ascending: false }),
       supabase.from('problems').select('*').eq('status', 'active').order('created_at', { ascending: false })
     ]);
-    
-    console.log('🚀 Raw Supabase responses:');
-    console.log('🚀 Projects:', projectsResult.data?.length || 0);
-    console.log('🚀 Knowledge nodes:', knowledgeNodesResult.data?.length || 0);
-    console.log('🚀 Problems:', problemsResult.data?.length || 0);
-    
+
+    // Keep only the essential data loading log
+    console.log('📊 Data loaded:', {
+      projects: projectsResult.data?.length || 0,
+      knowledgeNodes: knowledgeNodesResult.data?.length || 0,
+      problems: problemsResult.data?.length || 0,
+      user: session.user.id,
+      rawData: {
+        projects: projectsResult.data || [],
+        knowledgeNodes: knowledgeNodesResult.data || [],
+        problems: problemsResult.data || []
+      }
+    });
+
     // Check for errors
     const errors = [projectsResult.error, knowledgeNodesResult.error, problemsResult.error].filter(Boolean);
-    
+
     for (const error of errors) {
       console.error('Database query error:', error);
       if (isJWTError(error)) {
         throw error;
       }
     }
-    
+
     return {
       projects: projectsResult.data || [],
       knowledgeNodes: knowledgeNodesResult.data || [],
       problems: problemsResult.data || []
     };
-    
+
   } catch (error) {
     console.error('Error in fetchAllDataFromSupabase:', error);
     throw error;
@@ -113,55 +115,41 @@ export function filterElements(data, key, criteria) {
   if (!data || !Array.isArray(data) || !key) {
     return [];
   }
-  
+
   if (!criteria) {
     return data;
   }
-  
-  return data.filter(item => {
+
+  const filteredResults = data.filter(item => {
     const fieldValue = item[key];
-    
+
     // Handle 'empty' criteria - check if field is empty/null/undefined/empty array
     if (criteria === 'empty') {
-      return !fieldValue || 
-             fieldValue === '' || 
-             (Array.isArray(fieldValue) && fieldValue.length === 0) ||
-             (Array.isArray(fieldValue) && fieldValue.every(val => !val || val.trim() === ''));
+      return !fieldValue ||
+        fieldValue === '' ||
+        (Array.isArray(fieldValue) && fieldValue.length === 0) ||
+        (Array.isArray(fieldValue) && fieldValue.every(val => !val || val.trim() === ''));
     }
-    
-    // Handle 'today' criteria for date fields
-    if (criteria === 'today') {
-      const today = new Date().toISOString().split('T')[0];
-      
-      // Check both created_at and last_updated fields
-      let createdDate = null;
-      let updatedDate = null;
-      
-      if (item.created_at) {
-        try {
-          createdDate = new Date(item.created_at).toISOString().split('T')[0];
-        } catch (e) {
-          // Ignore parsing errors
-        }
-      }
-      
-      if (item.last_updated) {
-        try {
-          updatedDate = new Date(item.last_updated).toISOString().split('T')[0];
-        } catch (e) {
-          // Ignore parsing errors
-        }
-      }
-      
-      return createdDate === today || updatedDate === today;
-    }
-    
+
+
+
     // Handle array fields - check if criteria is included in the array
     if (Array.isArray(fieldValue)) {
       return fieldValue.includes(criteria);
     }
-    
+
+
+    // Log filtering results for debugging
+    console.log('🔍 Filter applied:', {
+      key: key,
+      criteria: criteria,
+      output: fieldValue
+    });
+
     // Handle exact match for simple values
     return fieldValue === criteria;
   });
+
+
+  return filteredResults;
 }
