@@ -7,8 +7,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 async function fetchSupabaseData(onJWTError = null) {
   try {
     // Get current user session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+    let { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
     // Check for JWT errors in session retrieval
     if (sessionError) {
       console.error('Session error:', sessionError);
@@ -17,7 +17,30 @@ async function fetchSupabaseData(onJWTError = null) {
         throw sessionError;
       }
     }
-    
+
+    // Try to refresh session if it exists but might be expired
+    if (session?.refresh_token) {
+      try {
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession({
+          refresh_token: session.refresh_token
+        });
+
+        if (refreshError) {
+          console.warn('Session refresh failed:', refreshError);
+          if (isJWTError(refreshError) && onJWTError) {
+            onJWTError('Session expired. Please log in again.');
+            throw refreshError;
+          }
+        } else if (refreshData?.session) {
+          console.log('Session refreshed successfully');
+          session = refreshData.session;
+        }
+      } catch (refreshErr) {
+        console.warn('Session refresh attempt failed:', refreshErr);
+        // Continue with existing session
+      }
+    }
+
     if (!session?.user) {
       console.log('No authenticated user, returning empty data');
       return { projects: [], knowledgeNodes: [], problems: [] };
@@ -33,10 +56,10 @@ async function fetchSupabaseData(onJWTError = null) {
 
     // Check for JWT errors in database queries
     const errors = [projectsResult.error, knowledgeNodesResult.error, problemsResult.error].filter(Boolean);
-    
+
     for (const error of errors) {
       console.error('Database query error:', error);
-      
+
       if (isJWTError(error)) {
         if (onJWTError) {
           onJWTError('Session expired. Please log in again.');
@@ -63,12 +86,12 @@ async function fetchSupabaseData(onJWTError = null) {
     };
   } catch (error) {
     console.error('Error fetching from Supabase:', error);
-    
+
     // Re-throw JWT errors to be handled by caller
     if (isJWTError(error)) {
       throw error;
     }
-    
+
     return { projects: [], knowledgeNodes: [], problems: [] };
   }
 }
@@ -76,13 +99,13 @@ async function fetchSupabaseData(onJWTError = null) {
 // Helper function to detect JWT errors
 function isJWTError(error) {
   if (!error) return false;
-  
-  const errorMessage = typeof error === 'string' ? error : 
+
+  const errorMessage = typeof error === 'string' ? error :
     error.message || error.error_description || error.details || JSON.stringify(error);
-  
+
   const jwtErrorPatterns = [
     'JWT expired',
-    'jwt expired', 
+    'jwt expired',
     'token expired',
     'invalid jwt',
     'Invalid JWT',
@@ -93,8 +116,8 @@ function isJWTError(error) {
     'Invalid token',
     'Token has expired'
   ];
-  
-  return jwtErrorPatterns.some(pattern => 
+
+  return jwtErrorPatterns.some(pattern =>
     errorMessage.toLowerCase().includes(pattern.toLowerCase())
   );
 }
@@ -214,7 +237,7 @@ function getDateKey(date) {
 export async function generateMindMapJson(options = {}) {
   try {
     console.log('=== DEBUGGING generateMindMapJson ===');
-    const { showSubprojects = false, parentProjectId = null, onJWTError = null } = options;
+    const { showSubprojects = false, parentProjectId = null, onJWTError = null, showTodayOnly = true } = options;
     const { projects, knowledgeNodes, problems } = await fetchSupabaseData(onJWTError);
 
     console.log('Fetched data:', {
@@ -222,8 +245,27 @@ export async function generateMindMapJson(options = {}) {
       knowledgeNodes: knowledgeNodes.length,
       problems: problems.length,
       showSubprojects,
-      parentProjectId
+      parentProjectId,
+      showTodayOnly
     });
+
+    // Filter for today's projects if showTodayOnly is true
+    let filteredByDate = projects;
+    if (showTodayOnly) {
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      filteredByDate = projects.filter(project => {
+        const createdDate = project.created_at ? project.created_at.split('T')[0] : null;
+        const updatedDate = project.last_updated ? project.last_updated.split('T')[0] : null;
+
+        const isFromToday = createdDate === today || updatedDate === today;
+        if (isFromToday) {
+          console.log(`Project "${project.name}" is from today (created: ${createdDate}, updated: ${updatedDate})`);
+        }
+        return isFromToday;
+      });
+
+      console.log(`Filtered to ${filteredByDate.length} projects from today (out of ${projects.length} total)`);
+    }
 
     // Clear used positions
     usedPositions.length = 0;
@@ -233,22 +275,22 @@ export async function generateMindMapJson(options = {}) {
 
     if (parentProjectId) {
       // Show subprojects for a specific parent project
-      const parentProject = projects.find(p => p.id === parentProjectId);
+      const parentProject = filteredByDate.find(p => p.id === parentProjectId);
       if (parentProject) {
         parentNode = parentProject.name;
         // Filter to only subprojects of this parent
-        filteredProjects = projects.filter(p => 
-          p.subproject_from && 
+        filteredProjects = filteredByDate.filter(p =>
+          p.subproject_from &&
           (p.subproject_from.includes(parentProject.name) || p.subproject_from.includes(parentProject.id))
         );
       }
     } else if (showSubprojects) {
       // Show all projects (both parents and subprojects) - used after minddump
-      filteredProjects = projects;
+      filteredProjects = filteredByDate;
     } else {
       // Default: Show only parent projects (no subproject_from or empty array)
-      filteredProjects = projects.filter(p => 
-        !p.subproject_from || 
+      filteredProjects = filteredByDate.filter(p =>
+        !p.subproject_from ||
         p.subproject_from.length === 0 ||
         (Array.isArray(p.subproject_from) && p.subproject_from.every(item => !item || item.trim() === ''))
       );
@@ -262,21 +304,21 @@ export async function generateMindMapJson(options = {}) {
         // Add metadata to indicate if this is a subproject
         node.isSubproject = project.subproject_from && project.subproject_from.length > 0;
         node.parentProjectNames = project.subproject_from || [];
-        
+
         // Find and attach subprojects if in default view
         if (!showSubprojects && !parentProjectId) {
-          const subprojects = projects.filter(p => 
-            p.subproject_from && 
+          const subprojects = filteredByDate.filter(p =>
+            p.subproject_from &&
             (p.subproject_from.includes(project.name) || p.subproject_from.includes(project.id))
           );
           if (subprojects.length > 0) {
-            node.subNodes = subprojects.map(sp => ({ 
+            node.subNodes = subprojects.map(sp => ({
               label: sp.name,
-              id: sp.id 
+              id: sp.id
             }));
           }
         }
-        
+
         nodes.push(node);
       }
     });

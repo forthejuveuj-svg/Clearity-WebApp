@@ -142,12 +142,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Function to reload mind map nodes from database (after minddump or other operations)
   const reloadNodes = async (options = {}) => {
     try {
-      const data = await generateMindMapJson(options);
+      // Always show today's projects by default
+      const finalOptions = { showTodayOnly: true, ...options };
+      const data = await generateMindMapJson(finalOptions);
       if (data) {
         setMindMapNodes(data.nodes || []);
         setParentNodeTitle(data.parentNode || null);
         saveCurrentSession(data.nodes || []);
-        console.log('Mind map nodes reloaded from database:', data.nodes?.length || 0, 'nodes');
+        console.log('Mind map nodes reloaded from database:', data.nodes?.length || 0, 'nodes from today');
       }
     } catch (error) {
       console.error('Error reloading nodes from database:', error);
@@ -195,8 +197,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   const loadSubprojects = async (nodeId: string) => {
     try {
-      const data = await generateMindMapJson({ parentProjectId: nodeId });
-      console.log(`Loaded ${data.nodes?.length || 0} subprojects for project ${nodeId} from database`);
+      const data = await generateMindMapJson({ 
+        parentProjectId: nodeId, 
+        showTodayOnly: true 
+      });
+      console.log(`Loaded ${data.nodes?.length || 0} subprojects for project ${nodeId} from today's database entries`);
       return data.nodes || [];
     } catch (error) {
       console.error('Error loading subprojects from database:', error);
@@ -213,39 +218,41 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         const healthCheck = await APIService.healthCheck();
         if (!healthCheck.success) {
           console.log('Backend unavailable - starting with empty canvas');
-          clearAllSessionsAndCache();
-          return;
-        }
-
-        const dbData = await generateMindMapJson();
-        const dbNodes = dbData?.nodes || [];
-        const cachedSessions = getCachedSessionsFromToday();
-
-        if (cachedSessions.length === 0) {
-          console.log('No cached sessions from today - starting with empty canvas');
           setMindMapNodes([]);
           setParentNodeTitle(null);
           return;
         }
 
-        const validatedNodes = validateCachedNodesAgainstDatabase(cachedSessions, dbNodes);
+        // Always fetch fresh data from database - only show today's projects
+        const dbData = await generateMindMapJson({ showTodayOnly: true });
+        const dbNodes = dbData?.nodes || [];
+        
+        console.log(`Found ${dbNodes.length} projects from today in database`);
 
-        if (validatedNodes.length > 0) {
-          setMindMapNodes(validatedNodes);
-          setParentNodeTitle(cachedSessions[0].parentNodeTitle || null);
-
-          const validatedSession = { ...cachedSessions[0], nodes: validatedNodes };
-          setSessionHistory([validatedSession]);
-          setCurrentSessionIndex(0);
-
-          console.log(`Loaded ${validatedNodes.length} validated nodes from today's cache`);
+        // Show projects from today
+        setMindMapNodes(dbNodes);
+        setParentNodeTitle(dbData.parentNode || null);
+        
+        // Save this as a new session (for navigation history)
+        if (dbNodes.length > 0) {
+          saveCurrentSession(dbNodes, null);
+          console.log(`Loaded ${dbNodes.length} nodes from today's database entries`);
         } else {
-          console.log('No valid cached nodes match database - starting with empty canvas');
-          clearAllSessionsAndCache();
+          console.log('No projects found from today - starting with empty canvas');
         }
+        
       } catch (error) {
         console.error('Error initializing data:', error);
-        clearAllSessionsAndCache();
+        
+        // If it's a JWT error, show empty state - user needs to re-login
+        if (error?.message?.toLowerCase().includes('jwt') || 
+            error?.message?.toLowerCase().includes('token') ||
+            error?.message?.toLowerCase().includes('unauthorized')) {
+          console.log('JWT error detected - user needs to re-login');
+        }
+        
+        setMindMapNodes([]);
+        setParentNodeTitle(null);
       }
     };
 
