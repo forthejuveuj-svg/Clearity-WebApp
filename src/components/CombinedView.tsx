@@ -140,21 +140,26 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   }>>([]);
   const [currentSessionIndex, setCurrentSessionIndex] = useState(-1);
 
-  // Function to reload mind map nodes from database
+  // Function to reload mind map nodes from database (after minddump or other operations)
   const reloadNodes = (options = {}) => {
     generateMindMapJson(options).then(data => {
       if (data) {
-        // Set regular nodes (all nodes are regular now)
+        // Set nodes from fresh database data
         setMindMapNodes(data.nodes || []);
 
         // Set parent node title if provided
         setParentNodeTitle(data.parentNode || null);
 
-        // Save current state to session when nodes are reloaded
+        // Save fresh database data to session cache with today's timestamp
+        // This creates a new valid session that will pass cross-validation
         saveCurrentSession(data.nodes || []);
 
-        console.log('Mind map nodes reloaded after successful processing');
+        console.log('Mind map nodes reloaded from database:', data.nodes?.length || 0, 'nodes');
+        console.log('New session saved - will be available on next load');
       }
+    }).catch(error => {
+      console.error('Error reloading nodes from database:', error);
+      // On error, don't update state - keep current view
     });
   };
 
@@ -201,6 +206,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Function to completely clear all sessions and cache (reusable for future implementations)
   // This function can be called from external components or hooks to reset the mindmap state
+  // NOTE: This only clears navigation/position cache, not login credentials or user preferences
   const clearAllSessionsAndCache = () => {
     // Clear state
     setSessionHistory([]);
@@ -211,11 +217,77 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     setCurrentProjectId(null);
     setShowSubprojects(false);
 
-    // Clear localStorage
+    // Clear localStorage (only mindmap-related cache, preserve auth and other app data)
     localStorage.removeItem('mindmap_sessions');
     localStorage.removeItem('mindmap_current_index');
 
-    console.log('All sessions and cache cleared');
+    console.log('Mindmap sessions and navigation cache cleared (login credentials preserved)');
+  };
+
+  // Get cached sessions from today only
+  const getCachedSessionsFromToday = () => {
+    try {
+      const stored = localStorage.getItem('mindmap_sessions');
+      if (!stored) return [];
+
+      const sessions = JSON.parse(stored);
+      const todaySessions = sessions.filter((session: any) =>
+        session.timestamp && isFromToday(session.timestamp)
+      );
+
+      // If we found expired sessions, clean them up
+      if (todaySessions.length !== sessions.length) {
+        if (todaySessions.length === 0) {
+          clearAllSessionsAndCache();
+        } else {
+          localStorage.setItem('mindmap_sessions', JSON.stringify(todaySessions));
+          localStorage.setItem('mindmap_current_index', '0');
+        }
+      }
+
+      return todaySessions;
+    } catch (error) {
+      console.warn('Error reading cached sessions:', error);
+      clearAllSessionsAndCache();
+      return [];
+    }
+  };
+
+  // Cross-validate cached nodes against database nodes
+  const validateCachedNodesAgainstDatabase = (cachedSessions: any[], dbNodes: Node[]) => {
+    if (cachedSessions.length === 0 || dbNodes.length === 0) {
+      return [];
+    }
+
+    // Get the most recent cached session
+    const latestSession = cachedSessions[cachedSessions.length - 1];
+    const cachedNodes = latestSession.nodes || [];
+
+    // Create a map of database nodes by both id and projectId for efficient lookup
+    const dbNodeMap = new Map();
+    dbNodes.forEach(dbNode => {
+      // Index by both regular id and projectId
+      if (dbNode.id) dbNodeMap.set(dbNode.id, dbNode);
+      if (dbNode.projectId) dbNodeMap.set(dbNode.projectId, dbNode);
+    });
+
+    // Filter cached nodes to only include those that exist in database
+    const validatedNodes = cachedNodes.filter((cachedNode: Node) => {
+      // Check if this cached node exists in database by id or projectId
+      const existsById = cachedNode.id && dbNodeMap.has(cachedNode.id);
+      const existsByProjectId = cachedNode.projectId && dbNodeMap.has(cachedNode.projectId);
+
+      const isValid = existsById || existsByProjectId;
+
+      if (!isValid) {
+        console.log(`Cached node "${cachedNode.label}" (id: ${cachedNode.id}, projectId: ${cachedNode.projectId}) not found in database - removing from cache`);
+      }
+
+      return isValid;
+    });
+
+    console.log(`Validated ${validatedNodes.length}/${cachedNodes.length} cached nodes against database`);
+    return validatedNodes;
   };
 
   // Utility function to check session status (useful for debugging)
@@ -242,12 +314,19 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   };
 
-  // Simple session management functions
+  // Save session to cache (only saves nodes that came from database)
   const saveCurrentSession = (nodes: Node[], parentNodeId?: string) => {
+    // Only save sessions with actual database data (not empty states)
+    if (!nodes || nodes.length === 0) {
+      console.log('Not saving empty session to cache');
+      return;
+    }
+
     const newSession = {
       id: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       nodes: [...nodes],
       parentNodeId,
+      parentNodeTitle: parentNodeTitle, // Save parent title for restoration
       timestamp: Date.now()
     };
 
@@ -255,47 +334,20 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     setSessionHistory(updatedHistory);
     setCurrentSessionIndex(updatedHistory.length - 1);
 
-    // Save to localStorage
+    // Save to localStorage - this will be cross-validated on next load
     localStorage.setItem('mindmap_sessions', JSON.stringify(updatedHistory));
     localStorage.setItem('mindmap_current_index', (updatedHistory.length - 1).toString());
+
+    console.log(`Saved session with ${nodes.length} nodes to cache (timestamp: ${new Date(newSession.timestamp).toLocaleString()})`);
   };
 
   const loadSessionFromStorage = () => {
-    try {
-      // First, clear any expired sessions
-      const hadExpiredSessions = clearExpiredSessions();
+    // NOTE: This function is now DEPRECATED and should not be used
+    // It's kept for backward compatibility but the new approach uses cross-validation
+    console.warn('loadSessionFromStorage() called - this is deprecated. Use cross-validation approach instead.');
 
-      const stored = localStorage.getItem('mindmap_sessions');
-      const storedIndex = localStorage.getItem('mindmap_current_index');
-
-      if (stored && storedIndex) {
-        const sessions = JSON.parse(stored);
-        const index = parseInt(storedIndex);
-
-        // Double-check that the session we're about to load is from today
-        if (sessions[index] && sessions[index].timestamp && isFromToday(sessions[index].timestamp)) {
-          setSessionHistory(sessions);
-          setCurrentSessionIndex(index);
-          setMindMapNodes(sessions[index].nodes);
-
-          // Also restore parent node title if it exists
-          if (sessions[index].parentNodeId) {
-            // You might want to fetch the parent node title from the database here
-            // For now, we'll leave it as null and let the UI handle it
-          }
-
-          console.log('Loaded valid session from today');
-        } else {
-          console.log('No valid sessions from today found');
-          // Clear everything if the session is not from today
-          clearAllSessionsAndCache();
-        }
-      }
-    } catch (error) {
-      console.warn('Failed to load sessions from localStorage:', error);
-      // Clear corrupted data
-      clearAllSessionsAndCache();
-    }
+    // Always start with empty canvas when this fallback is called
+    clearAllSessionsAndCache();
   };
 
   const goBackInHistory = () => {
@@ -375,11 +427,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   const loadSubprojects = async (nodeId: string) => {
     try {
-      // Load subprojects for a specific parent project
+      // Always load subprojects from database (not cache)
       const data = await generateMindMapJson({ parentProjectId: nodeId });
+      console.log(`Loaded ${data.nodes?.length || 0} subprojects for project ${nodeId} from database`);
       return data.nodes || [];
     } catch (error) {
-      console.error('Error loading subprojects:', error);
+      console.error('Error loading subprojects from database:', error);
       return [];
     }
   };
@@ -388,16 +441,67 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Load mind map nodes on component mount
   useEffect(() => {
-    // Start with empty canvas - only load nodes from today's sessions
-    // loadSessionFromStorage now handles date validation and expired session cleanup
-    loadSessionFromStorage();
+    // Cross-validate cache with database: only show nodes that exist in BOTH and are from today
+    // Default is empty canvas unless there was a minddump today
+    const initializeData = async () => {
+      try {
+        // First, check backend connectivity
+        const healthCheck = await APIService.healthCheck();
+        if (!healthCheck.success) {
+          console.warn('Backend health check failed:', healthCheck.error);
+          // If backend is down, start with empty canvas (don't trust cache alone)
+          console.log('Backend unavailable - starting with empty canvas');
+          clearAllSessionsAndCache();
+          return;
+        }
 
-    // Check backend connectivity
-    APIService.healthCheck().then(response => {
-      if (!response.success) {
-        console.warn('Backend health check failed:', response.error);
+        // Load current database state
+        const dbData = await generateMindMapJson();
+        const dbNodes = dbData?.nodes || [];
+
+        // Check if we have cached sessions from today
+        const cachedSessions = getCachedSessionsFromToday();
+
+        if (cachedSessions.length === 0) {
+          // No valid cache from today - start with empty canvas
+          console.log('No cached sessions from today - starting with empty canvas');
+          setMindMapNodes([]);
+          setParentNodeTitle(null);
+          return;
+        }
+
+        // Cross-validate: only keep cached nodes that also exist in database
+        const validatedNodes = validateCachedNodesAgainstDatabase(cachedSessions, dbNodes);
+
+        if (validatedNodes.length > 0) {
+          // We have validated nodes from today's cache that match database
+          setMindMapNodes(validatedNodes);
+          setParentNodeTitle(cachedSessions[0].parentNodeTitle || null);
+
+          // Restore session history with validated data
+          const validatedSession = {
+            ...cachedSessions[0],
+            nodes: validatedNodes
+          };
+          setSessionHistory([validatedSession]);
+          setCurrentSessionIndex(0);
+
+          console.log(`Loaded ${validatedNodes.length} validated nodes from today's cache`);
+        } else {
+          // No valid nodes found - clear cache and start empty
+          console.log('No valid cached nodes match database - starting with empty canvas');
+          clearAllSessionsAndCache();
+        }
+
+      } catch (error) {
+        console.error('Error initializing data:', error);
+        // On error, start with empty canvas for safety
+        console.log('Error during initialization - starting with empty canvas');
+        clearAllSessionsAndCache();
       }
-    });
+    };
+
+    initializeData();
   }, []);
 
 
