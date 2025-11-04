@@ -14,9 +14,10 @@ interface NavigationProps {
   currentView?: 'mindmap' | 'tasks';
   onOpenTaskManager?: () => void;
   onShowAuth?: () => void;
+  onProjectSelect?: (project: any) => void;
 }
 
-export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, currentView = 'mindmap', onOpenTaskManager, onShowAuth }: NavigationProps = {}) => {
+export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, currentView = 'mindmap', onOpenTaskManager, onShowAuth, onProjectSelect }: NavigationProps = {}) => {
   const navigate = useNavigate();
   const { user } = useAuthContext();
   const { signOut } = useAuth();
@@ -214,7 +215,8 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
       {/* Search Modal */}
       <SearchModal 
         isOpen={isSearchOpen} 
-        onClose={() => setIsSearchOpen(false)} 
+        onClose={() => setIsSearchOpen(false)}
+        onProjectSelect={onProjectSelect}
       />
       
       {/* Task Manager Modal */}

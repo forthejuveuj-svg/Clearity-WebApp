@@ -118,6 +118,7 @@ const Index = () => {
 
   const toggleViewRef = React.useRef<(() => void) | null>(null);
   const navigateToChatRef = React.useRef<((task: any) => void) | null>(null);
+  const reloadNodesRef = React.useRef<((options?: any) => void) | null>(null);
   const [combinedViewState, setCombinedViewState] = useState<'mindmap' | 'tasks'>('mindmap');
 
   const handleNavigateToChat = (task: any) => {
@@ -144,6 +145,38 @@ const Index = () => {
 
   const registerNavigateToChat = (fn: (task: any) => void) => {
     navigateToChatRef.current = fn;
+  };
+
+  const registerReloadNodes = (fn: (options?: any) => void) => {
+    reloadNodesRef.current = fn;
+  };
+
+  const handleProjectSelect = (project: any) => {
+    // Switch to combined view if not already there
+    if (currentView !== 'combined') {
+      setCurrentView('combined');
+    }
+    
+    // Switch to mindmap view
+    setCombinedViewState('mindmap');
+    
+    // Update the mind map based on project selection
+    if (reloadNodesRef.current) {
+      if (project.type === 'main') {
+        // Show main projects (projects without parents)
+        reloadNodesRef.current({ 
+          showTodayOnly: false, // Show all main projects, not just today's
+          forceRefresh: true 
+        });
+      } else if (project.type === 'parent') {
+        // Show subprojects of the selected parent project
+        reloadNodesRef.current({ 
+          parentProjectId: project.id,
+          showSubprojects: true,
+          forceRefresh: true 
+        });
+      }
+    }
   };
 
   const handleAuthSuccess = () => {
@@ -213,6 +246,7 @@ const Index = () => {
         currentView={currentView === 'combined' ? combinedViewState : 'mindmap'}
         onOpenTaskManager={currentView === 'onboarding' ? handleOpenTaskManagerFromOnboarding : undefined}
         onShowAuth={currentView === 'onboarding' ? handleShowAuthFromOnboarding : undefined}
+        onProjectSelect={handleProjectSelect}
       />
       
       {currentView === "onboarding" && (
@@ -229,6 +263,7 @@ const Index = () => {
           onNavigateToChat={registerNavigateToChat}
           onViewChange={setCombinedViewState}
           initialView={combinedViewState}
+          onReloadNodes={registerReloadNodes}
         />
       )}
       

@@ -49,9 +49,10 @@ interface CombinedViewProps {
   onViewChange?: (view: 'mindmap' | 'tasks') => void;
   initialView?: 'mindmap' | 'tasks';
   onClearCache?: (clearFn: () => void) => void; // Optional callback to expose cache clearing function
+  onReloadNodes?: (reloadFn: (options?: any) => void) => void; // Optional callback to expose reloadNodes function
 }
 
-export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateToChat: onNavigateToChatProp, onViewChange, initialView = 'mindmap', onClearCache }: CombinedViewProps) => {
+export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateToChat: onNavigateToChatProp, onViewChange, initialView = 'mindmap', onClearCache, onReloadNodes }: CombinedViewProps) => {
   const { userId, signOut } = useAuth();
   const globalData = useGlobalData();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -682,6 +683,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         setMindMapNodes(dbData?.nodes || []);
         setParentNodeTitle(dbData.parentNode || null);
       });
+    }
+    if (onReloadNodes) {
+      onReloadNodes(reloadNodes);
     }
   }, []);
 

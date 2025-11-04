@@ -6,9 +6,10 @@ import { ProjectNavigationResult } from "@/hooks/useProjectSearch";
 interface SearchModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onProjectSelect?: (project: ProjectNavigationResult) => void;
 }
 
-export const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
+export const SearchModal = ({ isOpen, onClose, onProjectSelect }: SearchModalProps) => {
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleSearch = (query: string) => {
@@ -25,8 +26,10 @@ export const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
   };
 
   const handleProjectSelect = (project: ProjectNavigationResult) => {
-    // Handle project selection - you can customize this behavior
-    console.log('Selected project:', project);
+    // Call the callback if provided
+    if (onProjectSelect) {
+      onProjectSelect(project);
+    }
     onClose();
   };
 
