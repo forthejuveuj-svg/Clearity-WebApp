@@ -11,6 +11,37 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   }
 });
 
+// Global data store - all data is cached here
+let globalDataStore = {
+  projects: [],
+  knowledgeNodes: [],
+  problems: [],
+  lastUpdated: null,
+  isLoading: false
+};
+
+// Subscribers for data updates
+let dataSubscribers = [];
+
+// Subscribe to data changes
+export function subscribeToDataUpdates(callback) {
+  dataSubscribers.push(callback);
+  return () => {
+    dataSubscribers = dataSubscribers.filter(cb => cb !== callback);
+  };
+}
+
+// Notify all subscribers of data changes
+function notifyDataSubscribers() {
+  dataSubscribers.forEach(callback => {
+    try {
+      callback(globalDataStore);
+    } catch (error) {
+      console.error('Error in data subscriber:', error);
+    }
+  });
+}
+
 // Helper function to detect JWT errors
 export function isJWTError(error) {
   if (!error) return false;
@@ -29,9 +60,9 @@ export function isJWTError(error) {
   );
 }
 
-// Unified function to fetch all data from Supabase
-export async function fetchAllDataFromSupabase(options = {}) {
-  const { selectFields = '*' } = options;
+// Internal function to fetch fresh data from Supabase
+async function fetchFreshDataFromSupabase(options = {}) {
+  const { selectFields = '*', onJWTError = null } = options;
 
   try {
     // Get current user session
@@ -40,6 +71,9 @@ export async function fetchAllDataFromSupabase(options = {}) {
     if (sessionError) {
       console.error('Session error:', sessionError);
       if (isJWTError(sessionError)) {
+        if (onJWTError) {
+          onJWTError('Session expired. Please log in again.');
+        }
         throw sessionError;
       }
     }
@@ -55,39 +89,96 @@ export async function fetchAllDataFromSupabase(options = {}) {
       supabase.from('problems').select('*').eq('status', 'active').order('created_at', { ascending: false })
     ]);
 
-    // Keep only the essential data loading log
-    console.log('📊 Data loaded:', {
-      projects: projectsResult.data?.length || 0,
-      knowledgeNodes: knowledgeNodesResult.data?.length || 0,
-      problems: problemsResult.data?.length || 0,
-      user: session.user.id,
-      rawData: {
-        projects: projectsResult.data || [],
-        knowledgeNodes: knowledgeNodesResult.data || [],
-        problems: problemsResult.data || []
-      }
-    });
-
     // Check for errors
     const errors = [projectsResult.error, knowledgeNodesResult.error, problemsResult.error].filter(Boolean);
 
     for (const error of errors) {
       console.error('Database query error:', error);
       if (isJWTError(error)) {
+        if (onJWTError) {
+          onJWTError('Session expired. Please log in again.');
+        }
         throw error;
       }
     }
 
-    return {
+    const freshData = {
       projects: projectsResult.data || [],
       knowledgeNodes: knowledgeNodesResult.data || [],
       problems: problemsResult.data || []
     };
 
+    console.log('📊 Fresh data loaded:', {
+      projects: freshData.projects.length,
+      knowledgeNodes: freshData.knowledgeNodes.length,
+      problems: freshData.problems.length,
+      user: session.user.id
+    });
+
+    return freshData;
+
   } catch (error) {
-    console.error('Error in fetchAllDataFromSupabase:', error);
+    console.error('Error in fetchFreshDataFromSupabase:', error);
     throw error;
   }
+}
+
+// Get all data from cache (fast)
+export function getAllDataFromCache() {
+  return {
+    projects: [...globalDataStore.projects],
+    knowledgeNodes: [...globalDataStore.knowledgeNodes],
+    problems: [...globalDataStore.problems],
+    lastUpdated: globalDataStore.lastUpdated,
+    isLoading: globalDataStore.isLoading
+  };
+}
+
+// Refresh all data from Supabase and update cache
+export async function refreshAllData(options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    globalDataStore.isLoading = true;
+    notifyDataSubscribers();
+
+    const freshData = await fetchFreshDataFromSupabase({ onJWTError });
+
+    // Update global store
+    globalDataStore.projects = freshData.projects;
+    globalDataStore.knowledgeNodes = freshData.knowledgeNodes;
+    globalDataStore.problems = freshData.problems;
+    globalDataStore.lastUpdated = new Date();
+    globalDataStore.isLoading = false;
+
+    // Notify all subscribers
+    notifyDataSubscribers();
+
+    return getAllDataFromCache();
+
+  } catch (error) {
+    globalDataStore.isLoading = false;
+    notifyDataSubscribers();
+    throw error;
+  }
+}
+
+// Initialize data on first load
+export async function initializeData(options = {}) {
+  if (globalDataStore.lastUpdated === null) {
+    return await refreshAllData(options);
+  }
+  return getAllDataFromCache();
+}
+
+// Legacy function for backward compatibility - now uses cache
+export async function fetchAllDataFromSupabase(options = {}) {
+  // If data is not loaded yet, load it
+  if (globalDataStore.lastUpdated === null) {
+    return await refreshAllData(options);
+  }
+  // Return cached data
+  return getAllDataFromCache();
 }
 
 /**
@@ -152,4 +243,209 @@ export function filterElements(data, key, criteria) {
 
 
   return filteredResults;
+}
+
+// Data manipulation functions that update both cache and database
+
+// Create a new project
+export async function createProject(projectData, options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      if (isJWTError(sessionError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw sessionError;
+      }
+    }
+
+    if (!session?.user) {
+      throw new Error('No authenticated user');
+    }
+
+    const { data: project, error } = await supabase
+      .from('projects')
+      .insert([{ ...projectData, user_id: session.user.id }])
+      .select()
+      .single();
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    // Update cache
+    globalDataStore.projects.unshift(project);
+    notifyDataSubscribers();
+
+    return project;
+  } catch (error) {
+    console.error('Error creating project:', error);
+    throw error;
+  }
+}
+
+// Update a project
+export async function updateProject(projectId, updates, options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    const { data: project, error } = await supabase
+      .from('projects')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+      .select()
+      .single();
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    // Update cache
+    const index = globalDataStore.projects.findIndex(p => p.id === projectId);
+    if (index !== -1) {
+      globalDataStore.projects[index] = project;
+      notifyDataSubscribers();
+    }
+
+    return project;
+  } catch (error) {
+    console.error('Error updating project:', error);
+    throw error;
+  }
+}
+
+// Create a new problem
+export async function createProblem(problemData, options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      if (isJWTError(sessionError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw sessionError;
+      }
+    }
+
+    if (!session?.user) {
+      throw new Error('No authenticated user');
+    }
+
+    const { data: problem, error } = await supabase
+      .from('problems')
+      .insert([{ ...problemData, user_id: session.user.id }])
+      .select()
+      .single();
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    // Update cache
+    globalDataStore.problems.unshift(problem);
+    notifyDataSubscribers();
+
+    return problem;
+  } catch (error) {
+    console.error('Error creating problem:', error);
+    throw error;
+  }
+}
+
+// Update a problem
+export async function updateProblem(problemId, updates, options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    const { data: problem, error } = await supabase
+      .from('problems')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', problemId)
+      .select()
+      .single();
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    // Update cache
+    const index = globalDataStore.problems.findIndex(p => p.id === problemId);
+    if (index !== -1) {
+      globalDataStore.problems[index] = problem;
+      notifyDataSubscribers();
+    }
+
+    return problem;
+  } catch (error) {
+    console.error('Error updating problem:', error);
+    throw error;
+  }
+}
+
+// Convert problem to project (combines create project + update problem)
+export async function convertProblemToProject(problem, options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    // Create project from problem
+    const projectData = {
+      name: problem.title,
+      description: problem.description || problem.effect || 'Converted from problem',
+      status: 'active',
+      priority: 'medium',
+      category: 'problem-conversion',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const project = await createProject(projectData, { onJWTError });
+
+    // Update problem status
+    await updateProblem(problem.id, {
+      status: 'ongoing',
+      project_id: project.id
+    }, { onJWTError });
+
+    console.log('Successfully converted problem to project:', {
+      problemId: problem.id,
+      projectId: project.id,
+      projectName: project.name
+    });
+
+    return project;
+  } catch (error) {
+    console.error('Error converting problem to project:', error);
+    throw error;
+  }
+}
+
+// Clear cache (useful for logout)
+export function clearDataCache() {
+  globalDataStore = {
+    projects: [],
+    knowledgeNodes: [],
+    problems: [],
+    lastUpdated: null,
+    isLoading: false
+  };
+  notifyDataSubscribers();
 }

@@ -4,8 +4,9 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, isJWTError } from '@/utils/supabaseClient.js';
+import { getAllDataFromCache, filterElements } from '@/utils/supabaseClient.js';
 import { EntityType } from '@/utils/messageModeHandler';
+import { useGlobalData } from './useGlobalData';
 
 // Using unified Supabase client and utilities from supabaseClient.js
 
@@ -28,82 +29,53 @@ const TABLE_MAPPING: Record<EntityType, { table: string; displayName: string }> 
 };
 
 export function useEntityAutocomplete() {
+  const globalData = useGlobalData();
   const [allEntities, setAllEntities] = useState<EntitySuggestion[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Fetch all entities from database
-  const fetchAllEntities = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Get current user session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      // Check for JWT errors in session
-      if (sessionError) {
-        console.error('Session error in useEntityAutocomplete:', sessionError);
-        if (isJWTError(sessionError)) {
-          // JWT error detected - this will be handled by the parent component
-          throw sessionError;
-        }
-      }
-      
-      if (!session?.user) {
-        setAllEntities([]);
-        setLoading(false);
-        return;
-      }
-
-      const entities: EntitySuggestion[] = [];
-
-      // Fetch from all tables
-      for (const [entityType, config] of Object.entries(TABLE_MAPPING)) {
-        try {
-          const { data, error } = await supabase
-            .from(config.table)
-            .select('id, name')
-            .order('name', { ascending: true })
-            .limit(100); // Limit per type
-
-          if (error) {
-            // Check for JWT errors in database queries
-            if (isJWTError(error)) {
-              throw error; // Re-throw JWT errors to be handled by parent
-            }
-            continue; // Continue on non-JWT errors
-          }
-
-          if (data) {
-            entities.push(...data.map(item => ({
-              id: item.id,
-              name: item.name || 'Untitled',
-              type: entityType as EntityType,
-              displayType: config.displayName
-            })));
-          }
-        } catch (err) {
-          // Re-throw JWT errors, silently continue on others
-          if (isJWTError(err)) {
-            throw err;
-          }
-        }
-      }
-
-      setAllEntities(entities);
-    } catch (err) {
-      console.error('Error fetching entities:', err);
-      setError('Failed to load entities');
-    } finally {
-      setLoading(false);
+  // Build entities from cached global data
+  const buildEntitiesFromCache = useCallback(() => {
+    const entities: EntitySuggestion[] = [];
+    
+    // Add projects
+    if (globalData.projects) {
+      entities.push(...globalData.projects.map(item => ({
+        id: item.id,
+        name: item.name || 'Untitled',
+        type: 'projects' as EntityType,
+        displayType: 'Project'
+      })));
     }
-  }, []);
 
-  // Load entities on mount
+    // Add knowledge nodes
+    if (globalData.knowledgeNodes) {
+      entities.push(...globalData.knowledgeNodes.map(item => ({
+        id: item.id,
+        name: item.name || item.title || 'Untitled',
+        type: 'knowledge_nodes' as EntityType,
+        displayType: 'Knowledge'
+      })));
+    }
+
+    // Add problems
+    if (globalData.problems) {
+      entities.push(...globalData.problems.map(item => ({
+        id: item.id,
+        name: item.title || item.name || 'Untitled',
+        type: 'problems' as EntityType,
+        displayType: 'Problem'
+      })));
+    }
+
+    // Sort by name
+    entities.sort((a, b) => a.name.localeCompare(b.name));
+    
+    setAllEntities(entities);
+  }, [globalData.projects, globalData.knowledgeNodes, globalData.problems]);
+
+  // Update entities when global data changes
   useEffect(() => {
-    fetchAllEntities();
-  }, [fetchAllEntities]);
+    buildEntitiesFromCache();
+  }, [buildEntitiesFromCache]);
 
   // Filter entities based on search query - memoized to prevent infinite loops
   const filterEntities = useCallback((query: string): EntitySuggestion[] => {
@@ -124,10 +96,10 @@ export function useEntityAutocomplete() {
 
   return {
     allEntities,
-    loading,
-    error,
+    loading: globalData.isLoading,
+    error: null,
     filterEntities,
-    refetch: fetchAllEntities
+    refetch: globalData.refresh
   };
 }
 

@@ -1,4 +1,9 @@
-import { supabase } from '../lib/supabase';
+import { 
+  getAllDataFromCache, 
+  filterElements, 
+  convertProblemToProject as convertProblemToProjectDB,
+  updateProblem
+} from './supabaseClient';
 
 interface Problem {
   id: string;
@@ -28,95 +33,17 @@ interface Project {
  * @param problem - The problem object to convert
  * @returns The created project
  */
-export async function convertProblemToProject(problem: Problem): Promise<Project> {
-  try {
-    // Get current user session
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session?.user) {
-      throw new Error('No authenticated user');
-    }
-
-    // Create new project from problem
-    const projectData = {
-      name: problem.title,
-      description: problem.description || problem.effect || 'Converted from problem',
-      status: 'active',
-      user_id: session.user.id,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      // Add any additional fields that might be relevant
-      priority: 'medium',
-      category: 'problem-conversion'
-    };
-
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .insert([projectData])
-      .select()
-      .single();
-
-    if (projectError) {
-      throw projectError;
-    }
-
-    // Update problem status to 'ongoing' and link to project
-    const { error: problemError } = await supabase
-      .from('problems')
-      .update({ 
-        status: 'ongoing' as const,
-        project_id: project.id,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', problem.id);
-
-    if (problemError) {
-      console.error('Error updating problem status:', problemError);
-      // Don't throw here as the project was created successfully
-    }
-
-    console.log('Successfully converted problem to project:', {
-      problemId: problem.id,
-      projectId: project.id,
-      projectName: project.name
-    });
-
-    return project;
-
-  } catch (error) {
-    console.error('Error converting problem to project:', error);
-    throw error;
-  }
+export async function convertProblemToProject(problem: Problem, options = {}): Promise<Project> {
+  return await convertProblemToProjectDB(problem, options);
 }
 
 /**
- * Get all active problems for the current user
+ * Get all active problems for the current user (from cache)
  * @returns Array of active problems
  */
-export async function getActiveProblems(): Promise<Problem[]> {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session?.user) {
-      return [];
-    }
-
-    const { data: problems, error } = await supabase
-      .from('problems')
-      .select('*')
-      .eq('status', 'active')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      throw error;
-    }
-
-    return problems || [];
-
-  } catch (error) {
-    console.error('Error fetching active problems:', error);
-    return [];
-  }
+export function getActiveProblems(): Problem[] {
+  const { problems } = getAllDataFromCache();
+  return filterElements(problems, 'status', 'active');
 }
 
 /**
@@ -125,26 +52,6 @@ export async function getActiveProblems(): Promise<Problem[]> {
  * @param status - New status ('active', 'ongoing', 'resolved')
  * @returns Updated problem
  */
-export async function updateProblemStatus(problemId: string, status: Problem['status']): Promise<Problem> {
-  try {
-    const { data: problem, error } = await supabase
-      .from('problems')
-      .update({ 
-        status,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', problemId)
-      .select()
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    return problem;
-
-  } catch (error) {
-    console.error('Error updating problem status:', error);
-    throw error;
-  }
+export async function updateProblemStatus(problemId: string, status: Problem['status'], options = {}): Promise<Problem> {
+  return await updateProblem(problemId, { status }, options);
 }

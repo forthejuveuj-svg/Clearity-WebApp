@@ -7,6 +7,8 @@ import { useAudioRecording } from "@/hooks/useAudioRecording";
 import { useAuth } from "@/hooks/useAuth";
 import { APIService } from "@/lib/api";
 import { generateMindMapJson } from "../utils/generateMindMapJson";
+import { handleJWTError, detectJWTError } from "@/utils/jwtErrorHandler";
+import { useGlobalData } from "@/hooks/useGlobalData";
 import { messageModeHandler } from "@/utils/messageModeHandler";
 import { EntityAutocomplete } from "./EntityAutocomplete";
 import { EntitySuggestion } from "@/hooks/useEntityAutocomplete";
@@ -50,7 +52,8 @@ interface CombinedViewProps {
 }
 
 export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateToChat: onNavigateToChatProp, onViewChange, initialView = 'mindmap', onClearCache }: CombinedViewProps) => {
-  const { userId } = useAuth();
+  const { userId, signOut } = useAuth();
+  const globalData = useGlobalData();
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [input, setInput] = useState("");
@@ -199,12 +202,23 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     try {
       const data = await generateMindMapJson({ 
         parentProjectId: nodeId, 
-        showTodayOnly: true 
+        showTodayOnly: true,
+        onJWTError: (message: string) => {
+          console.warn('JWT error during subproject loading:', message);
+        }
       });
       console.log(`Loaded ${data.nodes?.length || 0} subprojects for project ${nodeId} from today's database entries`);
       return data.nodes || [];
     } catch (error) {
       console.error('Error loading subprojects from database:', error);
+      
+      // Handle JWT errors by automatically logging out the user
+      const jwtResult = detectJWTError(error);
+      if (jwtResult.isJWTError) {
+        console.warn('JWT error detected during subproject loading, logging out user');
+        await handleJWTError(error, signOut);
+      }
+      
       return [];
     }
   };
@@ -215,9 +229,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   useEffect(() => {
     const initializeData = async () => {
       try {
-        // Skip health check for mind map data - we connect directly to Supabase
-        // Always fetch fresh data from database - only show today's projects
-        const dbData = await generateMindMapJson({ showTodayOnly: true });
+        // Use cached data for faster loading, only show today's projects
+        const dbData = await generateMindMapJson({ 
+          showTodayOnly: true,
+          forceRefresh: false, // Use cache first
+          onJWTError: (message: string) => {
+            console.warn('JWT error during data initialization:', message);
+          }
+        });
         const dbNodes = dbData?.nodes || [];
 
         // Show projects from today
@@ -232,11 +251,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       } catch (error) {
         console.error('Error initializing data:', error);
         
-        // If it's a JWT error, show empty state - user needs to re-login
-        if (error?.message?.toLowerCase().includes('jwt') || 
-            error?.message?.toLowerCase().includes('token') ||
-            error?.message?.toLowerCase().includes('unauthorized')) {
-          // JWT error - user needs to re-login
+        // Handle JWT errors by automatically logging out the user
+        const jwtResult = detectJWTError(error);
+        if (jwtResult.isJWTError) {
+          console.warn('JWT error detected during initialization, logging out user');
+          await handleJWTError(error, signOut);
+          return; // Exit early after logout
         }
         
         setMindMapNodes([]);
@@ -245,7 +265,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     };
 
     initializeData();
-  }, []);
+  }, [signOut]);
 
 
 
@@ -649,7 +669,19 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       onNavigateToChatProp(handleNavigateToChat);
     }
     if (onClearCache) {
-      onClearCache(clearAllSessionsAndCache);
+      onClearCache(async () => {
+        // Clear session cache
+        clearAllSessionsAndCache();
+        // Refresh global data from database
+        await globalData.refresh();
+        // Reload the mind map with fresh data
+        const dbData = await generateMindMapJson({ 
+          showTodayOnly: true,
+          forceRefresh: true // Force fresh data
+        });
+        setMindMapNodes(dbData?.nodes || []);
+        setParentNodeTitle(dbData.parentNode || null);
+      });
     }
   }, []);
 

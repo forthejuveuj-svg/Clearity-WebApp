@@ -1,30 +1,29 @@
-import { isJWTError, fetchAllDataFromSupabase, filterElements } from './supabaseClient.js';
+import { getAllDataFromCache, initializeData, filterElements, isJWTError } from './supabaseClient.js';
 
-async function fetchSupabaseData(onJWTError = null) {
+async function fetchSupabaseData(onJWTError = null, forceRefresh = false) {
   try {
-    const data = await fetchAllDataFromSupabase({
-      selectFields: `
-        id,
-        name,
-        created_at,
-        last_updated,
-        status,
-        priority_score,
-        progress_percent,
-        description,
-        key_points,
-        tasks,
-        effort_estimate_hours,
-        learning_objectives,
-        project_files,
-        subproject_from,
-        user_id
-      `
+    let data;
+    
+    if (forceRefresh) {
+      // Force refresh from database
+      const { refreshAllData } = await import('./supabaseClient.js');
+      data = await refreshAllData({ onJWTError });
+    } else {
+      // Try to get from cache first, initialize if needed
+      data = await initializeData({ onJWTError });
+    }
+
+    console.log('🔄 Data retrieved:', {
+      projects: data.projects?.length || 0,
+      knowledgeNodes: data.knowledgeNodes?.length || 0,
+      problems: data.problems?.length || 0,
+      source: forceRefresh ? 'database' : 'cache',
+      lastUpdated: data.lastUpdated
     });
 
     return data;
   } catch (error) {
-    console.error('Error fetching from Supabase:', error);
+    console.error('Error fetching data:', error);
 
     // Re-throw JWT errors to be handled by caller
     if (isJWTError(error)) {
@@ -34,7 +33,13 @@ async function fetchSupabaseData(onJWTError = null) {
       throw error;
     }
 
-    return { projects: [], knowledgeNodes: [], problems: [] };
+    // For non-JWT errors, return empty data to allow graceful degradation
+    console.warn('Returning empty data due to non-JWT error');
+    return {
+      projects: [],
+      knowledgeNodes: [],
+      problems: []
+    };
   }
 }
 
@@ -154,8 +159,8 @@ function getDateKey(date) {
 
 export async function generateMindMapJson(options = {}) {
   try {
-    const { showSubprojects = false, parentProjectId = null, onJWTError = null, showTodayOnly = true } = options;
-    const { projects, knowledgeNodes, problems } = await fetchSupabaseData(onJWTError);
+    const { showSubprojects = false, parentProjectId = null, onJWTError = null, showTodayOnly = true, forceRefresh = false } = options;
+    const { projects, knowledgeNodes, problems } = await fetchSupabaseData(onJWTError, forceRefresh);
 
     // Apply filtering based on options using unified filterElements
     let filteredProjects;

@@ -78,6 +78,10 @@ export const useAuth = () => {
     
     // Clear view preference on logout
     localStorage.removeItem('currentView')
+    
+    // Clear global data cache
+    const { clearDataCache } = await import('@/utils/supabaseClient')
+    clearDataCache()
   }
 
   return {

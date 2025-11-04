@@ -90,8 +90,13 @@ export async function withJWTErrorHandling<T>(
         onJWTError(jwtResult.message);
       }
       
-      // Auto logout
+      // Auto logout and clear cache
       await handleJWTError(error, signOut);
+      
+      // Clear global data cache
+      const { clearDataCache } = await import('./supabaseClient');
+      clearDataCache();
+      
       return null;
     }
     
