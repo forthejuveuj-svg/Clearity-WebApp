@@ -228,8 +228,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         const dbNodes = dbData?.nodes || [];
         
         console.log(`Found ${dbNodes.length} projects from today in database`);
+        console.log('Database nodes:', dbNodes);
 
         // Show projects from today
+        console.log('Setting mindMapNodes to:', dbNodes);
         setMindMapNodes(dbNodes);
         setParentNodeTitle(dbData.parentNode || null);
         
@@ -351,15 +353,21 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Show nodes only when they exist
   useEffect(() => {
+    console.log('=== Node Visibility Update ===');
+    console.log('mindMapNodes:', mindMapNodes.length, mindMapNodes.map(n => ({ id: n.id, name: n.label })));
+    console.log('parentNodeTitle:', parentNodeTitle);
+    
     if (mindMapNodes.length > 0) {
       const allNodeIds = mindMapNodes.map(n => n.id);
       // Include parent node if it exists
       if (parentNodeTitle) {
         allNodeIds.push("parent-node");
       }
+      console.log('Setting visibleNodes to:', allNodeIds);
       setVisibleNodes(allNodeIds);
     } else {
       // Clear visible nodes when mindMapNodes is empty
+      console.log('Clearing visible nodes - no mindMapNodes');
       setVisibleNodes([]);
     }
   }, [mindMapNodes, parentNodeTitle]);
@@ -823,15 +831,17 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             })}
 
             {/* Render regular nodes */}
-            {allNodes && allNodes.map((node) => (
-              <MindMapNode
-                key={node.id}
-                node={node}
-                onNodeClick={handleNodeClick}
-                onProblemClick={() => setIsProblemsOpen(true)}
-                getScaleTransform={getScaleTransform}
-              />
-            ))}
+            {allNodes && allNodes
+              .filter(node => visibleNodes.includes(node.id))
+              .map((node) => (
+                <MindMapNode
+                  key={node.id}
+                  node={node}
+                  onNodeClick={handleNodeClick}
+                  onProblemClick={() => setIsProblemsOpen(true)}
+                  getScaleTransform={getScaleTransform}
+                />
+              ))}
 
             {/* Large indicator node in top right - shows current context - only visible when in subproject view */}
             {parentNodeTitle && (
