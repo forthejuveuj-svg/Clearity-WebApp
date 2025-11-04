@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Search, X } from "lucide-react";
+import { ProjectSearchBar } from "./ProjectSearchBar";
+import { ProjectNavigationResult } from "@/hooks/useProjectSearch";
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -20,6 +22,12 @@ export const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
     if (e.key === 'Enter') {
       handleSearch(searchQuery);
     }
+  };
+
+  const handleProjectSelect = (project: ProjectNavigationResult) => {
+    // Handle project selection - you can customize this behavior
+    console.log('Selected project:', project);
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -46,7 +54,7 @@ export const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
         </div>
 
         {/* Search Input */}
-        <div className="p-6">
+        <div className="p-6 pb-4">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -64,7 +72,13 @@ export const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
           </div>
         </div>
 
-
+        {/* Project Navigation Cards */}
+        <div className="px-6 pb-6">
+          <ProjectSearchBar 
+            onSelectProject={handleProjectSelect}
+            className="border-0 bg-transparent"
+          />
+        </div>
       </div>
     </div>
   );

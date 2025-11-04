@@ -61,25 +61,27 @@ export const ProjectSearchBar: React.FC<ProjectNavigationProps> = ({
   }
 
   return (
-    <div className={`bg-gray-900 border border-gray-700 rounded-lg overflow-hidden ${className}`}>
-      <div className="px-4 py-2 bg-gray-800 border-b border-gray-700">
-        <h3 className="text-sm font-medium text-gray-300">Project Navigation</h3>
-      </div>
+    <div className={className}>
+      <h3 className="text-sm font-medium text-gray-300 mb-4">Available Projects</h3>
       
-      <div className="max-h-64 overflow-y-auto">
-        {navigationResults.map((option, index) => (
+      <div className="grid gap-3 max-h-64 overflow-y-auto">
+        {navigationResults.map((option) => (
           <button
             key={option.id}
             onClick={() => handleSelectOption(option)}
-            className={`w-full px-4 py-3 text-left hover:bg-gray-800 transition-colors duration-150 border-b border-gray-700 last:border-b-0`}
+            className="p-4 bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 hover:border-gray-600 transition-all duration-200 text-left group"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {getOptionIcon(option.type)}
                 <div>
-                  <div className="font-medium text-white">{option.name}</div>
+                  <div className="font-medium text-white group-hover:text-blue-300 transition-colors">
+                    {option.name}
+                  </div>
                   {option.project.description && (
-                    <div className="text-sm text-gray-400">{option.project.description}</div>
+                    <div className="text-sm text-gray-400 mt-1">
+                      {option.project.description}
+                    </div>
                   )}
                 </div>
               </div>
