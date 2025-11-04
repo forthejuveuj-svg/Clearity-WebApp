@@ -50,8 +50,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [hasInitialized, setHasInitialized] = useState(false);
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [isBuilding, setIsBuilding] = useState(true);
-  const [buildProgress, setBuildProgress] = useState(0);
+
   const [visibleNodes, setVisibleNodes] = useState<string[]>([]);
   const [mapHeight, setMapHeight] = useState(60); // Percentage of screen height for mind map
   const [isDragging, setIsDragging] = useState(false);
@@ -420,41 +419,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   }, [initialMessage, hasInitialized, userId, messages]);
 
-  // Auto-build mind map
+
+
+  // Show all nodes immediately
   useEffect(() => {
-    // Start building mind map slowly
-    const buildTimer = setInterval(() => {
-      setBuildProgress(prev => {
-        if (prev >= 100) {
-          setIsBuilding(false);
-          clearInterval(buildTimer);
-          return 100;
-        }
-        return prev + 2;
-      });
-    }, 100);
-
-    // Show nodes progressively
-    const nodeTimer = setInterval(() => {
-      setVisibleNodes(prev => {
-        const nextIndex = prev.length;
-        if (nextIndex < allNodes.length) {
-          return [...prev, allNodes[nextIndex].id];
-        }
-        clearInterval(nodeTimer);
-        return prev;
-      });
-    }, 800);
-
-    return () => {
-      clearInterval(buildTimer);
-      clearInterval(nodeTimer);
-    };
-  }, []);
-
-  // Show all nodes when building is complete
-  useEffect(() => {
-    if (!isBuilding && mindMapNodes.length > 0) {
+    if (mindMapNodes.length > 0) {
       const allNodeIds = mindMapNodes.map(n => n.id);
       // Include parent node if it exists
       if (parentNodeTitle) {
@@ -462,7 +431,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }
       setVisibleNodes(allNodeIds);
     }
-  }, [isBuilding, mindMapNodes, parentNodeTitle]);
+  }, [mindMapNodes, parentNodeTitle]);
 
   // Handler for entity autocomplete selection
   const handleEntitySelect = (entity: EntitySuggestion, newText: string) => {
@@ -621,8 +590,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       try {
         const response = await APIService.minddump({
           text: taskMessage,
-          user_id: userId,
-          use_relator: false
+          user_id: userId
         });
 
         if (response.success) {
@@ -1165,17 +1133,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
 
 
-            {/* Building progress indicator */}
-            {isBuilding && (
-              <div className="absolute top-4 left-1/2 transform -translate-x-1/2">
-                <div className="px-4 py-2 rounded-full bg-gray-800/80 backdrop-blur-sm border border-blue-400/30">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-                    <span className="text-sm text-white">Building your mind map... {buildProgress}%</span>
-                  </div>
-                </div>
-              </div>
-            )}
+
 
           </>
         ) : (
