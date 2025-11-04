@@ -47,9 +47,6 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
     try {
       await signOut();
       
-      // Clear cached session data
-      localStorage.removeItem('currentView');
-      
       navigate('/');
       setShowUserMenu(false);
     } catch (error) {

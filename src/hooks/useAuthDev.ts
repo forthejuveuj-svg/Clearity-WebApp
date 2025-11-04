@@ -46,10 +46,22 @@ export const useAuthDev = () => {
   useEffect(() => {
     // Check if user is already "logged in" in localStorage
     const isLoggedIn = localStorage.getItem('dev-auth-logged-in') === 'true'
+    const savedUserData = localStorage.getItem('dev-auth-user-data')
     
     if (isLoggedIn) {
-      setUser(MOCK_USER)
-      setSession(MOCK_SESSION)
+      // Restore user data if available, otherwise use default mock user
+      let userData = MOCK_USER
+      if (savedUserData) {
+        try {
+          userData = JSON.parse(savedUserData)
+        } catch (error) {
+          console.warn('Failed to parse saved user data, using default')
+        }
+      }
+      
+      const sessionData = { ...MOCK_SESSION, user: userData }
+      setUser(userData)
+      setSession(sessionData)
     }
     
     setLoading(false)
@@ -60,6 +72,7 @@ export const useAuthDev = () => {
     await new Promise(resolve => setTimeout(resolve, 1000))
     
     localStorage.setItem('dev-auth-logged-in', 'true')
+    localStorage.setItem('dev-auth-user-data', JSON.stringify(MOCK_USER))
     setUser(MOCK_USER)
     setSession(MOCK_SESSION)
   }
@@ -73,6 +86,7 @@ export const useAuthDev = () => {
     const mockSession = { ...MOCK_SESSION, user: mockUser }
     
     localStorage.setItem('dev-auth-logged-in', 'true')
+    localStorage.setItem('dev-auth-user-data', JSON.stringify(mockUser))
     setUser(mockUser)
     setSession(mockSession)
   }
@@ -93,12 +107,15 @@ export const useAuthDev = () => {
     const mockSession = { ...MOCK_SESSION, user: mockUser }
     
     localStorage.setItem('dev-auth-logged-in', 'true')
+    localStorage.setItem('dev-auth-user-data', JSON.stringify(mockUser))
     setUser(mockUser)
     setSession(mockSession)
   }
 
   const signOut = async () => {
     localStorage.removeItem('dev-auth-logged-in')
+    localStorage.removeItem('dev-auth-user-data')
+    localStorage.removeItem('currentView') // Clear view preference on logout
     setUser(null)
     setSession(null)
   }

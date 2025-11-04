@@ -37,30 +37,42 @@ const Index = () => {
     localStorage.setItem('currentView', currentView);
   }, [currentView]);
 
-  // Auto-redirect authenticated users to combined view
+  // Auto-redirect authenticated users to combined view and handle persistence
   useEffect(() => {
-    if (!loading && user) {
-      // User is authenticated, check if we should go to combined view
-      const savedView = localStorage.getItem('currentView');
-      const hasBeenToCombined = savedView === 'combined';
-      
-      // If user has been to combined view before OR if they're coming from auth,
-      // take them directly to combined view
-      if (hasBeenToCombined || location.state?.startWithMessage) {
-        setCurrentView('combined');
+    if (!loading) {
+      if (user) {
+        // User is authenticated
+        const savedView = localStorage.getItem('currentView');
+        const hasBeenToCombined = savedView === 'combined';
         
-        // Handle message from auth redirect
-        if (location.state?.startWithMessage) {
-          setInitialMessage(location.state.startWithMessage);
-          // Clear the state so refresh doesn't restart
-          window.history.replaceState({}, document.title);
+        // Always go to combined view if user is logged in, unless they explicitly went back to onboarding
+        if (hasBeenToCombined || location.state?.startWithMessage || currentView === 'onboarding') {
+          setCurrentView('combined');
+          
+          // Handle message from auth redirect
+          if (location.state?.startWithMessage) {
+            setInitialMessage(location.state.startWithMessage);
+            // Clear the state so refresh doesn't restart
+            window.history.replaceState({}, document.title);
+          }
         }
+      } else {
+        // User is not authenticated, reset to onboarding and clear saved view
+        setCurrentView('onboarding');
+        localStorage.removeItem('currentView');
       }
-    } else if (!loading && !user) {
-      // User is not authenticated, reset to onboarding
-      setCurrentView('onboarding');
     }
   }, [user, loading, location.state]);
+
+  // Initialize view state from localStorage on component mount (before auth loads)
+  useEffect(() => {
+    const savedView = localStorage.getItem('currentView');
+    if (savedView === 'combined') {
+      // Only set to combined if we expect the user to be logged in
+      // This will be corrected by the auth effect above if user is not actually logged in
+      setCurrentView('combined');
+    }
+  }, []); // Run only once on mount
 
 
 
@@ -79,6 +91,8 @@ const Index = () => {
 
   const handleBack = () => {
     setCurrentView("onboarding");
+    // Don't remove from localStorage - let user choose to go back to combined view easily
+    // The view will be restored to combined on next visit if user is still logged in
   };
 
   const handleShowAuthFromOnboarding = () => {

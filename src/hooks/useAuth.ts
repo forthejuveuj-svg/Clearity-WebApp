@@ -75,6 +75,9 @@ export const useAuth = () => {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
+    
+    // Clear view preference on logout
+    localStorage.removeItem('currentView')
   }
 
   return {
