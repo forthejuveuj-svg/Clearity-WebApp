@@ -42,9 +42,10 @@ interface CombinedViewProps {
   onNavigateToChat?: (navigateFn: (task: any) => void) => void;
   onViewChange?: (view: 'mindmap' | 'tasks') => void;
   initialView?: 'mindmap' | 'tasks';
+  onClearCache?: (clearFn: () => void) => void; // Optional callback to expose cache clearing function
 }
 
-export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateToChat: onNavigateToChatProp, onViewChange, initialView = 'mindmap' }: CombinedViewProps) => {
+export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateToChat: onNavigateToChatProp, onViewChange, initialView = 'mindmap', onClearCache }: CombinedViewProps) => {
   const { userId } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -157,6 +158,90 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     });
   };
 
+  // Helper function to check if a timestamp is from today
+  const isFromToday = (timestamp: number): boolean => {
+    const today = new Date();
+    const sessionDate = new Date(timestamp);
+
+    return today.getFullYear() === sessionDate.getFullYear() &&
+      today.getMonth() === sessionDate.getMonth() &&
+      today.getDate() === sessionDate.getDate();
+  };
+
+  // Function to clear expired sessions (older than today)
+  const clearExpiredSessions = (): boolean => {
+    try {
+      const stored = localStorage.getItem('mindmap_sessions');
+      if (!stored) return false;
+
+      const sessions = JSON.parse(stored);
+      const validSessions = sessions.filter((session: any) =>
+        session.timestamp && isFromToday(session.timestamp)
+      );
+
+      if (validSessions.length !== sessions.length) {
+        // Some sessions were expired, update storage
+        if (validSessions.length === 0) {
+          // All sessions expired, clear everything
+          clearAllSessionsAndCache();
+          return true;
+        } else {
+          // Update with only valid sessions
+          localStorage.setItem('mindmap_sessions', JSON.stringify(validSessions));
+          localStorage.setItem('mindmap_current_index', '0');
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.warn('Error clearing expired sessions:', error);
+      return false;
+    }
+  };
+
+  // Function to completely clear all sessions and cache (reusable for future implementations)
+  // This function can be called from external components or hooks to reset the mindmap state
+  const clearAllSessionsAndCache = () => {
+    // Clear state
+    setSessionHistory([]);
+    setCurrentSessionIndex(-1);
+    setMindMapNodes([]);
+    setParentNodeTitle(null);
+    setClickedProjectNode(null);
+    setCurrentProjectId(null);
+    setShowSubprojects(false);
+
+    // Clear localStorage
+    localStorage.removeItem('mindmap_sessions');
+    localStorage.removeItem('mindmap_current_index');
+
+    console.log('All sessions and cache cleared');
+  };
+
+  // Utility function to check session status (useful for debugging)
+  const getSessionStatus = () => {
+    try {
+      const stored = localStorage.getItem('mindmap_sessions');
+      if (!stored) return { hasSession: false, isValid: false, sessionCount: 0 };
+
+      const sessions = JSON.parse(stored);
+      const validSessions = sessions.filter((session: any) =>
+        session.timestamp && isFromToday(session.timestamp)
+      );
+
+      return {
+        hasSession: sessions.length > 0,
+        isValid: validSessions.length > 0,
+        sessionCount: sessions.length,
+        validSessionCount: validSessions.length,
+        oldestSession: sessions.length > 0 ? new Date(Math.min(...sessions.map((s: any) => s.timestamp))) : null,
+        newestSession: sessions.length > 0 ? new Date(Math.max(...sessions.map((s: any) => s.timestamp))) : null
+      };
+    } catch (error) {
+      return { hasSession: false, isValid: false, sessionCount: 0, error: error.message };
+    }
+  };
+
   // Simple session management functions
   const saveCurrentSession = (nodes: Node[], parentNodeId?: string) => {
     const newSession = {
@@ -172,11 +257,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
     // Save to localStorage
     localStorage.setItem('mindmap_sessions', JSON.stringify(updatedHistory));
-    localStorage.setItem('mindmap_current_index', currentSessionIndex.toString());
+    localStorage.setItem('mindmap_current_index', (updatedHistory.length - 1).toString());
   };
 
   const loadSessionFromStorage = () => {
     try {
+      // First, clear any expired sessions
+      const hadExpiredSessions = clearExpiredSessions();
+
       const stored = localStorage.getItem('mindmap_sessions');
       const storedIndex = localStorage.getItem('mindmap_current_index');
 
@@ -184,15 +272,29 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         const sessions = JSON.parse(stored);
         const index = parseInt(storedIndex);
 
-        setSessionHistory(sessions);
-        setCurrentSessionIndex(index);
-
-        if (sessions[index]) {
+        // Double-check that the session we're about to load is from today
+        if (sessions[index] && sessions[index].timestamp && isFromToday(sessions[index].timestamp)) {
+          setSessionHistory(sessions);
+          setCurrentSessionIndex(index);
           setMindMapNodes(sessions[index].nodes);
+
+          // Also restore parent node title if it exists
+          if (sessions[index].parentNodeId) {
+            // You might want to fetch the parent node title from the database here
+            // For now, we'll leave it as null and let the UI handle it
+          }
+
+          console.log('Loaded valid session from today');
+        } else {
+          console.log('No valid sessions from today found');
+          // Clear everything if the session is not from today
+          clearAllSessionsAndCache();
         }
       }
     } catch (error) {
       console.warn('Failed to load sessions from localStorage:', error);
+      // Clear corrupted data
+      clearAllSessionsAndCache();
     }
   };
 
@@ -282,34 +384,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   };
 
-  const clearAllSessions = () => {
-    setSessionHistory([]);
-    setCurrentSessionIndex(-1);
-    localStorage.removeItem('mindmap_sessions');
-    localStorage.removeItem('mindmap_current_index');
-    console.log('All sessions cleared');
-  };
+
 
   // Load mind map nodes on component mount
   useEffect(() => {
-    // First try to load from localStorage
+    // Start with empty canvas - only load nodes from today's sessions
+    // loadSessionFromStorage now handles date validation and expired session cleanup
     loadSessionFromStorage();
-
-    // Then load fresh data from database (default: only show parent projects)
-    generateMindMapJson({ showSubprojects: false }).then(data => {
-      if (data) {
-        // Set regular nodes (all nodes are regular now)
-        setMindMapNodes(data.nodes || []);
-
-        // Set parent node title if provided
-        setParentNodeTitle(data.parentNode || null);
-
-        // Save initial session if no sessions exist
-        if (sessionHistory.length === 0) {
-          saveCurrentSession(data.nodes || []);
-        }
-      }
-    });
 
     // Check backend connectivity
     APIService.healthCheck().then(response => {
@@ -421,7 +502,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
 
 
-  // Show all nodes immediately
+  // Show nodes only when they exist
   useEffect(() => {
     if (mindMapNodes.length > 0) {
       const allNodeIds = mindMapNodes.map(n => n.id);
@@ -430,6 +511,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         allNodeIds.push("parent-node");
       }
       setVisibleNodes(allNodeIds);
+    } else {
+      // Clear visible nodes when mindMapNodes is empty
+      setVisibleNodes([]);
     }
   }, [mindMapNodes, parentNodeTitle]);
 
@@ -738,6 +822,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
     if (onNavigateToChatProp) {
       onNavigateToChatProp(handleNavigateToChat);
+    }
+    if (onClearCache) {
+      onClearCache(clearAllSessionsAndCache);
     }
   }, []);
 
