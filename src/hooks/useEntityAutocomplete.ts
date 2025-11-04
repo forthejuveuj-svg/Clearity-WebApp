@@ -4,35 +4,10 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase, isJWTError } from '@/utils/supabaseClient.js';
 import { EntityType } from '@/utils/messageModeHandler';
 
-// Helper function to detect JWT errors
-function isJWTError(error: any): boolean {
-  if (!error) return false;
-  
-  const errorMessage = typeof error === 'string' ? error : 
-    error.message || error.error_description || error.details || JSON.stringify(error);
-  
-  const jwtErrorPatterns = [
-    'JWT expired', 'jwt expired', 'token expired', 'invalid jwt', 'Invalid JWT',
-    'JWT malformed', 'jwt malformed', 'Authentication failed', 'Unauthorized',
-    'Invalid token', 'Token has expired'
-  ];
-  
-  return jwtErrorPatterns.some(pattern => 
-    errorMessage.toLowerCase().includes(pattern.toLowerCase())
-  );
-}
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-  },
-});
+// Using unified Supabase client and utilities from supabaseClient.js
 
 export interface EntitySuggestion {
   id: string;

@@ -1,11 +1,11 @@
-import { supabase, isJWTError, fetchProjectsFromSupabase } from './supabaseClient.js';
+import { isJWTError, fetchAllDataFromSupabase, filterElements } from './supabaseClient.js';
 
 async function fetchSupabaseData(onJWTError = null) {
   try {
-    console.log('🚀 Using unified fetchProjectsFromSupabase...');
-    
-    // Use the unified function to fetch projects with all fields
-    const projects = await fetchProjectsFromSupabase({
+    console.log('🚀 Using unified fetchAllDataFromSupabase...');
+
+    // Fetch ALL data using the unified function
+    const data = await fetchAllDataFromSupabase({
       selectFields: `
         id,
         name,
@@ -24,21 +24,11 @@ async function fetchSupabaseData(onJWTError = null) {
         user_id
       `
     });
-    
-    // Fetch other data using the same supabase client
-    const [knowledgeNodesResult, problemsResult] = await Promise.all([
-      supabase.from('knowledge_nodes').select('*').order('created_at', { ascending: false }),
-      supabase.from('problems').select('*').eq('status', 'active').order('created_at', { ascending: false })
-    ]);
 
-    return {
-      projects: projects || [],
-      knowledgeNodes: knowledgeNodesResult.data || [],
-      problems: problemsResult.data || []
-    };
+    return data;
   } catch (error) {
     console.error('Error fetching from Supabase:', error);
-    
+
     // Re-throw JWT errors to be handled by caller
     if (isJWTError(error)) {
       if (onJWTError) {
@@ -46,11 +36,14 @@ async function fetchSupabaseData(onJWTError = null) {
       }
       throw error;
     }
-    
+
     return { projects: [], knowledgeNodes: [], problems: [] };
   }
 }
 
+
+
+// Canvas-level filtering function using unified filterElements
 
 
 function projectToId(name) {
@@ -183,77 +176,38 @@ export async function generateMindMapJson(options = {}) {
 
     console.log('Raw projects data:', projects);
 
-    // Filter for today's projects if showTodayOnly is true
-    let filteredByDate = projects;
-    if (showTodayOnly) {
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-      console.log(`Today's date: ${today}`);
-      console.log(`All projects before filtering:`, projects.map(p => ({
-        name: p.name,
-        created_at: p.created_at,
-        last_updated: p.last_updated
-      })));
-
-      filteredByDate = projects.filter(project => {
-        // Handle different date formats more robustly
-        let createdDate = null;
-        let updatedDate = null;
-
-        if (project.created_at) {
-          // Handle both ISO format and PostgreSQL timestamp format
-          const createdDateObj = new Date(project.created_at);
-          createdDate = createdDateObj.toISOString().split('T')[0];
-        }
-
-        if (project.last_updated) {
-          const updatedDateObj = new Date(project.last_updated);
-          updatedDate = updatedDateObj.toISOString().split('T')[0];
-        }
-
-        const isFromToday = createdDate === today || updatedDate === today;
-
-        console.log(`Project "${project.name}":`, {
-          created_at: project.created_at,
-          createdDate,
-          last_updated: project.last_updated,
-          updatedDate,
-          today,
-          isFromToday
-        });
-
-        return isFromToday;
-      });
-
-      console.log(`Filtered to ${filteredByDate.length} projects from today (out of ${projects.length} total)`);
+    // Apply filtering based on options using unified filterElements
+    let filteredProjects;
+    
+    if (parentProjectId) {
+      // Find subprojects of the parent project
+      const parentProject = projects.find(p => p.id === parentProjectId);
+      if (parentProject) {
+        filteredProjects = projects.filter(p => 
+          p.subproject_from && 
+          (p.subproject_from.includes(parentProject.name) || p.subproject_from.includes(parentProject.id))
+        );
+      } else {
+        filteredProjects = [];
+      }
+    } else if (showTodayOnly) {
+      // Filter by today's date
+      filteredProjects = filterElements(projects, 'created_at', 'today');
+    } else {
+      // Default: show parent projects only (empty subproject_from)
+      filteredProjects = filterElements(projects, 'subproject_from', 'empty');
     }
 
     // Clear used positions
     usedPositions.length = 0;
 
-    let filteredProjects = [];
+    // Determine parent node name if filtering by parent project
     let parentNode = null;
-
     if (parentProjectId) {
-      // Show subprojects for a specific parent project
-      const parentProject = filteredByDate.find(p => p.id === parentProjectId);
+      const parentProject = projects.find(p => p.id === parentProjectId);
       if (parentProject) {
         parentNode = parentProject.name;
-        // Filter to only subprojects of this parent
-        filteredProjects = filteredByDate.filter(p =>
-          p.subproject_from &&
-          (p.subproject_from.includes(parentProject.name) || p.subproject_from.includes(parentProject.id))
-        );
       }
-    } else if (showSubprojects) {
-      // Show all projects (both parents and subprojects) - used after minddump
-      filteredProjects = filteredByDate;
-    } else {
-      // Default: Show only parent projects (no subproject_from or empty array)
-      filteredProjects = filteredByDate.filter(p =>
-        !p.subproject_from ||
-        p.subproject_from.length === 0 ||
-        (Array.isArray(p.subproject_from) && p.subproject_from.every(item => !item || item.trim() === ''))
-      );
     }
 
     // Create nodes from filtered projects
@@ -267,7 +221,7 @@ export async function generateMindMapJson(options = {}) {
 
         // Find and attach subprojects if in default view
         if (!showSubprojects && !parentProjectId) {
-          const subprojects = filteredByDate.filter(p =>
+          const subprojects = projects.filter(p =>
             p.subproject_from &&
             (p.subproject_from.includes(project.name) || p.subproject_from.includes(project.id))
           );
