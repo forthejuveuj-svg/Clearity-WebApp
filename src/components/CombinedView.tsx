@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Mic, MicOff, ArrowUp, MessageSquare, AlertTriangle, X, Check, Reply, ArrowLeft, ArrowRight } from "lucide-react";
+import { Mic, MicOff, ArrowUp, MessageSquare, X, Reply } from "lucide-react";
 import { TypingAnimation } from "./TypingAnimation";
 import { ProblemsModal } from "./ProblemsModal";
 import { TaskManagerModal } from "./TaskManagerModal";
@@ -11,8 +11,10 @@ import { messageModeHandler } from "@/utils/messageModeHandler";
 import { EntityAutocomplete } from "./EntityAutocomplete";
 import { EntitySuggestion } from "@/hooks/useEntityAutocomplete";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { SessionExpiryNotification, useSessionExpiryNotification } from "./SessionExpiryNotification";
-import { handleJWTError } from "@/utils/jwtErrorHandler";
+import { getCachedSessionsFromToday, validateCachedNodesAgainstDatabase, clearAllSessionsAndCache } from "@/utils/sessionUtils";
+import { processUserMessage, getDefaultErrorMessage } from "@/utils/messageProcessor";
+import { MindMapNode } from "./MindMapNode";
+import { SessionManager, SessionData } from "@/utils/sessionManager";
 
 interface Message {
   role: "user" | "assistant";
@@ -20,7 +22,7 @@ interface Message {
   audioSnippets?: any[];
 }
 
-interface Node {
+export interface Node {
   id: string;
   projectId?: string; // Actual database ID
   label: string;
@@ -48,34 +50,11 @@ interface CombinedViewProps {
 }
 
 export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateToChat: onNavigateToChatProp, onViewChange, initialView = 'mindmap', onClearCache }: CombinedViewProps) => {
-  const { userId, signOut } = useAuth();
+  const { userId } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // JWT error handling
-  const { notification, showNotification, hideNotification } = useSessionExpiryNotification();
-
-  // Handle JWT errors by showing notification and logging out
-  const handleJWTErrorWithNotification = async (error: any) => {
-    console.warn('JWT error detected in CombinedView:', error);
-    
-    // Show notification
-    showNotification('Session expired. Please log in again.');
-    
-    // Auto logout after a short delay to let user see the message
-    setTimeout(async () => {
-      try {
-        await signOut();
-      } catch (logoutError) {
-        console.error('Error during automatic logout:', logoutError);
-        // Force logout by clearing localStorage and reloading
-        localStorage.clear();
-        window.location.reload();
-      }
-    }, 1500); // 1.5 second delay
-  };
 
   const [visibleNodes, setVisibleNodes] = useState<string[]>([]);
   const [mapHeight, setMapHeight] = useState(60); // Percentage of screen height for mind map
@@ -157,413 +136,115 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null); // Track focused project for workflow
 
   // Simple session management
-  const [sessionHistory, setSessionHistory] = useState<Array<{
-    id: string;
-    nodes: Node[];
-    parentNodeId?: string;
-    timestamp: number;
-  }>>([]);
+  const [sessionHistory, setSessionHistory] = useState<SessionData[]>([]);
   const [currentSessionIndex, setCurrentSessionIndex] = useState(-1);
 
   // Function to reload mind map nodes from database (after minddump or other operations)
-  const reloadNodes = (options = {}) => {
-    const optionsWithJWTHandler = {
-      ...options,
-      onJWTError: (message: string) => {
-        showNotification(message);
-        setTimeout(() => handleJWTErrorWithNotification(new Error(message)), 1000);
-      }
-    };
-
-    generateMindMapJson(optionsWithJWTHandler).then(data => {
+  const reloadNodes = async (options = {}) => {
+    try {
+      const data = await generateMindMapJson(options);
       if (data) {
-        // Set nodes from fresh database data
         setMindMapNodes(data.nodes || []);
-
-        // Set parent node title if provided
         setParentNodeTitle(data.parentNode || null);
-
-        // Save fresh database data to session cache with today's timestamp
-        // This creates a new valid session that will pass cross-validation
         saveCurrentSession(data.nodes || []);
-
         console.log('Mind map nodes reloaded from database:', data.nodes?.length || 0, 'nodes');
-        console.log('New session saved - will be available on next load');
       }
-    }).catch(error => {
+    } catch (error) {
       console.error('Error reloading nodes from database:', error);
-      
-      // Check if it's a JWT error and handle it
-      if (error && handleJWTError) {
-        handleJWTError(error, signOut).then(wasJWTError => {
-          if (wasJWTError) {
-            showNotification('Session expired. Please log in again.');
-          }
-        });
-      }
-    });
-  };
-
-  // Helper function to check if a timestamp is from today
-  const isFromToday = (timestamp: number): boolean => {
-    const today = new Date();
-    const sessionDate = new Date(timestamp);
-
-    return today.getFullYear() === sessionDate.getFullYear() &&
-      today.getMonth() === sessionDate.getMonth() &&
-      today.getDate() === sessionDate.getDate();
-  };
-
-  // Function to clear expired sessions (older than today)
-  const clearExpiredSessions = (): boolean => {
-    try {
-      const stored = localStorage.getItem('mindmap_sessions');
-      if (!stored) return false;
-
-      const sessions = JSON.parse(stored);
-      const validSessions = sessions.filter((session: any) =>
-        session.timestamp && isFromToday(session.timestamp)
-      );
-
-      if (validSessions.length !== sessions.length) {
-        // Some sessions were expired, update storage
-        if (validSessions.length === 0) {
-          // All sessions expired, clear everything
-          clearAllSessionsAndCache();
-          return true;
-        } else {
-          // Update with only valid sessions
-          localStorage.setItem('mindmap_sessions', JSON.stringify(validSessions));
-          localStorage.setItem('mindmap_current_index', '0');
-          return true;
-        }
-      }
-      return false;
-    } catch (error) {
-      console.warn('Error clearing expired sessions:', error);
-      return false;
     }
   };
 
-  // Function to completely clear all sessions and cache (reusable for future implementations)
-  // This function can be called from external components or hooks to reset the mindmap state
-  // CRITICAL: This only clears navigation/position cache, NEVER touches auth credentials
-  const clearAllSessionsAndCache = () => {
-    // Clear component state
-    setSessionHistory([]);
-    setCurrentSessionIndex(-1);
-    setMindMapNodes([]);
-    setParentNodeTitle(null);
-    setClickedProjectNode(null);
-    setCurrentProjectId(null);
-    setShowSubprojects(false);
 
-    // SAFE localStorage clearing - only remove specific mindmap keys
-    // NEVER use localStorage.clear() as it would remove auth tokens
-    const keysToRemove = ['mindmap_sessions', 'mindmap_current_index'];
-    keysToRemove.forEach(key => {
-      try {
-        localStorage.removeItem(key);
-      } catch (error) {
-        console.warn(`Failed to remove ${key}:`, error);
-      }
-    });
-
-    console.log('Mindmap cache cleared (auth credentials and other app data preserved)');
-  };
-
-  // Get cached sessions from today only
-  const getCachedSessionsFromToday = () => {
-    try {
-      const stored = localStorage.getItem('mindmap_sessions');
-      if (!stored) return [];
-
-      const sessions = JSON.parse(stored);
-      const todaySessions = sessions.filter((session: any) =>
-        session.timestamp && isFromToday(session.timestamp)
-      );
-
-      // If we found expired sessions, clean them up
-      if (todaySessions.length !== sessions.length) {
-        if (todaySessions.length === 0) {
-          clearAllSessionsAndCache();
-        } else {
-          localStorage.setItem('mindmap_sessions', JSON.stringify(todaySessions));
-          localStorage.setItem('mindmap_current_index', '0');
-        }
-      }
-
-      return todaySessions;
-    } catch (error) {
-      console.warn('Error reading cached sessions:', error);
-      clearAllSessionsAndCache();
-      return [];
-    }
-  };
-
-  // Cross-validate cached nodes against database nodes
-  const validateCachedNodesAgainstDatabase = (cachedSessions: any[], dbNodes: Node[]) => {
-    if (cachedSessions.length === 0 || dbNodes.length === 0) {
-      return [];
-    }
-
-    // Get the most recent cached session
-    const latestSession = cachedSessions[cachedSessions.length - 1];
-    const cachedNodes = latestSession.nodes || [];
-
-    // Create a map of database nodes by both id and projectId for efficient lookup
-    const dbNodeMap = new Map();
-    dbNodes.forEach(dbNode => {
-      // Index by both regular id and projectId
-      if (dbNode.id) dbNodeMap.set(dbNode.id, dbNode);
-      if (dbNode.projectId) dbNodeMap.set(dbNode.projectId, dbNode);
-    });
-
-    // Filter cached nodes to only include those that exist in database
-    const validatedNodes = cachedNodes.filter((cachedNode: Node) => {
-      // Check if this cached node exists in database by id or projectId
-      const existsById = cachedNode.id && dbNodeMap.has(cachedNode.id);
-      const existsByProjectId = cachedNode.projectId && dbNodeMap.has(cachedNode.projectId);
-
-      const isValid = existsById || existsByProjectId;
-
-      if (!isValid) {
-        console.log(`Cached node "${cachedNode.label}" (id: ${cachedNode.id}, projectId: ${cachedNode.projectId}) not found in database - removing from cache`);
-      }
-
-      return isValid;
-    });
-
-    console.log(`Validated ${validatedNodes.length}/${cachedNodes.length} cached nodes against database`);
-    return validatedNodes;
-  };
-
-  // Utility function to check session status (useful for debugging)
-  const getSessionStatus = () => {
-    try {
-      const stored = localStorage.getItem('mindmap_sessions');
-      if (!stored) return { hasSession: false, isValid: false, sessionCount: 0 };
-
-      const sessions = JSON.parse(stored);
-      const validSessions = sessions.filter((session: any) =>
-        session.timestamp && isFromToday(session.timestamp)
-      );
-
-      return {
-        hasSession: sessions.length > 0,
-        isValid: validSessions.length > 0,
-        sessionCount: sessions.length,
-        validSessionCount: validSessions.length,
-        oldestSession: sessions.length > 0 ? new Date(Math.min(...sessions.map((s: any) => s.timestamp))) : null,
-        newestSession: sessions.length > 0 ? new Date(Math.max(...sessions.map((s: any) => s.timestamp))) : null
-      };
-    } catch (error) {
-      return { hasSession: false, isValid: false, sessionCount: 0, error: error.message };
-    }
-  };
 
   // Save session to cache (only saves nodes that came from database)
   const saveCurrentSession = (nodes: Node[], parentNodeId?: string) => {
-    // Only save sessions with actual database data (not empty states)
-    if (!nodes || nodes.length === 0) {
-      console.log('Not saving empty session to cache');
-      return;
+    const newSession = SessionManager.saveSession(nodes, parentNodeId, parentNodeTitle);
+    if (newSession) {
+      const updatedHistory = [...sessionHistory.slice(0, currentSessionIndex + 1), newSession];
+      setSessionHistory(updatedHistory);
+      setCurrentSessionIndex(updatedHistory.length - 1);
     }
-
-    const newSession = {
-      id: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      nodes: [...nodes],
-      parentNodeId,
-      parentNodeTitle: parentNodeTitle, // Save parent title for restoration
-      timestamp: Date.now()
-    };
-
-    const updatedHistory = [...sessionHistory.slice(0, currentSessionIndex + 1), newSession];
-    setSessionHistory(updatedHistory);
-    setCurrentSessionIndex(updatedHistory.length - 1);
-
-    // Save to localStorage - this will be cross-validated on next load
-    localStorage.setItem('mindmap_sessions', JSON.stringify(updatedHistory));
-    localStorage.setItem('mindmap_current_index', (updatedHistory.length - 1).toString());
-
-    console.log(`Saved session with ${nodes.length} nodes to cache (timestamp: ${new Date(newSession.timestamp).toLocaleString()})`);
   };
 
-  const loadSessionFromStorage = () => {
-    // NOTE: This function is now DEPRECATED and should not be used
-    // It's kept for backward compatibility but the new approach uses cross-validation
-    console.warn('loadSessionFromStorage() called - this is deprecated. Use cross-validation approach instead.');
 
-    // Always start with empty canvas when this fallback is called
-    clearAllSessionsAndCache();
-  };
 
   const goBackInHistory = () => {
-    if (currentSessionIndex > 0) {
-      const newIndex = currentSessionIndex - 1;
-      setCurrentSessionIndex(newIndex);
-      setMindMapNodes(sessionHistory[newIndex].nodes);
+    const result = SessionManager.navigateHistory('back', currentSessionIndex, sessionHistory);
+    if (result) {
+      setCurrentSessionIndex(result.newIndex);
+      setMindMapNodes(result.session.nodes);
       setClickedProjectNode(null);
 
-      // Clear parent node title when going back to main view (index 0) or when session has no parentNodeId
-      if (newIndex === 0 || !sessionHistory[newIndex].parentNodeId) {
+      if (result.newIndex === 0 || !result.session.parentNodeId) {
         setParentNodeTitle(null);
-        // Clear project ID when navigating away from project view
         setCurrentProjectId(null);
-        // When going back to main view, don't show subprojects unless we came from minddump
-        // Keep showSubprojects state as-is (it will be true if we came from minddump)
       }
-
-      localStorage.setItem('mindmap_current_index', newIndex.toString());
     }
   };
 
   const goForwardInHistory = () => {
-    if (currentSessionIndex < sessionHistory.length - 1) {
-      const newIndex = currentSessionIndex + 1;
-      setCurrentSessionIndex(newIndex);
-      setMindMapNodes(sessionHistory[newIndex].nodes);
+    const result = SessionManager.navigateHistory('forward', currentSessionIndex, sessionHistory);
+    if (result) {
+      setCurrentSessionIndex(result.newIndex);
+      setMindMapNodes(result.session.nodes);
       setClickedProjectNode(null);
-
-      localStorage.setItem('mindmap_current_index', newIndex.toString());
     }
   };
 
-  // Function to generate non-overlapping positions for nodes
-  const generateNonOverlappingPositions = (count: number) => {
-    const positions: { x: number; y: number }[] = [];
-    const minDistance = 25; // Minimum distance between nodes (in percentage)
-    const maxAttempts = 100; // Maximum attempts to find a valid position
 
-    // Define safe boundaries (avoid edges and large node area)
-    const boundaries = {
-      minX: 15, // 15% from left
-      maxX: 70, // 70% from left (avoid large node on right)
-      minY: 15, // 15% from top
-      maxY: 85  // 85% from top
-    };
-
-    for (let i = 0; i < count; i++) {
-      let validPosition = false;
-      let attempts = 0;
-      let newPos = { x: 0, y: 0 };
-
-      while (!validPosition && attempts < maxAttempts) {
-        // Generate random position within boundaries
-        newPos = {
-          x: Math.random() * (boundaries.maxX - boundaries.minX) + boundaries.minX,
-          y: Math.random() * (boundaries.maxY - boundaries.minY) + boundaries.minY
-        };
-
-        // Check if position is far enough from existing positions
-        validPosition = positions.every(pos => {
-          const distance = Math.sqrt(
-            Math.pow(newPos.x - pos.x, 2) + Math.pow(newPos.y - pos.y, 2)
-          );
-          return distance >= minDistance;
-        });
-
-        attempts++;
-      }
-
-      // If we couldn't find a valid position, use the last generated one
-      positions.push(newPos);
-    }
-
-    return positions;
-  };
 
   const loadSubprojects = async (nodeId: string) => {
     try {
-      // Always load subprojects from database (not cache) with JWT error handling
-      const data = await generateMindMapJson({ 
-        parentProjectId: nodeId,
-        onJWTError: (message: string) => {
-          showNotification(message);
-          setTimeout(() => handleJWTErrorWithNotification(new Error(message)), 1000);
-        }
-      });
+      const data = await generateMindMapJson({ parentProjectId: nodeId });
       console.log(`Loaded ${data.nodes?.length || 0} subprojects for project ${nodeId} from database`);
       return data.nodes || [];
     } catch (error) {
       console.error('Error loading subprojects from database:', error);
-      
-      // Check if it's a JWT error
-      const wasJWTError = await handleJWTError(error, signOut);
-      if (wasJWTError) {
-        showNotification('Session expired. Please log in again.');
-      }
-      
       return [];
     }
   };
 
 
 
-  // Load mind map nodes on component mount
+  // Initialize data on component mount
   useEffect(() => {
-    // Cross-validate cache with database: only show nodes that exist in BOTH and are from today
-    // Default is empty canvas unless there was a minddump today
     const initializeData = async () => {
       try {
-        // First, check backend connectivity
         const healthCheck = await APIService.healthCheck();
         if (!healthCheck.success) {
-          console.warn('Backend health check failed:', healthCheck.error);
-          // If backend is down, start with empty canvas (don't trust cache alone)
           console.log('Backend unavailable - starting with empty canvas');
           clearAllSessionsAndCache();
           return;
         }
 
-        // Load current database state with JWT error handling
-        const dbData = await generateMindMapJson({
-          onJWTError: (message: string) => {
-            showNotification(message);
-            // Trigger logout after showing notification
-            setTimeout(() => handleJWTErrorWithNotification(new Error(message)), 1000);
-          }
-        });
+        const dbData = await generateMindMapJson();
         const dbNodes = dbData?.nodes || [];
-
-        // Check if we have cached sessions from today
         const cachedSessions = getCachedSessionsFromToday();
 
         if (cachedSessions.length === 0) {
-          // No valid cache from today - start with empty canvas
           console.log('No cached sessions from today - starting with empty canvas');
           setMindMapNodes([]);
           setParentNodeTitle(null);
           return;
         }
 
-        // Cross-validate: only keep cached nodes that also exist in database
         const validatedNodes = validateCachedNodesAgainstDatabase(cachedSessions, dbNodes);
 
         if (validatedNodes.length > 0) {
-          // We have validated nodes from today's cache that match database
           setMindMapNodes(validatedNodes);
           setParentNodeTitle(cachedSessions[0].parentNodeTitle || null);
 
-          // Restore session history with validated data
-          const validatedSession = {
-            ...cachedSessions[0],
-            nodes: validatedNodes
-          };
+          const validatedSession = { ...cachedSessions[0], nodes: validatedNodes };
           setSessionHistory([validatedSession]);
           setCurrentSessionIndex(0);
 
           console.log(`Loaded ${validatedNodes.length} validated nodes from today's cache`);
         } else {
-          // No valid nodes found - clear cache and start empty
           console.log('No valid cached nodes match database - starting with empty canvas');
           clearAllSessionsAndCache();
         }
-
       } catch (error) {
         console.error('Error initializing data:', error);
-        // On error, start with empty canvas for safety
-        console.log('Error during initialization - starting with empty canvas');
         clearAllSessionsAndCache();
       }
     };
@@ -589,33 +270,25 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       if (initialMessage) {
         setMessages([{ role: "user", content: initialMessage }]);
 
-        // Process initial message with message mode handler
+        // Process initial message
         const processInitialMessage = async () => {
           setIsProcessing(true);
           try {
-            const result = await messageModeHandler.processMessage(initialMessage, userId);
+            const result = await processUserMessage(initialMessage, userId);
 
-            if (result.success) {
-              setMessages(prev => [...prev, {
-                role: "assistant",
-                content: result.output || "Processing completed successfully."
-              }]);
-
-              // After minddump, show both projects and subprojects
-              setShowSubprojects(true);
-              // Reload nodes when processing is successful - show all projects after minddump
-              reloadNodes({ showSubprojects: true });
-            } else {
-              setMessages(prev => [...prev, {
-                role: "assistant",
-                content: `I encountered an issue processing your request: ${result.error || 'Unknown error'}`
-              }]);
-            }
-          } catch (error) {
-            console.error('Error processing initial message:', error);
             setMessages(prev => [...prev, {
               role: "assistant",
-              content: "I'm having trouble connecting to the backend. Please try again later."
+              content: result.success ? result.output! : getDefaultErrorMessage(result.error)
+            }]);
+
+            if (result.success) {
+              setShowSubprojects(true);
+              reloadNodes({ showSubprojects: true });
+            }
+          } catch (error) {
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: getDefaultErrorMessage()
             }]);
           } finally {
             setIsProcessing(false);
@@ -634,30 +307,26 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       // Add new user message
       setMessages(prev => [...prev, { role: "user", content: initialMessage }]);
 
-      // Process with message mode handler
+      // Process new message
       const processNewMessage = async () => {
         setIsProcessing(true);
         try {
-          const result = await messageModeHandler.processMessage(initialMessage, userId);
+          const result = await processUserMessage(initialMessage, userId);
+
+          const responseMessage = result.success
+            ? result.output!
+            : "I understand. Let me help you with that task. What specific aspect would you like to focus on first?";
+
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: responseMessage
+          }]);
 
           if (result.success) {
-            setMessages(prev => [...prev, {
-              role: "assistant",
-              content: result.output || "Processing completed successfully."
-            }]);
-
-            // After minddump, show both projects and subprojects
             setShowSubprojects(true);
-            // Reload nodes when processing is successful - show all projects after minddump
             reloadNodes({ showSubprojects: true });
-          } else {
-            setMessages(prev => [...prev, {
-              role: "assistant",
-              content: "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
-            }]);
           }
         } catch (error) {
-          console.error('Error processing new message:', error);
           setMessages(prev => [...prev, {
             role: "assistant",
             content: "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
@@ -738,33 +407,23 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           return;
         }
 
-        // Normal minddump mode - Use message mode handler to process the message
-        const result = await messageModeHandler.processMessage(userMessage, userId);
+        // Normal minddump mode
+        const result = await processUserMessage(userMessage, userId);
+
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: result.success ? result.output! : getDefaultErrorMessage(result.error)
+        }]);
 
         if (result.success) {
-          // Add AI response with the actual result
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: result.output || "Processing completed successfully."
-          }]);
-
-          // After minddump, show both projects and subprojects
           setShowSubprojects(true);
-          // Reload nodes when processing is successful - show all projects after minddump
           reloadNodes({ showSubprojects: true });
-        } else {
-          // Handle error case
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: `I encountered an issue processing your request: ${result.error || 'Unknown error'}`
-          }]);
         }
       } catch (error) {
         console.error('Error processing message:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
         setMessages(prev => [...prev, {
           role: "assistant",
-          content: `Error: ${errorMessage}`
+          content: getDefaultErrorMessage()
         }]);
       } finally {
         setIsProcessing(false);
@@ -1065,93 +724,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   }, [input]);
 
-  const getCircleSize = () => {
-    const screenWidth = window.innerWidth;
 
-    if (screenWidth >= 1024) {
-      // Desktop sizes - smaller regular nodes
-      return { width: 144, height: 144 }; // 9rem (36 * 4) - reduced from 11rem
-    }
-
-    if (screenWidth >= 768) {
-      // Tablet: scale between 768-1024px
-      const baseWidths = { min: 96, max: 144 }; // 6rem to 9rem for regular nodes - reduced
-
-      const scaleFactor = Math.max(0, Math.min(1, (screenWidth - 768) / (1024 - 768)));
-      const width = baseWidths.min + (baseWidths.max - baseWidths.min) * scaleFactor;
-
-      return { width, height: width };
-    }
-
-    // Phone screens (< 768px): smaller circles
-    const phoneScale = screenWidth / 768; // e.g., 375px / 768 = 0.49
-    const tabletBase = 96; // reduced from 112
-
-    // Multiply by 1.2 to make circles 20% bigger on phones (reduced from 30%)
-    const width = tabletBase * phoneScale * 1.2;
-    return { width, height: width };
-  };
-
-  const getSizeClass = () => {
-    const screenWidth = window.innerWidth;
-
-    // All regular nodes are medium size
-    if (screenWidth >= 1024) {
-      return "text-2xl";
-    }
-
-    if (screenWidth >= 768) {
-      return "text-base";
-    }
-
-    // Phone: smaller text
-    return "text-xs";
-  };
-
-  const getColorClass = (color: string) => {
-    switch (color) {
-      case "blue": return "border-blue-400 shadow-[0_0_20px_-5px_rgba(59,130,246,0.4)]";
-      case "violet": return "border-violet-400 shadow-[0_0_20px_-5px_rgba(139,92,246,0.4)]";
-      case "red": return "border-red-400 shadow-[0_0_20px_-5px_rgba(239,68,68,0.4)]";
-      case "teal": return "border-teal-400 shadow-[0_0_20px_-5px_rgba(45,212,191,0.4)]";
-      default: return "border-blue-400";
-    }
-  };
-
-  const getRingClass = (color: string) => {
-    switch (color) {
-      case "blue": return "ring-blue-400/40";
-      case "violet": return "ring-violet-400/40";
-      case "red": return "ring-red-400/40";
-      case "teal": return "ring-teal-400/40";
-      default: return "ring-blue-400/40";
-    }
-  };
-
-  const getThoughtColor = (color: string) => {
-    switch (color) {
-      case "blue": return "text-blue-300 bg-blue-500/10 border-blue-400/30";
-      case "violet": return "text-violet-300 bg-violet-500/10 border-violet-400/30";
-      case "red": return "text-red-300 bg-red-500/10 border-red-400/30";
-      case "teal": return "text-teal-300 bg-teal-500/10 border-teal-400/30";
-      default: return "text-blue-300 bg-blue-500/10 border-blue-400/30";
-    }
-  };
-
-  const getProblemCount = (node: Node) => {
-    if (!node.hasProblem) return 0;
-    // Use problemData if available, otherwise fallback to problemType
-    if (node.problemData) {
-      return node.problemData.filter(p => p.status === 'active').length;
-    }
-    // Fallback for old problemType format
-    switch (node.problemType) {
-      case "anxiety": return 3;
-      case "blocker": return 2;
-      case "stress": return 1;
-      default: return 1;
-    }
-  };
 
   const getScaleTransform = () => {
     // Calculate scale factor based on map height
@@ -1174,13 +747,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   return (
     <div className="h-screen w-screen flex flex-col relative overflow-hidden bg-gradient-to-br from-black via-slate-900 to-black fixed inset-0">
-      {/* Session Expiry Notification */}
-      <SessionExpiryNotification
-        message={notification.message}
-        isVisible={notification.isVisible}
-        onClose={hideNotification}
-        autoHideDuration={5000}
-      />
       {/* Mind Map or Task Manager Section */}
       <div
         className="relative overflow-hidden"
@@ -1251,105 +817,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
             {/* Render regular nodes */}
             {allNodes && allNodes.map((node) => (
-              <div
+              <MindMapNode
                 key={node.id}
-                className="absolute transition-transform duration-500 ease-out"
-                style={{
-                  left: `${node.x}%`,
-                  top: `${node.y}%`,
-                  transform: `translate(-50%, -50%) ${getScaleTransform()}`,
-                }}
-              >
-                {/* Problem indicator - positioned outside the clickable area with higher z-index */}
-                {node.hasProblem && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsProblemsOpen(true);
-                    }}
-                    className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center border-2 border-gray-900 shadow-lg hover:bg-red-600 hover:scale-110 transition-all duration-200 cursor-pointer z-30"
-                  >
-                    <span className="text-white font-bold text-sm">{getProblemCount(node)}</span>
-                  </button>
-                )}
-
-                <div
-                  onClick={() => handleNodeClick(node)}
-                  className={`
-                ${getSizeClass()} ${getColorClass(node.color)}
-                relative rounded-full border-2 bg-gray-900/60 backdrop-blur-sm
-                flex items-center justify-center text-center
-                transition-all duration-500
-                hover:scale-110 hover:bg-gray-800/60
-                cursor-pointer
-                ring-4 ring-offset-16 ring-offset-transparent ${getRingClass(node.color)}
-                z-10
-              `}
-                  style={{
-                    width: `${getCircleSize().width}px`,
-                    height: `${getCircleSize().height}px`
-                  }}
-                >
-                  <span className="font-medium leading-tight px-1 whitespace-pre-line text-white pointer-events-none">
-                    {node.label}
-                  </span>
-
-                  {/* Subprojects indicator */}
-                  {(node.subNodes && node.subNodes.length > 0) && (
-                    <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-blue-500/80 rounded-full flex items-center justify-center border-2 border-gray-900 shadow-lg pointer-events-none">
-                      <span className="text-white font-bold text-xs">{node.subNodes.length}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Small thought labels around each circle - positioned outside clickable area */}
-                {node.thoughts && node.thoughts.map((thought, idx) => {
-                  // Default angles for all nodes
-                  const angles = [60, 90, 120];
-                  const angle = angles[idx];
-                  // Responsive radius: scales with screen size
-                  const screenWidth = window.innerWidth;
-                  let radius;
-
-                  if (screenWidth >= 1024) {
-                    // Desktop - adjusted for smaller circles
-                    radius = 135;
-                  } else if (screenWidth >= 768) {
-                    // Tablet: scale between 768-1024px
-                    const minRadius = 90;
-                    const maxRadius = 135;
-                    const scaleFactor = Math.max(0, Math.min(1, (screenWidth - 768) / (1024 - 768)));
-                    radius = minRadius + (maxRadius - minRadius) * scaleFactor;
-                  } else {
-                    // Phone: scale proportionally
-                    const phoneScale = screenWidth / 768;
-                    const tabletRadius = 90;
-                    radius = tabletRadius * phoneScale * 1.2;
-                  }
-                  const angleRad = (angle * Math.PI) / 180;
-                  const x = Math.cos(angleRad) * radius;
-                  const y = Math.sin(angleRad) * radius;
-
-                  return (
-                    <div
-                      key={idx}
-                      className={`absolute font-semibold whitespace-nowrap px-3 py-1.5 lg:px-6 lg:py-3 rounded-full border backdrop-blur-sm transition-all duration-1000 ease-out hover:scale-125 hover:brightness-150 hover:shadow-lg cursor-pointer z-20 ${getThoughtColor(node.color)}`}
-                      style={{
-                        left: `calc(50% + ${x}px)`,
-                        top: `calc(50% + ${y}px)`,
-                        transform: 'translate(-50%, -50%)',
-                        fontSize: window.innerWidth >= 1024
-                          ? (mapHeight >= 50 ? '1.25rem' : mapHeight >= 30 ? '1.5rem' : '1.75rem')
-                          : window.innerWidth >= 768
-                            ? '0.875rem' // text-sm for tablet
-                            : '0.75rem' // text-xs for phone (matches circle text)
-                      }}
-                    >
-                      {thought}
-                    </div>
-                  );
-                })}
-              </div>
+                node={node}
+                onNodeClick={handleNodeClick}
+                onProblemClick={() => setIsProblemsOpen(true)}
+                getScaleTransform={getScaleTransform}
+              />
             ))}
 
             {/* Large indicator node in top right - shows current context - only visible when in subproject view */}
