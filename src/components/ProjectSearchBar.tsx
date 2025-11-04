@@ -5,31 +5,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, ChevronDown, Folder, FolderOpen, X } from 'lucide-react';
-import { useGlobalData } from '@/hooks/useGlobalData';
-import { filterElements } from '@/utils/supabaseClient';
-
-interface Project {
-  id: string;
-  name: string;
-  description?: string;
-  subproject_from?: string[] | string | null;
-  status?: string;
-  created_at?: string;
-}
-
-interface ProjectOption {
-  id: string;
-  name: string;
-  type: 'main' | 'parent' | 'subproject';
-  parentId?: string;
-  parentName?: string;
-  project: Project;
-}
+import { useProjectSearch, ProjectSearchResult } from '@/hooks/useProjectSearch';
 
 interface ProjectSearchBarProps {
-  onSelectProject: (project: ProjectOption) => void;
+  onSelectProject: (project: ProjectSearchResult) => void;
   placeholder?: string;
-  selectedProject?: ProjectOption | null;
+  selectedProject?: ProjectSearchResult | null;
   className?: string;
 }
 
@@ -39,103 +20,29 @@ export const ProjectSearchBar: React.FC<ProjectSearchBarProps> = ({
   selectedProject,
   className = ""
 }) => {
-  const { projects, isLoading } = useGlobalData();
+  const { searchResults, isLoading } = useProjectSearch();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([]);
-  const [filteredOptions, setFilteredOptions] = useState<ProjectOption[]>([]);
+  const [filteredOptions, setFilteredOptions] = useState<ProjectSearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   
   const searchRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Build project options from cached data
-  useEffect(() => {
-    if (!projects || projects.length === 0) {
-      setProjectOptions([]);
-      return;
-    }
-
-    const options: ProjectOption[] = [];
-    
-    // Get main projects (projects that are not subprojects)
-    const mainProjects = filterElements(projects, 'subproject_from', 'empty');
-    
-    // Get projects that have subprojects
-    const projectsWithSubprojects = projects.filter(project => {
-      return projects.some(otherProject => {
-        const subprojectFrom = otherProject.subproject_from;
-        if (!subprojectFrom) return false;
-        
-        // Handle both array and string formats
-        if (Array.isArray(subprojectFrom)) {
-          return subprojectFrom.includes(project.id);
-        }
-        return subprojectFrom === project.id;
-      });
-    });
-
-    // Add "Main Projects" option
-    if (mainProjects.length > 0) {
-      options.push({
-        id: 'main-projects',
-        name: 'Main Projects',
-        type: 'main',
-        project: {
-          id: 'main-projects',
-          name: 'Main Projects',
-          description: `${mainProjects.length} projects without parent projects`
-        }
-      });
-    }
-
-    // Add parent projects (projects that have subprojects)
-    projectsWithSubprojects.forEach(project => {
-      const subprojects = projects.filter(p => {
-        const subprojectFrom = p.subproject_from;
-        if (!subprojectFrom) return false;
-        
-        if (Array.isArray(subprojectFrom)) {
-          return subprojectFrom.includes(project.id);
-        }
-        return subprojectFrom === project.id;
-      });
-
-      options.push({
-        id: project.id,
-        name: project.name,
-        type: 'parent',
-        project: {
-          ...project,
-          description: `${subprojects.length} subproject${subprojects.length !== 1 ? 's' : ''}`
-        }
-      });
-    });
-
-    // Sort options: Main Projects first, then alphabetically
-    options.sort((a, b) => {
-      if (a.type === 'main') return -1;
-      if (b.type === 'main') return 1;
-      return a.name.localeCompare(b.name);
-    });
-
-    setProjectOptions(options);
-  }, [projects]);
-
   // Filter options based on search query
   useEffect(() => {
     if (!searchQuery.trim()) {
-      setFilteredOptions(projectOptions);
+      setFilteredOptions(searchResults);
     } else {
       const searchLower = searchQuery.toLowerCase();
-      const filtered = projectOptions.filter(option =>
+      const filtered = searchResults.filter(option =>
         option.name.toLowerCase().includes(searchLower) ||
         (option.project.description && option.project.description.toLowerCase().includes(searchLower))
       );
       setFilteredOptions(filtered);
     }
     setSelectedIndex(0);
-  }, [searchQuery, projectOptions]);
+  }, [searchQuery, searchResults]);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -194,7 +101,7 @@ export const ProjectSearchBar: React.FC<ProjectSearchBarProps> = ({
     }
   }, [isOpen]);
 
-  const handleSelectOption = (option: ProjectOption) => {
+  const handleSelectOption = (option: ProjectSearchResult) => {
     onSelectProject(option);
     setIsOpen(false);
     setSearchQuery('');
@@ -209,7 +116,7 @@ export const ProjectSearchBar: React.FC<ProjectSearchBarProps> = ({
     });
   };
 
-  const getOptionIcon = (type: ProjectOption['type']) => {
+  const getOptionIcon = (type: ProjectSearchResult['type']) => {
     switch (type) {
       case 'main':
         return <FolderOpen className="w-4 h-4 text-blue-400" />;
@@ -220,7 +127,7 @@ export const ProjectSearchBar: React.FC<ProjectSearchBarProps> = ({
     }
   };
 
-  const getOptionBadge = (type: ProjectOption['type']) => {
+  const getOptionBadge = (type: ProjectSearchResult['type']) => {
     switch (type) {
       case 'main':
         return <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300">Main</span>;
