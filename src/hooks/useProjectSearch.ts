@@ -1,6 +1,6 @@
 /**
- * Hook for project search functionality
- * Provides utilities for working with project hierarchy and filtering
+ * Hook for project navigation functionality
+ * Calculates project hierarchy in background and provides navigation results
  */
 
 import { useMemo } from 'react';
@@ -16,23 +16,26 @@ interface Project {
   created_at?: string;
 }
 
-export interface ProjectSearchResult {
+export interface ProjectNavigationResult {
   id: string;
   name: string;
   type: 'main' | 'parent';
   project: Project;
+  // Data for when this option is selected
+  mainProjects?: Project[];
+  subprojects?: Project[];
 }
 
 export function useProjectSearch() {
   const { projects, isLoading, refresh } = useGlobalData();
 
-  // Get search results for the search bar using filterElements queries
-  const searchResults = useMemo((): ProjectSearchResult[] => {
+  // Calculate navigation results in background after each data refresh
+  const navigationResults = useMemo((): ProjectNavigationResult[] => {
     if (!projects || projects.length === 0) {
       return [];
     }
 
-    const results: ProjectSearchResult[] = [];
+    const results: ProjectNavigationResult[] = [];
 
     // Query 1: Get main projects (projects that are not subprojects)
     const mainProjects = filterElements(projects, 'subproject_from', 'empty');
@@ -47,7 +50,9 @@ export function useProjectSearch() {
           id: 'main-projects',
           name: 'Main Projects',
           description: `${mainProjects.length} projects without parent projects`
-        }
+        },
+        mainProjects: mainProjects, // Pre-calculated data for when selected
+        subprojects: []
       });
     }
 
@@ -68,7 +73,7 @@ export function useProjectSearch() {
       }
     });
 
-    // Query 3: Get parent projects and their subproject counts
+    // Query 3: Get parent projects and pre-calculate their subprojects
     Array.from(parentIds).forEach(parentId => {
       const parentProject = projects.find((p: Project) => p.id === parentId);
       if (parentProject) {
@@ -81,7 +86,9 @@ export function useProjectSearch() {
           project: {
             ...parentProject,
             description: `${subprojects.length} subproject${subprojects.length !== 1 ? 's' : ''}`
-          }
+          },
+          mainProjects: [],
+          subprojects: subprojects // Pre-calculated data for when selected
         });
       }
     });
@@ -98,7 +105,7 @@ export function useProjectSearch() {
 
   return {
     projects: projects || [],
-    searchResults,
+    navigationResults,
     isLoading,
     refresh
   };
