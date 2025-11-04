@@ -48,11 +48,50 @@ async function fetchSupabaseData(onJWTError = null) {
 
     console.log('Fetching data for user:', session.user.id);
 
-    const [projectsResult, knowledgeNodesResult, problemsResult] = await Promise.all([
-      supabase.from('projects').select('*').order('created_at', { ascending: false }),
+    console.log('Making Supabase queries...');
+    console.log('User ID:', session.user.id);
+
+    // First, try a simple query to see what we get
+    const testResult = await supabase
+      .from('projects')
+      .select('*')
+      .limit(1);
+
+    console.log('Test query result:', testResult);
+    console.log('Test query data:', testResult.data);
+
+    // Try to fetch projects with explicit field selection
+    const projectsResult = await supabase
+      .from('projects')
+      .select(`
+        id,
+        name,
+        created_at,
+        last_updated,
+        status,
+        priority_score,
+        progress_percent,
+        description,
+        key_points,
+        tasks,
+        effort_estimate_hours,
+        learning_objectives,
+        project_files,
+        subproject_from,
+        user_id
+      `)
+      .order('created_at', { ascending: false });
+
+    const [knowledgeNodesResult, problemsResult] = await Promise.all([
       supabase.from('knowledge_nodes').select('*').order('created_at', { ascending: false }),
       supabase.from('problems').select('*').eq('status', 'active').order('created_at', { ascending: false })
     ]);
+
+    console.log('Supabase query results:');
+    console.log('Projects result:', projectsResult);
+    console.log('Projects data sample:', projectsResult.data?.[0]);
+    console.log('Projects error:', projectsResult.error);
+    console.log('Total projects found:', projectsResult.data?.length);
 
     // Check for JWT errors in database queries
     const errors = [projectsResult.error, knowledgeNodesResult.error, problemsResult.error].filter(Boolean);
@@ -248,7 +287,7 @@ export async function generateMindMapJson(options = {}) {
       parentProjectId,
       showTodayOnly
     });
-    
+
     console.log('Raw projects data:', projects);
 
     // Filter for today's projects if showTodayOnly is true
@@ -261,25 +300,25 @@ export async function generateMindMapJson(options = {}) {
         created_at: p.created_at,
         last_updated: p.last_updated
       })));
-      
+
       filteredByDate = projects.filter(project => {
         // Handle different date formats more robustly
         let createdDate = null;
         let updatedDate = null;
-        
+
         if (project.created_at) {
           // Handle both ISO format and PostgreSQL timestamp format
           const createdDateObj = new Date(project.created_at);
           createdDate = createdDateObj.toISOString().split('T')[0];
         }
-        
+
         if (project.last_updated) {
           const updatedDateObj = new Date(project.last_updated);
           updatedDate = updatedDateObj.toISOString().split('T')[0];
         }
 
         const isFromToday = createdDate === today || updatedDate === today;
-        
+
         console.log(`Project "${project.name}":`, {
           created_at: project.created_at,
           createdDate,
@@ -288,7 +327,7 @@ export async function generateMindMapJson(options = {}) {
           today,
           isFromToday
         });
-        
+
         return isFromToday;
       });
 
