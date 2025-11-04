@@ -67,6 +67,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Reset message mode handler when component mounts
   useEffect(() => {
     messageModeHandler.reset();
+
+    // Set up callback for project focus events
+    messageModeHandler.setOnProjectFocusCallback((message: string) => {
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: message
+      }]);
+    });
   }, []);
 
   // WebSocket for project manager workflow (silent connection)
@@ -195,7 +203,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       setCurrentSessionIndex(newIndex);
       setMindMapNodes(sessionHistory[newIndex].nodes);
       setClickedProjectNode(null);
-      
+
       // Clear parent node title when going back to main view (index 0) or when session has no parentNodeId
       if (newIndex === 0 || !sessionHistory[newIndex].parentNodeId) {
         setParentNodeTitle(null);
@@ -493,14 +501,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             // Wait a moment for session to register
             await new Promise(resolve => setTimeout(resolve, 500));
           }
-          
+
           // If there's a current question, send response to workflow
           if (currentQuestion) {
             sendResponse(userMessage);
             setIsProcessing(false);
             return;
           }
-          
+
           // If no question yet, workflow is processing - just wait
           setIsProcessing(false);
           return;

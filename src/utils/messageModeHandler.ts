@@ -20,8 +20,15 @@ interface SelectedObject {
   type: EntityType;
 }
 
+interface ProjectFocus {
+  id: string;
+  name: string;
+  status: 'started' | 'not_started';
+}
+
 interface MessageModeState {
   selectedObject?: SelectedObject;
+  projectFocus?: ProjectFocus;
   messageCount: number;
 }
 
@@ -29,6 +36,7 @@ export class MessageModeHandler {
   private state: MessageModeState = {
     messageCount: 0
   };
+  private onProjectFocusCallback?: (message: string) => void;
 
   constructor() {
     this.reset();
@@ -37,13 +45,17 @@ export class MessageModeHandler {
   reset() {
     this.state = {
       messageCount: 0,
-      selectedObject: undefined
+      selectedObject: undefined,
+      projectFocus: undefined
     };
   }
 
   getPlaceholder(): string {
     if (this.state.selectedObject) {
       return `What do you want to change about ${this.state.selectedObject.name}?`;
+    }
+    if (this.state.projectFocus) {
+      return `Let's work on ${this.state.projectFocus.name}...`;
     }
     return "Let's overthink about...";
   }
@@ -69,6 +81,42 @@ export class MessageModeHandler {
    */
   getSelectedObject(): SelectedObject | undefined {
     return this.state.selectedObject;
+  }
+
+  /**
+   * Set project focus and trigger callback for not started projects
+   */
+  setProjectFocus(project: ProjectFocus) {
+    this.state.projectFocus = project;
+    this.state.messageCount = 0;
+    
+    // If project is not started, trigger callback to send AI message
+    if (project.status === 'not_started' && this.onProjectFocusCallback) {
+      const message = `Would you like me to help you start organizing the project "${project.name}"? I can break it down into manageable tasks and create a roadmap for you.`;
+      this.onProjectFocusCallback(message);
+    }
+  }
+
+  /**
+   * Clear project focus
+   */
+  clearProjectFocus() {
+    this.state.projectFocus = undefined;
+    this.state.messageCount = 0;
+  }
+
+  /**
+   * Get the currently focused project
+   */
+  getProjectFocus(): ProjectFocus | undefined {
+    return this.state.projectFocus;
+  }
+
+  /**
+   * Set callback for project focus events
+   */
+  setOnProjectFocusCallback(callback: (message: string) => void) {
+    this.onProjectFocusCallback = callback;
   }
 
   async processMessage(text: string, userId: string): Promise<{ success: boolean; output?: string; error?: string }> {
@@ -115,7 +163,8 @@ export class MessageModeHandler {
   getStateInfo() {
     return {
       messageCount: this.state.messageCount,
-      selectedObject: this.state.selectedObject
+      selectedObject: this.state.selectedObject,
+      projectFocus: this.state.projectFocus
     };
   }
 }
