@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useAuthDev } from './useAuthDev'
@@ -36,7 +36,7 @@ export const useAuth = () => {
     return () => subscription.unsubscribe()
   }, [])
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = useCallback(async () => {
     // Force production URL - replace with your actual domain
     const redirectUrl = 'https://74.208.127.204/';
     console.log('OAuth redirect URL:', redirectUrl);
@@ -49,17 +49,17 @@ export const useAuth = () => {
       }
     })
     if (error) throw error
-  }
+  }, [])
 
-  const signInWithEmail = async (email: string, password: string) => {
+  const signInWithEmail = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
     if (error) throw error
-  }
+  }, [])
 
-  const signUpWithEmail = async (email: string, password: string, name?: string) => {
+  const signUpWithEmail = useCallback(async (email: string, password: string, name?: string) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -70,9 +70,9 @@ export const useAuth = () => {
       }
     })
     if (error) throw error
-  }
+  }, [])
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     
@@ -82,7 +82,7 @@ export const useAuth = () => {
     // Clear global data cache
     const { clearDataCache } = await import('@/utils/supabaseClient')
     clearDataCache()
-  }
+  }, [])
 
   return {
     user,

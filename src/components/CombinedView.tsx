@@ -99,7 +99,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         role: "assistant",
         content: "Project planning workflow completed! I've broken down your project and assessed the required skills."
       }]);
-      reloadNodes();
+      reloadNodes({ forceRefresh: true }); // Force refresh after workflow completion
       setCurrentProjectId(null);
     },
     (error) => {
@@ -145,17 +145,17 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Function to reload mind map nodes from database (after minddump or other operations)
   const reloadNodes = async (options = {}) => {
     try {
-      // Always show today's projects by default
-      const finalOptions = { showTodayOnly: true, ...options };
+      // Always show today's projects by default, use cache unless forceRefresh is specified
+      const finalOptions = { showTodayOnly: true, forceRefresh: false, ...options };
       const data = await generateMindMapJson(finalOptions);
       if (data) {
         setMindMapNodes(data.nodes || []);
         setParentNodeTitle(data.parentNode || null);
         saveCurrentSession(data.nodes || []);
-        console.log('Mind map nodes reloaded from database:', data.nodes?.length || 0, 'nodes from today');
+        console.log('Mind map nodes reloaded:', data.nodes?.length || 0, 'nodes from today', finalOptions.forceRefresh ? '(forced refresh)' : '(from cache)');
       }
     } catch (error) {
-      console.error('Error reloading nodes from database:', error);
+      console.error('Error reloading nodes:', error);
     }
   };
 
@@ -232,7 +232,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         // Use cached data for faster loading, only show today's projects
         const dbData = await generateMindMapJson({ 
           showTodayOnly: true,
-          forceRefresh: false, // Use cache first
+          forceRefresh: false, // Use cache first - no need to hit database on initialization
           onJWTError: (message: string) => {
             console.warn('JWT error during data initialization:', message);
           }
@@ -298,7 +298,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
             if (result.success) {
               setShowSubprojects(true);
-              reloadNodes({ showSubprojects: true });
+              reloadNodes({ showSubprojects: true, forceRefresh: true }); // Force refresh after successful minddump
             }
           } catch (error) {
             setMessages(prev => [...prev, {
@@ -339,7 +339,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
           if (result.success) {
             setShowSubprojects(true);
-            reloadNodes({ showSubprojects: true });
+            reloadNodes({ showSubprojects: true, forceRefresh: true }); // Force refresh after successful processing
           }
         } catch (error) {
           setMessages(prev => [...prev, {
@@ -432,7 +432,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
         if (result.success) {
           setShowSubprojects(true);
-          reloadNodes({ showSubprojects: true });
+          reloadNodes({ showSubprojects: true, forceRefresh: true }); // Force refresh after successful processing
         }
       } catch (error) {
         console.error('Error processing message:', error);
@@ -529,7 +529,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           }]);
 
           // Reload nodes when processing is successful
-          reloadNodes();
+          reloadNodes({ forceRefresh: true }); // Force refresh after successful processing
         } else {
           setMessages(prev => [...prev, {
             role: "assistant",

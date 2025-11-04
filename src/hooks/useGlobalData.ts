@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   getAllDataFromCache, 
   subscribeToDataUpdates, 
@@ -20,6 +20,7 @@ interface GlobalDataState {
 export function useGlobalData() {
   const { signOut } = useAuth();
   const [data, setData] = useState<GlobalDataState>(() => getAllDataFromCache());
+  const initializationRef = useRef(false);
 
   useEffect(() => {
     // Subscribe to data updates
@@ -27,8 +28,14 @@ export function useGlobalData() {
       setData(newData);
     });
 
-    // Initialize data on mount
+    // Initialize data only once on mount
     const initData = async () => {
+      if (initializationRef.current) {
+        return; // Already initialized
+      }
+      
+      initializationRef.current = true;
+      
       try {
         await initializeData({
           onJWTError: (message: string) => {
@@ -41,15 +48,16 @@ export function useGlobalData() {
           console.warn('JWT error detected, logging out user');
           await handleJWTError(error, signOut);
         }
+        initializationRef.current = false; // Reset on error to allow retry
       }
     };
 
     initData();
 
     return unsubscribe;
-  }, [signOut]);
+  }, []); // Remove signOut from dependencies to prevent re-initialization
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     try {
       await refreshAllData({
         onJWTError: (message: string) => {
@@ -65,11 +73,12 @@ export function useGlobalData() {
         throw error; // Re-throw non-JWT errors
       }
     }
-  };
+  }, [signOut]);
 
-  const clearCache = () => {
+  const clearCache = useCallback(() => {
     clearDataCache();
-  };
+    initializationRef.current = false; // Reset initialization flag when cache is cleared
+  }, []);
 
   return {
     ...data,

@@ -9,15 +9,20 @@ async function fetchSupabaseData(onJWTError = null, forceRefresh = false) {
       const { refreshAllData } = await import('./supabaseClient.js');
       data = await refreshAllData({ onJWTError });
     } else {
-      // Try to get from cache first, initialize if needed
-      data = await initializeData({ onJWTError });
+      // Use cache first - only initialize if cache is empty
+      data = getAllDataFromCache();
+      
+      // If cache is empty (no lastUpdated), then initialize
+      if (!data.lastUpdated) {
+        data = await initializeData({ onJWTError });
+      }
     }
 
     console.log('🔄 Data retrieved:', {
       projects: data.projects?.length || 0,
       knowledgeNodes: data.knowledgeNodes?.length || 0,
       problems: data.problems?.length || 0,
-      source: forceRefresh ? 'database' : 'cache',
+      source: forceRefresh ? 'database' : (data.lastUpdated ? 'cache' : 'initialized'),
       lastUpdated: data.lastUpdated
     });
 
