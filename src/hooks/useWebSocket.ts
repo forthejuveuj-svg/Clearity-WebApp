@@ -70,8 +70,8 @@ export const useWebSocket = (
 
       // Create new socket
       console.log('Initializing WebSocket connection to:', BACKEND_URL);
-      socket = io(BACKEND_URL, {
-        transports: ['websocket', 'polling'],
+      socket = io("http://74.208.127.204:8000", {
+        transports: ['websocket'],
         autoConnect: false, // Don't auto-connect
         timeout: 0, // No connection timeout
         forceNew: false,
