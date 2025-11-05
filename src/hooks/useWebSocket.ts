@@ -70,14 +70,14 @@ export const useWebSocket = (
 
       // Create new socket
       console.log('Initializing WebSocket connection to:', BACKEND_URL);
-      socket = io("http://74.208.127.204:8000", {
-        transports: ['websocket'],
-        autoConnect: false, // Don't auto-connect
-        timeout: 0, // No connection timeout
-        forceNew: false,
-        reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionAttempts: 5
+      const socket = io("http://74.208.127.204:8000", {
+        transports: ['websocket', 'polling'], // include polling as fallback
+        autoConnect: true,                     // connect immediately
+        timeout: 10000,                        // 10s for initial handshake
+        forceNew: false,                        // reuse existing connection if possible
+        reconnection: true,                     // allow automatic retries
+        reconnectionDelay: 1000,                // wait 1s between retries
+        reconnectionAttempts: 10                // try up to 10 times before giving up
       });
 
       // Set up event handlers
