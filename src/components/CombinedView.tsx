@@ -22,6 +22,8 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   audioSnippets?: any[];
+  messageType?: "project_organization" | "normal";
+  autoRemove?: boolean; // Flag to mark messages for automatic removal
 }
 
 export interface Node {
@@ -60,6 +62,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Helper function to remove project organization messages
+  // These messages are ONLY removed in two specific cases:
+  // 1. User responds with "No" (declines the project organization offer)
+  // 2. New project organization message is added (replaces old one when clicking different project)
+  // All other messages remain as part of the natural conversation flow
+  const removeProjectOrganizationMessages = (messages: Message[]) => {
+    return messages.filter(msg => msg.messageType !== 'project_organization');
+  };
+
   const [visibleNodes, setVisibleNodes] = useState<string[]>([]);
   const [mapHeight, setMapHeight] = useState(60); // Percentage of screen height for mind map
   const [isDragging, setIsDragging] = useState(false);
@@ -77,10 +88,17 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     messageModeHandler.reset();
 
     // Set up callback for project focus events
-    messageModeHandler.setOnProjectFocusCallback((message: string) => {
+    messageModeHandler.setOnProjectFocusCallback((message: string, messageType?: string) => {
+      // Remove any existing project organization messages before adding new one
+      if (messageType === 'project_organization') {
+        setMessages(prev => removeProjectOrganizationMessages(prev));
+      }
+
       setMessages(prev => [...prev, {
         role: "assistant",
-        content: message
+        content: message,
+        messageType: messageType as "project_organization" | "normal" | undefined,
+        autoRemove: messageType === 'project_organization'
       }]);
     });
   }, []);
@@ -114,7 +132,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Handle workflow questions in chat
   useEffect(() => {
     if (currentQuestion) {
-      // Add question to chat as assistant message
+      // Add question to chat as assistant message (don't remove project org messages - this is part of workflow)
       setMessages(prev => [...prev, {
         role: "assistant",
         content: currentQuestion.question + (currentQuestion.options ? `\n\nOptions: ${currentQuestion.options.join(', ')}` : '')
@@ -125,6 +143,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Handle workflow progress messages in chat
   useEffect(() => {
     if (progress) {
+      // Add progress message (don't remove project org messages - this is part of workflow)
       setMessages(prev => [...prev, {
         role: "assistant",
         content: progress
@@ -201,8 +220,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   const loadSubprojects = async (nodeId: string) => {
     try {
-      const data = await generateMindMapJson({ 
-        parentProjectId: nodeId, 
+      const data = await generateMindMapJson({
+        parentProjectId: nodeId,
         showTodayOnly: true,
         onJWTError: (message: string) => {
           console.warn('JWT error during subproject loading:', message);
@@ -212,14 +231,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       return data.nodes || [];
     } catch (error) {
       console.error('Error loading subprojects from database:', error);
-      
+
       // Handle JWT errors by automatically logging out the user
       const jwtResult = detectJWTError(error);
       if (jwtResult.isJWTError) {
         console.warn('JWT error detected during subproject loading, logging out user');
         await handleJWTError(error, signOut);
       }
-      
+
       return [];
     }
   };
@@ -231,7 +250,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     const initializeData = async () => {
       try {
         // Use cached data for faster loading, only show today's projects
-        const dbData = await generateMindMapJson({ 
+        const dbData = await generateMindMapJson({
           showTodayOnly: true,
           forceRefresh: false, // Use cache first - no need to hit database on initialization
           onJWTError: (message: string) => {
@@ -243,15 +262,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         // Show projects from today
         setMindMapNodes(dbNodes);
         setParentNodeTitle(dbData.parentNode || null);
-        
+
         // Save this as a new session (for navigation history)
         if (dbNodes.length > 0) {
           saveCurrentSession(dbNodes, null);
         }
-        
+
       } catch (error) {
         console.error('Error initializing data:', error);
-        
+
         // Handle JWT errors by automatically logging out the user
         const jwtResult = detectJWTError(error);
         if (jwtResult.isJWTError) {
@@ -259,7 +278,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           await handleJWTError(error, signOut);
           return; // Exit early after logout
         }
-        
+
         setMindMapNodes([]);
         setParentNodeTitle(null);
       }
@@ -320,7 +339,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Handle new messages when initialMessage changes (e.g., from task manager)
   useEffect(() => {
     if (initialMessage && hasInitialized && userId && messages.length > 0 && messages[messages.length - 1].content !== initialMessage) {
-      // Add new user message
+      // Add new user message (don't remove project organization messages - they're part of conversation)
       setMessages(prev => [...prev, { role: "user", content: initialMessage }]);
 
       // Process new message
@@ -388,7 +407,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     e.preventDefault();
     if (input.trim() && !isProcessing) {
       const userMessage = input.trim();
-      setMessages([...messages, { role: "user", content: userMessage }]);
+
+      // Check if user is responding with "No" to remove project organization messages
+      // Matches: "No", "no", "NO", "No.", "No!", "No?", "No thanks", etc.
+      const isNoResponse = /^no\b/i.test(userMessage);
+
+      // ONLY remove project organization messages if user says "No"
+      // All other messages should remain as part of the conversation
+      const filteredMessages = isNoResponse ? removeProjectOrganizationMessages(messages) : messages;
+
+      setMessages([...filteredMessages, { role: "user", content: userMessage }]);
       setInput("");
       setIsProcessing(true);
 
@@ -512,7 +540,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
     const taskMessage = `Let's discuss "${task.title}". What would you like to know or work on?`;
 
-    // Add task message to chat
+    // Add task message to chat (don't remove project organization messages - they're part of conversation)
     setMessages(prev => [...prev, { role: "user", content: taskMessage }]);
 
     if (userId) {
@@ -611,7 +639,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           audioSnippets: audioSnippets // Store snippets for playback
         }]);
 
-        // Add AI response after delay
+        // Add AI response after delay (don't remove org messages for simple acknowledgment)
         setTimeout(() => {
           setMessages(prev => [...prev, {
             role: "assistant",
@@ -676,7 +704,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         // Refresh global data from database
         await globalData.refresh();
         // Reload the mind map with fresh data
-        const dbData = await generateMindMapJson({ 
+        const dbData = await generateMindMapJson({
           showTodayOnly: true,
           forceRefresh: true // Force fresh data
         });

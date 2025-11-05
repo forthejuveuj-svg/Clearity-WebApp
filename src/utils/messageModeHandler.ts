@@ -93,7 +93,7 @@ export class MessageModeHandler {
     // If project is not started, trigger callback to send AI message
     if (project.status === 'not_started' && this.onProjectFocusCallback) {
       const message = `Would you like me to help you start organizing the project "${project.name}"? I can break it down into manageable tasks and create a roadmap for you.`;
-      this.onProjectFocusCallback(message);
+      this.onProjectFocusCallback(message, 'project_organization');
     }
   }
 
@@ -115,7 +115,7 @@ export class MessageModeHandler {
   /**
    * Set callback for project focus events
    */
-  setOnProjectFocusCallback(callback: (message: string) => void) {
+  setOnProjectFocusCallback(callback: (message: string, messageType?: string) => void) {
     this.onProjectFocusCallback = callback;
   }
 
