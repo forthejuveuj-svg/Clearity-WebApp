@@ -902,7 +902,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       {/* Mind Map or Task Manager Section */}
       <div
         className="relative overflow-hidden"
-        style={{ height: `${mapHeight}vh` }}
+        style={{ 
+          height: `${mapHeight}vh`,
+          padding: '15% 20%' // 15% top/bottom, 20% left/right padding
+        }}
       >
         {currentView === 'mindmap' ? (
           // Mind Map View
