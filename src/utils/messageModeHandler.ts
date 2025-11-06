@@ -24,6 +24,7 @@ interface ProjectFocus {
   id: string;
   name: string;
   status: 'started' | 'not_started';
+  hasSubprojects?: boolean;
 }
 
 interface MessageModeState {
@@ -91,14 +92,17 @@ export class MessageModeHandler {
     this.state.messageCount = 0;
     
     if (this.onProjectFocusCallback) {
-      if (project.status === 'not_started') {
-        // Project not started - offer to help organize it
+      // Check if project has subprojects or is already started
+      const shouldUseProjectChat = project.status === 'started' || project.hasSubprojects;
+      
+      if (shouldUseProjectChat) {
+        // Project is started OR has subprojects - offer to help with it using project chat
+        const message = `Do you want to talk about project "${project.name}"?`;
+        this.onProjectFocusCallback(message, 'project_chat');
+      } else {
+        // Project not started and no subprojects - offer to help organize it
         const message = `Would you like me to help you start organizing the project "${project.name}"? I can break it down into manageable tasks and create a roadmap for you.`;
         this.onProjectFocusCallback(message, 'project_organization');
-      } else {
-        // Project already started - offer to help with it
-        const message = `Do you need help with "${project.name}"?`;
-        this.onProjectFocusCallback(message, 'project_chat');
       }
     }
   }
@@ -144,8 +148,8 @@ export class MessageModeHandler {
         if (response.success) {
           this.clearSelection();
         }
-      } else if (this.state.projectFocus && this.state.projectFocus.status === 'started') {
-        // Project is focused and started - use project chat
+      } else if (this.state.projectFocus && (this.state.projectFocus.status === 'started' || this.state.projectFocus.hasSubprojects)) {
+        // Project is focused and started OR has subprojects - use project chat
         response = await APIService.projectChat({
           text,
           project_id: this.state.projectFocus.id,
