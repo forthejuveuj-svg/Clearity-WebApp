@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { X, AlertTriangle, CheckCircle, Clock, Target, ArrowRight, Loader2 } from "lucide-react";
 import { convertProblemToProject, getActiveProblems } from "../utils/projectManager";
-import { createProject } from "../utils/supabaseClient";
+import { createProject, updateProblem } from "../utils/supabaseClient";
 // Define Node interface locally to avoid circular imports
 interface Node {
   id: string;
@@ -23,7 +23,7 @@ interface Node {
 // Simple problem interface - matches what comes from database
 interface Problem {
   id: string;
-  title: string;
+  name: string;
   description?: string;
   effect?: string;
   status: 'active' | 'ongoing' | 'resolved';
@@ -91,8 +91,9 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
           console.log('Problem keys:', Object.keys(projectProblems[0]));
         }
         
-        // Use problems as-is from the project data
-        setProblems(projectProblems);
+        // Filter to only show active problems
+        const activeProjectProblems = projectProblems.filter(p => p.status === 'active');
+        setProblems(activeProjectProblems);
       } else {
         // Show all active problems when no specific project is selected
         const activeProblems = await getActiveProblems();
@@ -132,7 +133,7 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
   };
 
   const handleConvertToProject = async (problem: Problem) => {
-    console.log('Converting problem:', problem);
+    console.log('Converting problem:', problem.name);
     console.log('Selected project:', selectedProject?.label);
     console.log('Problem fields:', Object.keys(problem));
     
@@ -140,17 +141,26 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
     try {
       if (selectedProject) {
         // Convert problem to subproject of the selected project
-        const problemTitle = problem.title || problem.name || problem.summary || 'Untitled Problem';
+        const problemTitle = problem.name;
+        const parentProjectId = selectedProject.id;
         const subprojectData = {
           name: problemTitle,
           description: problem.description || `Subproject created from problem: ${problemTitle}`,
-          subproject_from: [selectedProject.label], // Use the project name in the subproject_from array
+          subproject_from: [parentProjectId], // Use the project ID in the subproject_from array
           status: 'not_started'
         };
         
         console.log('Creating subproject with data:', subprojectData);
+        // createProject() saves the subproject to the Supabase database and updates cache
         const subproject = await createProject(subprojectData);
-        console.log('Created subproject:', subproject);
+        console.log('Created subproject in database:', subproject);
+        
+        // Update the problem status to 'resolved' and link it to the new subproject
+        await updateProblem(problem.id, {
+          status: 'resolved',
+          project_id: subproject.id
+        });
+        console.log('Updated problem status to resolved and linked to subproject');
         
         // Remove the converted problem from the list
         setProblems(prev => prev.filter(p => p.id !== problem.id));
@@ -158,7 +168,7 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
         // Notify parent component to refresh the mind map
         onProblemConverted?.(problem.id, subproject.id);
         
-        console.log(`Successfully converted "${problem.title}" to subproject under "${selectedProject.label}"`);
+        console.log(`Successfully converted "${problemTitle}" to subproject under "${selectedProject.label}"`);
       } else {
         // Convert to standalone project
         const project = await convertProblemToProject(problem);
@@ -169,7 +179,7 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
         // Notify parent component
         onProblemConverted?.(problem.id, project.id);
         
-        console.log(`Successfully converted "${problem.title}" to standalone project`);
+        console.log(`Successfully converted "${problem.name}" to standalone project`);
       }
     } catch (error) {
       console.error('Error converting problem:', error);
@@ -313,7 +323,7 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
                       <div className="w-2 h-2 bg-red-400 rounded-full mt-2 flex-shrink-0"></div>
                       <div className="flex-1">
                         <h3 className="text-white font-medium text-sm mb-1 leading-tight">
-                          {problem.title || problem.name || problem.summary || 'Untitled Problem'}
+                          {problem.name}
                         </h3>
                         {problem.description && (
                           <p className="text-gray-400 text-xs leading-relaxed">{problem.description}</p>
