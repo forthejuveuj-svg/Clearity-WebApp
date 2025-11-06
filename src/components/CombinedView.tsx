@@ -839,27 +839,18 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     return basePadding + bannerPadding;
   };
 
-  // Auto-scroll to bottom when new messages are added or when banners change
+  // Auto-scroll to maximum bottom position when messages change
   useEffect(() => {
-    const scrollToBottom = () => {
-      if (messagesEndRef.current && chatContainerRef.current) {
-        // Force layout recalculation first
+    const scrollToMaxBottom = () => {
+      if (chatContainerRef.current) {
         chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-
-        // Then smooth scroll to ensure we're at the very bottom
-        requestAnimationFrame(() => {
-          messagesEndRef.current?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'end'
-          });
-        });
       }
     };
 
-    // Longer delay to ensure DOM is fully updated with message content
-    const timeoutId = setTimeout(scrollToBottom, 200);
+    // Small delay to ensure DOM is updated
+    const timeoutId = setTimeout(scrollToMaxBottom, 50);
     return () => clearTimeout(timeoutId);
-  }, [messages, isInputExpanded, isRecording, isProcessing, sessionId, replyingToTask]);
+  }, [messages]);
 
   // Cleanup blur timeout on unmount
   useEffect(() => {
@@ -1112,15 +1103,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                           newSet.delete(idx);
                           return newSet;
                         });
-                        // Scroll after typing animation completes
+                        // Scroll to max bottom after typing animation completes
                         setTimeout(() => {
-                          if (messagesEndRef.current) {
-                            messagesEndRef.current.scrollIntoView({
-                              behavior: 'smooth',
-                              block: 'end'
-                            });
+                          if (chatContainerRef.current) {
+                            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
                           }
-                        }, 100);
+                        }, 50);
                       }}
                     />
                   ) : (
