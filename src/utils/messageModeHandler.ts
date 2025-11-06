@@ -42,6 +42,8 @@ export class MessageModeHandler {
     this.reset();
   }
 
+
+
   reset() {
     this.state = {
       messageCount: 0,
@@ -52,10 +54,12 @@ export class MessageModeHandler {
 
   getPlaceholder(): string {
     if (this.state.selectedObject) {
-      return `What do you want to change about ${this.state.selectedObject.name}?`;
+      const sanitizedName = this.state.selectedObject.name.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+      return `What do you want to change about ${sanitizedName}?`;
     }
     if (this.state.projectFocus) {
-      return `Let's work on ${this.state.projectFocus.name}...`;
+      const sanitizedName = this.state.projectFocus.name.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+      return `Let's work on ${sanitizedName}...`;
     }
     return "Let's overthink about...";
   }
@@ -91,13 +95,14 @@ export class MessageModeHandler {
     this.state.messageCount = 0;
     
     if (this.onProjectFocusCallback) {
+      const sanitizedName = project.name.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
       if (project.status === 'not_started') {
         // Project not started - offer to help organize it
-        const message = `Would you like me to help you start organizing the project "${project.name}"? I can break it down into manageable tasks and create a roadmap for you.`;
+        const message = `Would you like me to help you start organizing the project "${sanitizedName}"? I can break it down into manageable tasks and create a roadmap for you.`;
         this.onProjectFocusCallback(message, 'project_organization');
       } else {
         // Project already started - offer to help with it
-        const message = `Do you need help with "${project.name}"?`;
+        const message = `Do you need help with "${sanitizedName}"?`;
         this.onProjectFocusCallback(message, 'project_chat');
       }
     }
