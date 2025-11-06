@@ -1,6 +1,24 @@
 import React, { useState, useRef, useEffect } from "react";
 import { X, AlertTriangle, CheckCircle, Clock, Target, ArrowRight, Loader2 } from "lucide-react";
 import { convertProblemToProject, getActiveProblems } from "../utils/projectManager";
+import { createProject } from "../utils/supabaseClient";
+// Define Node interface locally to avoid circular imports
+interface Node {
+  id: string;
+  projectId?: string;
+  label: string;
+  x: number;
+  y: number;
+  color: "blue" | "violet" | "red" | "teal";
+  subNodes?: { label: string; id?: string }[];
+  tension?: number;
+  thoughts?: string[];
+  hasProblem?: boolean;
+  problemType?: "anxiety" | "blocker" | "stress";
+  problemData?: any[];
+  isSubproject?: boolean;
+  parentProjectNames?: string[];
+}
 
 interface Problem {
   id: string;
@@ -30,14 +48,15 @@ interface Solution {
   completed: boolean;
 }
 
-interface ProblemsModalProps {
+export interface ProblemsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  selectedProject?: Node | null;
   onSolutionsCompleted?: (count: number) => void;
   onProblemConverted?: (problemId: string, projectId: string) => void;
 }
 
-export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted, onProblemConverted }: ProblemsModalProps) => {
+export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, selectedProject, onSolutionsCompleted, onProblemConverted }) => {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [loading, setLoading] = useState(false);
   const [convertingProblem, setConvertingProblem] = useState<string | null>(null);
@@ -49,18 +68,25 @@ export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted, onProblem
   const dragOffset = useRef({ x: 0, y: 0 });
   const modalRef = useRef<HTMLDivElement>(null);
 
-  // Load problems when modal opens
+  // Load problems when modal opens or selected project changes
   useEffect(() => {
     if (isOpen) {
       loadProblems();
     }
-  }, [isOpen]);
+  }, [isOpen, selectedProject]);
 
   const loadProblems = async () => {
     setLoading(true);
     try {
-      const activeProblems = await getActiveProblems();
-      setProblems(activeProblems);
+      if (selectedProject) {
+        // Show problems specific to the selected project
+        const projectProblems = selectedProject.problemData || [];
+        setProblems(projectProblems);
+      } else {
+        // Show all active problems when no specific project is selected
+        const activeProblems = await getActiveProblems();
+        setProblems(activeProblems);
+      }
     } catch (error) {
       console.error('Error loading problems:', error);
     } finally {
@@ -96,15 +122,37 @@ export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted, onProblem
   const handleConvertToProject = async (problem: Problem) => {
     setConvertingProblem(problem.id);
     try {
-      const project = await convertProblemToProject(problem);
-      
-      // Update local state to remove the converted problem
-      setProblems(prev => prev.filter(p => p.id !== problem.id));
-      
-      // Notify parent component
-      onProblemConverted?.(problem.id, project.id);
-      
-      console.log(`Successfully converted problem "${problem.title}" to project "${project.name}"`);
+      if (selectedProject) {
+        // Convert problem to subproject of the selected project
+        const subprojectData = {
+          name: problem.title,
+          description: problem.description || `Subproject created from problem: ${problem.title}`,
+          parent_project_id: selectedProject.projectId || selectedProject.id,
+          status: 'not_started',
+          created_at: new Date().toISOString()
+        };
+        
+        const subproject = await createProject(subprojectData);
+        
+        // Update local state to remove the converted problem
+        setProblems(prev => prev.filter(p => p.id !== problem.id));
+        
+        // Notify parent component
+        onProblemConverted?.(problem.id, subproject.id);
+        
+        console.log(`Successfully converted problem "${problem.title}" to subproject "${subproject.name}" under project "${selectedProject.label}"`);
+      } else {
+        // Use existing convertProblemToProject for general problems
+        const project = await convertProblemToProject(problem);
+        
+        // Update local state to remove the converted problem
+        setProblems(prev => prev.filter(p => p.id !== problem.id));
+        
+        // Notify parent component
+        onProblemConverted?.(problem.id, project.id);
+        
+        console.log(`Successfully converted problem "${problem.title}" to project "${project.name}"`);
+      }
     } catch (error) {
       console.error('Error converting problem to project:', error);
       // You might want to show a toast notification here
@@ -199,7 +247,9 @@ export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted, onProblem
               <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center">
                 <AlertTriangle className="w-5 h-5 text-red-400" />
               </div>
-              <h2 className="text-lg font-semibold text-white">Active Problems</h2>
+              <h2 className="text-lg font-semibold text-white">
+                {selectedProject ? `Problems in "${selectedProject.label}"` : 'Active Problems'}
+              </h2>
               {problems.length > 0 && (
                 <span className="bg-red-500/20 text-red-300 text-xs px-2 py-1 rounded-full">
                   {problems.length}
@@ -225,8 +275,15 @@ export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted, onProblem
           ) : problems.length === 0 ? (
             <div className="text-center py-8">
               <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-3" />
-              <h3 className="text-white font-medium mb-2">No active problems</h3>
-              <p className="text-gray-400 text-sm">Great! You don't have any active problems right now.</p>
+              <h3 className="text-white font-medium mb-2">
+                {selectedProject ? 'No problems in this project' : 'No active problems'}
+              </h3>
+              <p className="text-gray-400 text-sm">
+                {selectedProject 
+                  ? `Great! "${selectedProject.label}" doesn't have any active problems right now.`
+                  : 'Great! You don\'t have any active problems right now.'
+                }
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -280,7 +337,7 @@ export const ProblemsModal = ({ isOpen, onClose, onSolutionsCompleted, onProblem
                       ) : (
                         <ArrowRight className="w-3 h-3" />
                       )}
-                      Convert to Project
+                      {selectedProject ? 'Convert to Subproject' : 'Convert to Project'}
                     </button>
                     
                     <button

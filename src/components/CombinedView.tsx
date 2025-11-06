@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Mic, MicOff, ArrowUp, MessageSquare, X, Reply } from "lucide-react";
 import { TypingAnimation } from "./TypingAnimation";
-import { ProblemsModal } from "./ProblemsModal";
+import { ProblemsModal, ProblemsModalProps } from "./ProblemsModal";
 import { TaskManagerModal } from "./TaskManagerModal";
 import { useAudioRecording } from "@/hooks/useAudioRecording";
 import { useAuth } from "@/hooks/useAuth";
@@ -78,6 +78,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
   const [typingMessages, setTypingMessages] = useState<Set<number>>(new Set());
   const [isProblemsOpen, setIsProblemsOpen] = useState(false);
+  const [selectedProjectForProblems, setSelectedProjectForProblems] = useState<Node | null>(null);
   const [currentView, setCurrentView] = useState<'mindmap' | 'tasks'>(initialView);
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
@@ -974,7 +975,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   key={node.id}
                   node={node}
                   onNodeClick={handleNodeClick}
-                  onProblemClick={() => setIsProblemsOpen(true)}
+                  onProblemClick={() => {
+                    setSelectedProjectForProblems(node);
+                    setIsProblemsOpen(true);
+                  }}
                   getScaleTransform={getScaleTransform}
                 />
               ))}
@@ -1284,10 +1288,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       {/* Problems Modal */}
       <ProblemsModal
         isOpen={isProblemsOpen}
-        onClose={() => setIsProblemsOpen(false)}
+        onClose={() => {
+          setIsProblemsOpen(false);
+          setSelectedProjectForProblems(null);
+        }}
+        selectedProject={selectedProjectForProblems}
         onProblemConverted={(problemId, projectId) => {
           console.log(`Problem ${problemId} converted to project ${projectId}`);
-          // You might want to refresh the mind map or show a success message here
+          // Refresh the mind map to show new subproject
+          reloadNodes({ forceRefresh: true });
         }}
       />
     </div>
