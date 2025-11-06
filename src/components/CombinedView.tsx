@@ -83,6 +83,34 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // WebSocket for project manager workflow (silent connection)
+  const {
+    connected,
+    sessionId,
+    currentQuestion,
+    progress,
+    sendResponse,
+    startWorkflow,
+    disconnect,
+  } = useWebSocket(
+    (results) => {
+      // Workflow completed - show summary in chat
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: "Project planning workflow completed! I've broken down your project and assessed the required skills."
+      }]);
+      reloadNodes({ forceRefresh: true }); // Force refresh after workflow completion
+      setCurrentProjectId(null);
+      setCurrentProjectStatus(null);
+    },
+    (error) => {
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `Workflow error: ${error}`
+      }]);
+    }
+  );
+
   // Reset message mode handler when component mounts
   useEffect(() => {
     messageModeHandler.reset();
@@ -111,34 +139,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         }]);
       }
     });
-  }, []);
 
-  // WebSocket for project manager workflow (silent connection)
-  const {
-    connected,
-    sessionId,
-    currentQuestion,
-    progress,
-    sendResponse,
-    startWorkflow,
-  } = useWebSocket(
-    (results) => {
-      // Workflow completed - show summary in chat
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: "Project planning workflow completed! I've broken down your project and assessed the required skills."
-      }]);
-      reloadNodes({ forceRefresh: true }); // Force refresh after workflow completion
-      setCurrentProjectId(null);
-      setCurrentProjectStatus(null);
-    },
-    (error) => {
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: `Workflow error: ${error}`
-      }]);
-    }
-  );
+    // Set up callback for project focus change events (for cleanup)
+    messageModeHandler.setOnProjectFocusChangeCallback(() => {
+      // Disconnect WebSocket when project focus changes
+      if (connected || sessionId) {
+        console.log('Project focus changed, disconnecting WebSocket');
+        disconnect();
+      }
+    });
+  }, [connected, sessionId, disconnect]);
 
   // Handle workflow questions in chat
   useEffect(() => {

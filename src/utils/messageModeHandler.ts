@@ -37,6 +37,7 @@ export class MessageModeHandler {
     messageCount: 0
   };
   private onProjectFocusCallback?: (message: string, messageType?: string, clearMessages?: boolean) => void;
+  private onProjectFocusChangeCallback?: () => void;
 
   constructor() {
     this.reset();
@@ -91,6 +92,11 @@ export class MessageModeHandler {
    * Set project focus and trigger callback with appropriate message based on project status
    */
   setProjectFocus(project: ProjectFocus) {
+    // Notify about project focus change (for cleanup)
+    if (this.onProjectFocusChangeCallback) {
+      this.onProjectFocusChangeCallback();
+    }
+    
     this.state.projectFocus = project;
     this.state.messageCount = 0;
     
@@ -128,6 +134,13 @@ export class MessageModeHandler {
    */
   setOnProjectFocusCallback(callback: (message: string, messageType?: string, clearMessages?: boolean) => void) {
     this.onProjectFocusCallback = callback;
+  }
+
+  /**
+   * Set callback for project focus change events (for cleanup)
+   */
+  setOnProjectFocusChangeCallback(callback: () => void) {
+    this.onProjectFocusChangeCallback = callback;
   }
 
   async processMessage(text: string, userId: string): Promise<{ success: boolean; output?: string; error?: string }> {

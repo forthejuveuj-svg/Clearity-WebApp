@@ -23,6 +23,7 @@ interface UseWebSocketReturn {
   progress: string | null;
   sendResponse: (response: any) => void;
   startWorkflow: (projectId: string, userId: string, workflowType?: 'projectmanager' | 'project_chat_workflow') => Promise<void>;
+  disconnect: () => void;
 }
 
 // Global socket reference
@@ -107,6 +108,20 @@ export const useWebSocket = (
         console.log('Received question:', data);
         currentQuestionState = data;
         setCurrentQuestion(data);
+      });
+
+      socket.on('workflow_message', (data: any) => {
+        console.log('Received workflow message:', data);
+        // Convert workflow_message to workflow_question format for compatibility
+        const questionData: WorkflowQuestion = {
+          session_id: data.session_id,
+          question: data.message,
+          type: 'free_text',
+          options: undefined,
+          context: undefined
+        };
+        currentQuestionState = questionData;
+        setCurrentQuestion(questionData);
       });
 
       socket.on('workflow_progress', (data: any) => {
@@ -267,6 +282,7 @@ export const useWebSocket = (
     currentQuestion,
     progress,
     sendResponse,
-    startWorkflow
+    startWorkflow,
+    disconnect: disconnectSocket
   };
 };
