@@ -82,7 +82,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   // Ref for auto-scrolling chat messages
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -826,32 +826,38 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Calculate dynamic padding based on active banners
   const calculateChatPadding = () => {
     let bannerCount = 0;
-    
+
     if (isRecording && isInputExpanded) bannerCount++;
     if (isProcessing && isInputExpanded && !isRecording) bannerCount++;
     if (sessionId && !currentProjectId && isInputExpanded && !isRecording && !isProcessing) bannerCount++;
     if (replyingToTask && isInputExpanded && !isRecording && !isProcessing) bannerCount++;
-    
+
     // Base padding + banner height (48px per banner + 8px margin)
     const basePadding = isInputExpanded ? 80 : 60;
     const bannerPadding = bannerCount * 56; // 48px height + 8px margin
-    
+
     return basePadding + bannerPadding;
   };
 
   // Auto-scroll to bottom when new messages are added or when banners change
   useEffect(() => {
     const scrollToBottom = () => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ 
-          behavior: 'smooth',
-          block: 'end'
+      if (messagesEndRef.current && chatContainerRef.current) {
+        // Force layout recalculation first
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+
+        // Then smooth scroll to ensure we're at the very bottom
+        requestAnimationFrame(() => {
+          messagesEndRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'end'
+          });
         });
       }
     };
 
-    // Small delay to ensure DOM is updated
-    const timeoutId = setTimeout(scrollToBottom, 100);
+    // Longer delay to ensure DOM is fully updated with message content
+    const timeoutId = setTimeout(scrollToBottom, 200);
     return () => clearTimeout(timeoutId);
   }, [messages, isInputExpanded, isRecording, isProcessing, sessionId, replyingToTask]);
 
@@ -1075,7 +1081,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       >
         {/* Chat messages */}
         <div className="h-full flex flex-col max-w-4xl mx-auto">
-          <div 
+          <div
             ref={chatContainerRef}
             className="overflow-y-auto px-4 space-y-2 custom-scrollbar"
             style={{
@@ -1106,6 +1112,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                           newSet.delete(idx);
                           return newSet;
                         });
+                        // Scroll after typing animation completes
+                        setTimeout(() => {
+                          if (messagesEndRef.current) {
+                            messagesEndRef.current.scrollIntoView({
+                              behavior: 'smooth',
+                              block: 'end'
+                            });
+                          }
+                        }, 100);
                       }}
                     />
                   ) : (
