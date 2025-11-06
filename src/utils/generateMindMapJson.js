@@ -247,11 +247,8 @@ export async function generateMindMapJson(options = {}) {
     if (nodes.length >= 8 && !parentProjectId && !showSubprojects) {
       console.log(`🔄 Detected ${nodes.length} projects - triggering Project Unifier`);
 
-      // Get user ID from localStorage or other source
-      const userId = localStorage.getItem('user_id') || 'default_user';
-
       // Call project unifier in background
-      callProjectUnifier(filteredProjects, userId).then(async (unifierResult) => {
+      callProjectUnifier(filteredProjects).then(async (unifierResult) => {
         if (unifierResult && unifierResult.success) {
           console.log('✅ Project Unifier completed, refreshing cache...');
 
@@ -292,9 +289,12 @@ export async function generateMindMapJson(options = {}) {
   }
 }
 
-async function callProjectUnifier(projects, userId) {
+async function callProjectUnifier(projects) {
   try {
     console.log(`🔄 Triggering Project Unifier for ${projects.length} projects`);
+
+    // Get user_id from the first project since that will be correct
+    const userId = projects.length > 0 ? projects[0].user_id : null;
 
     const response = await fetch('https://clearity.space/rpc', {
       method: 'POST',
@@ -305,7 +305,7 @@ async function callProjectUnifier(projects, userId) {
         method: 'project_unifier',
         params: {
           projects_data: projects,
-          user_id: userId
+          ...(userId && { user_id: userId })
           // No session_id = direct analysis mode
         }
       })
