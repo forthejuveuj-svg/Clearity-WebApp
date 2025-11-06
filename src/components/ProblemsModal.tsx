@@ -23,7 +23,7 @@ interface Node {
 // Simple problem interface - matches what comes from database
 interface Problem {
   id: string;
-  name: string;
+  name?: string;
   description?: string;
   effect?: string;
   status: 'active' | 'ongoing' | 'resolved';
@@ -84,13 +84,13 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
         const projectProblems = selectedProject.problemData || [];
         console.log('Selected project:', selectedProject.label);
         console.log('Project problems data:', projectProblems);
-        
+
         // Debug: Log the structure of real problems
         if (projectProblems.length > 0) {
           console.log('First real problem structure:', projectProblems[0]);
           console.log('Problem keys:', Object.keys(projectProblems[0]));
         }
-        
+
         // Filter to only show active problems
         const activeProjectProblems = projectProblems.filter(p => p.status === 'active');
         setProblems(activeProjectProblems);
@@ -136,49 +136,61 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
     console.log('Converting problem:', problem.name);
     console.log('Selected project:', selectedProject?.label);
     console.log('Problem fields:', Object.keys(problem));
-    
+
     setConvertingProblem(problem.id);
     try {
       if (selectedProject) {
         // Convert problem to subproject of the selected project
         const problemTitle = problem.name;
-        const parentProjectId = selectedProject.id;
+        const parentProjectId = selectedProject.projectId || selectedProject.id;
+
+        console.log('Selected project object:', selectedProject);
+        console.log('selectedProject.projectId:', selectedProject.projectId);
+        console.log('selectedProject.id:', selectedProject.id);
+        console.log('Parent project ID to use:', parentProjectId);
+
+        // Ensure we have a valid parent project ID
+        if (!parentProjectId) {
+          throw new Error('No valid parent project ID found');
+        }
+
         const subprojectData = {
           name: problemTitle,
           description: problem.description || `Subproject created from problem: ${problemTitle}`,
           subproject_from: [parentProjectId], // Use the project ID in the subproject_from array
           status: 'not_started'
         };
-        
+
         console.log('Creating subproject with data:', subprojectData);
         // createProject() saves the subproject to the Supabase database and updates cache
         const subproject = await createProject(subprojectData);
         console.log('Created subproject in database:', subproject);
-        
+        console.log('Subproject subproject_from field:', subproject.subproject_from);
+
         // Update the problem status to 'resolved' and link it to the new subproject
         await updateProblem(problem.id, {
           status: 'resolved',
           project_id: subproject.id
         });
         console.log('Updated problem status to resolved and linked to subproject');
-        
+
         // Remove the converted problem from the list
         setProblems(prev => prev.filter(p => p.id !== problem.id));
-        
+
         // Notify parent component to refresh the mind map
         onProblemConverted?.(problem.id, subproject.id);
-        
+
         console.log(`Successfully converted "${problemTitle}" to subproject under "${selectedProject.label}"`);
       } else {
         // Convert to standalone project
         const project = await convertProblemToProject(problem);
-        
+
         // Remove the converted problem from the list
         setProblems(prev => prev.filter(p => p.id !== problem.id));
-        
+
         // Notify parent component
         onProblemConverted?.(problem.id, project.id);
-        
+
         console.log(`Successfully converted "${problem.name}" to standalone project`);
       }
     } catch (error) {
@@ -193,7 +205,7 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
     // Only start dragging if clicking on the header area
     const target = e.target as HTMLElement;
     const header = modalRef.current?.querySelector('.modal-header');
-    
+
     if (header && (header.contains(target) || target === header)) {
       e.preventDefault();
       setIsDragging(true);
@@ -211,14 +223,14 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
     if (isDragging && modalRef.current) {
       const newX = e.clientX - dragOffset.current.x;
       const newY = e.clientY - dragOffset.current.y;
-      
+
       // Keep modal within viewport bounds
       const maxX = window.innerWidth - modalRef.current.offsetWidth;
       const maxY = window.innerHeight - modalRef.current.offsetHeight;
-      
+
       const constrainedX = Math.max(0, Math.min(newX, maxX));
       const constrainedY = Math.max(0, Math.min(newY, maxY));
-      
+
       setModalPosition({ x: constrainedX, y: constrainedY });
     }
   };
@@ -232,7 +244,7 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
-      
+
       return () => {
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
@@ -243,27 +255,27 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
   if (!isOpen) return null;
 
   return (
-    <div 
+    <div
       className="fixed top-0 left-0 right-0 h-[90vh] z-50 flex items-start justify-end p-4 pointer-events-none"
     >
       {/* Backdrop only for mind map area */}
-      <div 
+      <div
         className="absolute top-0 left-0 right-0 h-[90vh] bg-black/20 pointer-events-auto"
         onClick={onClose}
         style={{
           animation: 'breathe 4s ease-in-out infinite'
         }}
       />
-      
+
       {/* Modal */}
-      <div 
+      <div
         ref={modalRef}
         onMouseDown={handleMouseDown}
         className="relative bg-gray-900/95 border border-gray-700/50 rounded-2xl w-full max-w-lg mx-auto shadow-2xl max-h-[70vh] overflow-hidden backdrop-blur-sm mt-16 pointer-events-auto"
-        style={{ 
-          position: 'absolute', 
-          left: modalPosition.x || '50%', 
-          top: modalPosition.y || '16px', 
+        style={{
+          position: 'absolute',
+          left: modalPosition.x || '50%',
+          top: modalPosition.y || '16px',
           transform: modalPosition.x ? 'none' : 'translateX(-50%)',
           cursor: isDragging ? 'grabbing' : 'grab'
         }}
@@ -307,7 +319,7 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
                 {selectedProject ? 'No problems in this project' : 'No active problems'}
               </h3>
               <p className="text-gray-400 text-sm">
-                {selectedProject 
+                {selectedProject
                   ? `Great! "${selectedProject.label}" doesn't have any active problems right now.`
                   : 'Great! You don\'t have any active problems right now.'
                 }
@@ -369,7 +381,7 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
                       )}
                       {selectedProject ? 'Convert to Subproject' : 'Convert to Project'}
                     </button>
-                    
+
                     <button
                       onClick={() => toggleRemindLater(problem.id)}
                       className="flex items-center gap-2 px-3 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 text-xs rounded-lg transition-all duration-200 hover:shadow-md"
