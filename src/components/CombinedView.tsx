@@ -506,6 +506,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           setCurrentProjectId(projectIdToUse);
           setCurrentProjectStatus('not_started'); // Navigating to subprojects implies not started
 
+          // Trigger project chat initiator for projects with subprojects
+          messageModeHandler.setProjectFocus({
+            id: projectIdToUse,
+            name: node.label,
+            status: 'started' // Projects with subprojects should use project chat, not project manager
+          });
+
           console.log(`Navigated to subprojects of ${node.label}`);
         } else {
           console.log(`No subprojects found for ${node.label}`);
