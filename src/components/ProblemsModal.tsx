@@ -85,6 +85,12 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
         console.log('Selected project:', selectedProject.label);
         console.log('Project problems data:', projectProblems);
         
+        // Debug: Log the structure of real problems
+        if (projectProblems.length > 0) {
+          console.log('First real problem structure:', projectProblems[0]);
+          console.log('Problem keys:', Object.keys(projectProblems[0]));
+        }
+        
         // Use problems as-is from the project data
         setProblems(projectProblems);
       } else {
@@ -126,17 +132,19 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
   };
 
   const handleConvertToProject = async (problem: Problem) => {
-    console.log('Converting problem:', problem.title);
+    console.log('Converting problem:', problem);
     console.log('Selected project:', selectedProject?.label);
+    console.log('Problem fields:', Object.keys(problem));
     
     setConvertingProblem(problem.id);
     try {
       if (selectedProject) {
         // Convert problem to subproject of the selected project
+        const problemTitle = problem.title || problem.name || problem.summary || 'Untitled Problem';
         const subprojectData = {
-          name: problem.title,
-          description: problem.description || `Subproject created from problem: ${problem.title}`,
-          parent_project_id: selectedProject.projectId || selectedProject.id,
+          name: problemTitle,
+          description: problem.description || `Subproject created from problem: ${problemTitle}`,
+          subproject_from: [selectedProject.label], // Use the project name in the subproject_from array
           status: 'not_started'
         };
         
@@ -304,7 +312,9 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
                     <div className="flex items-start gap-3 flex-1">
                       <div className="w-2 h-2 bg-red-400 rounded-full mt-2 flex-shrink-0"></div>
                       <div className="flex-1">
-                        <h3 className="text-white font-medium text-sm mb-1 leading-tight">{problem.title}</h3>
+                        <h3 className="text-white font-medium text-sm mb-1 leading-tight">
+                          {problem.title || problem.name || problem.summary || 'Untitled Problem'}
+                        </h3>
                         {problem.description && (
                           <p className="text-gray-400 text-xs leading-relaxed">{problem.description}</p>
                         )}

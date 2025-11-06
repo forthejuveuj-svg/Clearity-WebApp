@@ -1,6 +1,6 @@
-import { 
-  getAllDataFromCache, 
-  filterElements, 
+import {
+  getAllDataFromCache,
+  filterElements,
   convertProblemToProject as convertProblemToProjectDB,
   updateProblem
 } from './supabaseClient';
