@@ -296,7 +296,7 @@ async function callProjectUnifier(projects, userId) {
   try {
     console.log(`🔄 Triggering Project Unifier for ${projects.length} projects`);
 
-    const response = await fetch('http://clearity.space/rpc', {
+    const response = await fetch('https://clearity.space/rpc', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
