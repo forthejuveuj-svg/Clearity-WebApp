@@ -73,7 +73,7 @@ function getRandomPosition() {
   // Bounding box constraints: 20% left/right margins, 15% top/bottom margins
   const leftMargin = 20;   // 20% from left
   const rightMargin = 20;  // 20% from right  
-  const topMargin = 15;    // 15% from top
+  const topMargin = 20;    // 15% from top
   const bottomMargin = 15; // 15% from bottom
   
   const availableWidth = 100 - leftMargin - rightMargin;   // 60% available width
