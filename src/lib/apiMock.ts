@@ -39,6 +39,12 @@ interface ProjectChatParams {
   user_id: string;
 }
 
+interface ProjectChatWorkflowParams {
+  project_id: string;
+  user_id: string;
+  session_id: string;
+}
+
 // Mock data generators
 const generateMockMindMapData = (text: string) => {
   const words = text.split(' ').slice(0, 10);
@@ -177,6 +183,16 @@ export class APIServiceMock {
       success: true,
       output: randomResponse,
       method: 'project_chat'
+    };
+  }
+
+  static async projectChatWorkflow(params: ProjectChatWorkflowParams): Promise<RPCResponse> {
+    await this.simulateDelay(500);
+    
+    return {
+      success: true,
+      result: { message: `Project chat workflow started for session ${params.session_id}` },
+      method: 'project_chat_workflow'
     };
   }
 

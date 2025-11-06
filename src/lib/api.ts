@@ -43,6 +43,12 @@ interface ProjectChatParams {
   user_id: string;
 }
 
+interface ProjectChatWorkflowParams {
+  project_id: string;
+  user_id: string;
+  session_id: string;
+}
+
 export class APIService {
   private static get useMockAPI(): boolean {
     return import.meta.env.DEV && window.location.hostname === 'localhost';
@@ -126,6 +132,13 @@ export class APIService {
       return APIServiceMock.projectChat(params);
     }
     return this.makeRPCCall('project_chat', params);
+  }
+
+  static async projectChatWorkflow(params: ProjectChatWorkflowParams): Promise<RPCResponse> {
+    if (this.useMockAPI) {
+      return APIServiceMock.projectChatWorkflow(params);
+    }
+    return this.makeRPCCall('project_chat_workflow', params);
   }
 
   static async healthCheck(): Promise<RPCResponse> {

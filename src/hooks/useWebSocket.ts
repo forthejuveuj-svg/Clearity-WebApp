@@ -22,7 +22,7 @@ interface UseWebSocketReturn {
   currentQuestion: WorkflowQuestion | null;
   progress: string | null;
   sendResponse: (response: any) => void;
-  startWorkflow: (projectId: string, userId: string) => Promise<void>;
+  startWorkflow: (projectId: string, userId: string, workflowType?: 'projectmanager' | 'project_chat_workflow') => Promise<void>;
 }
 
 // Global socket reference
@@ -196,7 +196,7 @@ export const useWebSocket = (
   }, []);
 
   // Start workflow for a project - this is when we connect
-  const startWorkflow = useCallback(async (projectId: string, userId: string) => {
+  const startWorkflow = useCallback(async (projectId: string, userId: string, workflowType: 'projectmanager' | 'project_chat_workflow' = 'projectmanager') => {
     try {
       // Initialize socket connection first
       await initializeSocket();
@@ -227,7 +227,7 @@ export const useWebSocket = (
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          method: 'projectmanager',
+          method: workflowType,
           params: {
             project_id: projectId,
             user_id: userId,

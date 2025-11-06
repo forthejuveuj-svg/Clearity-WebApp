@@ -120,6 +120,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }]);
       reloadNodes({ forceRefresh: true }); // Force refresh after workflow completion
       setCurrentProjectId(null);
+      setCurrentProjectStatus(null);
     },
     (error) => {
       setMessages(prev => [...prev, {
@@ -157,6 +158,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [clickedProjectNode, setClickedProjectNode] = useState<Node | null>(null);
   const [showSubprojects, setShowSubprojects] = useState(false); // Track if we should show subprojects
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null); // Track focused project for workflow
+  const [currentProjectStatus, setCurrentProjectStatus] = useState<'started' | 'not_started' | null>(null); // Track project status
 
   // Simple session management
   const [sessionHistory, setSessionHistory] = useState<SessionData[]>([]);
@@ -203,6 +205,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       if (result.newIndex === 0 || !result.session.parentNodeId) {
         setParentNodeTitle(null);
         setCurrentProjectId(null);
+        setCurrentProjectStatus(null);
       }
     }
   };
@@ -430,11 +433,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }
 
       try {
-        // Check if we're in project manager mode (project is focused)
-        if (currentProjectId) {
+        // Check if we're in project mode (project is focused)
+        if (currentProjectId && currentProjectStatus) {
+          // Both project types use WebSocket workflows, but different ones
+          const workflowType = currentProjectStatus === 'not_started' ? 'projectmanager' : 'project_chat_workflow';
+          
           // If workflow hasn't started yet, start it
           if (!sessionId || !connected) {
-            await startWorkflow(currentProjectId, userId);
+            await startWorkflow(currentProjectId, userId, workflowType);
             // Wait a moment for session to register
             await new Promise(resolve => setTimeout(resolve, 500));
           }
@@ -498,6 +504,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           setParentNodeTitle(node.label);
           // Track project ID for project manager mode
           setCurrentProjectId(projectIdToUse);
+          setCurrentProjectStatus('not_started'); // Navigating to subprojects implies not started
 
           console.log(`Navigated to subprojects of ${node.label}`);
         } else {
@@ -507,6 +514,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           const projectIdToUse = node.projectId || node.id;
           setCurrentProjectId(projectIdToUse);
           const isStarted = node.color === 'blue' || node.color === 'teal';
+          setCurrentProjectStatus(isStarted ? 'started' : 'not_started');
           messageModeHandler.setProjectFocus({
             id: projectIdToUse,
             name: node.label,
@@ -524,6 +532,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
       // Determine if project is started (simple heuristic based on node color or other properties)
       const isStarted = node.color === 'blue' || node.color === 'teal'; // Assume blue/teal = started
+      setCurrentProjectStatus(isStarted ? 'started' : 'not_started');
 
       // Silently switch to project mode - user doesn't see any indication
       messageModeHandler.setProjectFocus({
