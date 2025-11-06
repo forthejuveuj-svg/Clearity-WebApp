@@ -176,7 +176,7 @@ export async function generateMindMapJson(options = {}) {
       if (parentProject) {
         filteredProjects = projects.filter(p => 
           p.subproject_from && 
-          (p.subproject_from.includes(parentProject.name) || p.subproject_from.includes(parentProject.id))
+          p.subproject_from.includes(parentProject.id)
         );
       } else {
         filteredProjects = [];
@@ -219,7 +219,7 @@ export async function generateMindMapJson(options = {}) {
         if (!showSubprojects && !parentProjectId) {
           const subprojects = projects.filter(p =>
             p.subproject_from &&
-            (p.subproject_from.includes(project.name) || p.subproject_from.includes(project.id))
+            p.subproject_from.includes(project.id)
           );
           if (subprojects.length > 0) {
             node.subNodes = subprojects.map(sp => ({
