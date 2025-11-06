@@ -20,8 +20,8 @@ interface Node {
   parentProjectNames?: string[];
 }
 
-// Simple problem interface from database
-interface SimpleProblem {
+// Simple problem interface - matches what comes from database
+interface Problem {
   id: string;
   title: string;
   description?: string;
@@ -30,10 +30,6 @@ interface SimpleProblem {
   created_at: string;
   updated_at?: string;
   project_id?: string;
-}
-
-// Extended problem interface with additional fields
-interface Problem extends SimpleProblem {
   tag?: string;
   reasoning?: string[];
   microAction?: {
@@ -89,48 +85,13 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
         console.log('Selected project:', selectedProject.label);
         console.log('Project problems data:', projectProblems);
         
-        // Convert simple problems to extended problems for consistent interface
-        let extendedProblems: Problem[] = projectProblems.map((problem: SimpleProblem | Problem) => ({
-          ...problem,
-          // Ensure all required fields exist
-          tag: (problem as Problem).tag,
-          reasoning: (problem as Problem).reasoning,
-          microAction: (problem as Problem).microAction,
-          solutions: (problem as Problem).solutions,
-          isSolvable: (problem as Problem).isSolvable
-        }));
-        
-        // If no problems found, create a test problem for demonstration
-        if (extendedProblems.length === 0) {
-          extendedProblems = [{
-            id: `test-problem-${selectedProject.id}`,
-            title: `Sample problem for ${selectedProject.label}`,
-            description: 'This is a test problem to demonstrate the conversion functionality.',
-            effect: 'This problem is blocking progress on the project.',
-            status: 'active' as const,
-            created_at: new Date().toISOString(),
-            project_id: selectedProject.projectId || selectedProject.id,
-            tag: 'test',
-            reasoning: ['This is a demonstration problem', 'Created to test the subproject conversion feature'],
-            isSolvable: true
-          }];
-        }
-        
-        console.log('Extended problems:', extendedProblems);
-        setProblems(extendedProblems);
+        // Use problems as-is from the project data
+        setProblems(projectProblems);
       } else {
         // Show all active problems when no specific project is selected
         const activeProblems = await getActiveProblems();
-        // Convert simple problems to extended problems
-        const extendedProblems: Problem[] = activeProblems.map((problem: SimpleProblem) => ({
-          ...problem,
-          tag: undefined,
-          reasoning: undefined,
-          microAction: undefined,
-          solutions: undefined,
-          isSolvable: undefined
-        }));
-        setProblems(extendedProblems);
+        console.log('All active problems:', activeProblems);
+        setProblems(activeProblems);
       }
     } catch (error) {
       console.error('Error loading problems:', error);
@@ -165,8 +126,8 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
   };
 
   const handleConvertToProject = async (problem: Problem) => {
-    console.log('Converting problem to project:', problem);
-    console.log('Selected project:', selectedProject);
+    console.log('Converting problem:', problem.title);
+    console.log('Selected project:', selectedProject?.label);
     
     setConvertingProblem(problem.id);
     try {
@@ -176,44 +137,35 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
           name: problem.title,
           description: problem.description || `Subproject created from problem: ${problem.title}`,
           parent_project_id: selectedProject.projectId || selectedProject.id,
-          status: 'not_started',
-          created_at: new Date().toISOString()
+          status: 'not_started'
         };
         
         console.log('Creating subproject with data:', subprojectData);
         const subproject = await createProject(subprojectData);
         console.log('Created subproject:', subproject);
         
-        // Update local state to remove the converted problem
+        // Remove the converted problem from the list
         setProblems(prev => prev.filter(p => p.id !== problem.id));
         
-        // If this was a test problem, we don't need to update the database
-        if (problem.id.startsWith('test-problem-')) {
-          console.log('Test problem converted, no database update needed');
-        }
-        
-        // Notify parent component
+        // Notify parent component to refresh the mind map
         onProblemConverted?.(problem.id, subproject.id);
         
-        console.log(`Successfully converted problem "${problem.title}" to subproject "${subproject.name}" under project "${selectedProject.label}"`);
+        console.log(`Successfully converted "${problem.title}" to subproject under "${selectedProject.label}"`);
       } else {
-        // Use existing convertProblemToProject for general problems
-        console.log('Converting to standalone project');
+        // Convert to standalone project
         const project = await convertProblemToProject(problem);
-        console.log('Created project:', project);
         
-        // Update local state to remove the converted problem
+        // Remove the converted problem from the list
         setProblems(prev => prev.filter(p => p.id !== problem.id));
         
         // Notify parent component
         onProblemConverted?.(problem.id, project.id);
         
-        console.log(`Successfully converted problem "${problem.title}" to project "${project.name}"`);
+        console.log(`Successfully converted "${problem.title}" to standalone project`);
       }
     } catch (error) {
-      console.error('Error converting problem to project:', error);
-      console.error('Error details:', error);
-      // You might want to show a toast notification here
+      console.error('Error converting problem:', error);
+      alert(`Failed to convert problem: ${error.message || 'Unknown error'}`);
     } finally {
       setConvertingProblem(null);
     }

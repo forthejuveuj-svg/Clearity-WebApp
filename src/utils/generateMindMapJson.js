@@ -150,8 +150,19 @@ function createProjectNode(project, knowledgeNodes = [], problems = []) {
     y: position.y,
     color,
     thoughts: allThoughts,
-    hasProblem: projectProblems.length > 0,
-    problemData: projectProblems.length > 0 ? projectProblems : undefined
+    hasProblem: projectProblems.length > 0 || true, // Temporarily show problem bubble on all nodes for testing
+    problemData: projectProblems.length > 0 ? projectProblems : [
+      // Add a test problem if no real problems exist
+      {
+        id: `test-problem-${project.id}`,
+        title: `Test problem for ${project.name}`,
+        description: 'This is a test problem to demonstrate the conversion functionality.',
+        effect: 'This problem is blocking progress on the project.',
+        status: 'active',
+        created_at: new Date().toISOString(),
+        project_id: project.id
+      }
+    ]
   };
 
 
