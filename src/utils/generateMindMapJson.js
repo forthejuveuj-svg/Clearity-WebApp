@@ -1,17 +1,16 @@
-import { getAllDataFromCache, initializeData, filterElements, isJWTError } from './supabaseClient.js';
+import { getAllDataFromCache, initializeData, filterElements, isJWTError, refreshAllData } from './supabaseClient.js';
 
 async function fetchSupabaseData(onJWTError = null, forceRefresh = false) {
   try {
     let data;
-    
+
     if (forceRefresh) {
       // Force refresh from database
-      const { refreshAllData } = await import('./supabaseClient.js');
       data = await refreshAllData({ onJWTError });
     } else {
       // Use cache first - only initialize if cache is empty
       data = getAllDataFromCache();
-      
+
       // If cache is empty (no lastUpdated), then initialize
       if (!data.lastUpdated) {
         data = await initializeData({ onJWTError });
@@ -75,7 +74,7 @@ function getRandomPosition() {
   const rightMargin = 20;  // 20% from right  
   const topMargin = 20;    // 15% from top
   const bottomMargin = 15; // 15% from bottom
-  
+
   const availableWidth = 100 - leftMargin - rightMargin;   // 60% available width
   const availableHeight = 100 - topMargin - bottomMargin; // 70% available height
 
@@ -178,13 +177,13 @@ export async function generateMindMapJson(options = {}) {
 
     // Apply filtering based on options using unified filterElements
     let filteredProjects;
-    
+
     if (parentProjectId) {
       // Find subprojects of the parent project
       const parentProject = projects.find(p => p.id === parentProjectId);
       if (parentProject) {
-        filteredProjects = projects.filter(p => 
-          p.subproject_from && 
+        filteredProjects = projects.filter(p =>
+          p.subproject_from &&
           p.subproject_from.includes(parentProject.id)
         );
       } else {
@@ -193,7 +192,7 @@ export async function generateMindMapJson(options = {}) {
     } else if (showTodayOnly) {
       // Filter by today's date - only check created_at
       const today = new Date().toISOString().split('T')[0];
-      
+
       filteredProjects = projects.filter(project => {
         const createdDate = project.created_at ? new Date(project.created_at).toISOString().split('T')[0] : null;
         return createdDate === today;
@@ -244,18 +243,93 @@ export async function generateMindMapJson(options = {}) {
 
 
 
+    // Check if we need to trigger project unifier (8+ nodes and not in subproject view)
+    if (nodes.length >= 8 && !parentProjectId && !showSubprojects) {
+      console.log(`🔄 Detected ${nodes.length} projects - triggering Project Unifier`);
+
+      // Get user ID from localStorage or other source
+      const userId = localStorage.getItem('user_id') || 'default_user';
+
+      // Call project unifier in background
+      callProjectUnifier(filteredProjects, userId).then(async (unifierResult) => {
+        if (unifierResult && unifierResult.success) {
+          console.log('✅ Project Unifier completed, refreshing cache...');
+
+          // Refresh cache to get updated project structure
+          try {
+            await refreshAllData({ onJWTError });
+            console.log('✅ Cache refreshed after project unification');
+
+            // Optionally trigger a UI refresh here
+            // You could dispatch a custom event that the UI listens to
+            window.dispatchEvent(new CustomEvent('projectsReorganized', {
+              detail: {
+                message: 'Projects have been reorganized. Refresh to see changes.',
+                parentProjects: unifierResult.parent_projects || []
+              }
+            }));
+
+          } catch (refreshError) {
+            console.error('❌ Error refreshing cache after unification:', refreshError);
+          }
+        }
+      }).catch(error => {
+        console.error('❌ Project Unifier error:', error);
+      });
+    }
+
     const result = {
       nodes,
       parentNode,
-      _timestamp: Date.now()
+      _timestamp: Date.now(),
+      unifierTriggered: nodes.length >= 8 && !parentProjectId && !showSubprojects
     };
-
-
 
     return result;
   } catch (error) {
     console.error('Error generating mind map:', error);
     return getFallbackJson();
+  }
+}
+
+async function callProjectUnifier(projects, userId) {
+  try {
+    console.log(`🔄 Triggering Project Unifier for ${projects.length} projects`);
+
+    const response = await fetch('http://clearity.space/rpc', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        method: 'project_unifier',
+        params: {
+          projects_data: projects,
+          user_id: userId
+          // No session_id = direct analysis mode
+        }
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      console.log('✅ Project Unifier completed successfully');
+      console.log('Reorganization plan:', result.reorganization_plan);
+
+      // If there are parent projects suggested, log them
+      if (result.parent_projects && result.parent_projects.length > 0) {
+        console.log(`📊 Suggested ${result.parent_projects.length} parent projects:`, result.parent_projects);
+      }
+
+      return result;
+    } else {
+      console.warn('⚠️ Project Unifier failed:', result.error);
+      return null;
+    }
+  } catch (error) {
+    console.error('❌ Error calling Project Unifier:', error);
+    return null;
   }
 }
 
