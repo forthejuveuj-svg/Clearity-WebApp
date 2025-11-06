@@ -82,6 +82,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Ref for auto-scrolling chat messages
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // WebSocket for all workflows (project manager, project chat, and mind dump)
   const {
@@ -819,6 +823,38 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     };
   }, [isDragging]);
 
+  // Calculate dynamic padding based on active banners
+  const calculateChatPadding = () => {
+    let bannerCount = 0;
+    
+    if (isRecording && isInputExpanded) bannerCount++;
+    if (isProcessing && isInputExpanded && !isRecording) bannerCount++;
+    if (sessionId && !currentProjectId && isInputExpanded && !isRecording && !isProcessing) bannerCount++;
+    if (replyingToTask && isInputExpanded && !isRecording && !isProcessing) bannerCount++;
+    
+    // Base padding + banner height (48px per banner + 8px margin)
+    const basePadding = isInputExpanded ? 80 : 60;
+    const bannerPadding = bannerCount * 56; // 48px height + 8px margin
+    
+    return basePadding + bannerPadding;
+  };
+
+  // Auto-scroll to bottom when new messages are added or when banners change
+  useEffect(() => {
+    const scrollToBottom = () => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'end'
+        });
+      }
+    };
+
+    // Small delay to ensure DOM is updated
+    const timeoutId = setTimeout(scrollToBottom, 100);
+    return () => clearTimeout(timeoutId);
+  }, [messages, isInputExpanded, isRecording, isProcessing, sessionId, replyingToTask]);
+
   // Cleanup blur timeout on unmount
   useEffect(() => {
     return () => {
@@ -1039,7 +1075,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       >
         {/* Chat messages */}
         <div className="h-full flex flex-col max-w-4xl mx-auto">
-          <div className="overflow-y-auto px-4 py-3 pb-20 space-y-2">
+          <div 
+            ref={chatContainerRef}
+            className="overflow-y-auto px-4 space-y-2 custom-scrollbar"
+            style={{
+              paddingTop: '12px',
+              paddingBottom: `${calculateChatPadding()}px`,
+            }}
+          >
             {messages.map((message, idx) => (
               <div
                 key={idx}
@@ -1086,6 +1129,60 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 </div>
               </div>
             ))}
+            {/* Invisible element to scroll to */}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Status banners - positioned above input */}
+          <div className={`absolute left-0 right-0 px-4 pointer-events-none transition-all duration-300 ${mapHeight > 85 ? 'bottom-[-100px] opacity-0' : 'bottom-16 opacity-100'
+            }`}>
+            <div className="max-w-4xl mx-auto">
+              {/* Recording indicator - show when recording */}
+              {isRecording && isInputExpanded && (
+                <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/30 rounded-lg backdrop-blur-sm">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  <span className="text-sm text-red-300 flex-1">Recording... {formatRecordingTime(recordingTime)}</span>
+                  <button
+                    type="button"
+                    onClick={handleMicrophoneClick}
+                    className="p-0.5 hover:bg-red-500/20 rounded transition-colors pointer-events-auto"
+                  >
+                    <MicOff className="w-3.5 h-3.5 text-red-400" />
+                  </button>
+                </div>
+              )}
+
+              {/* Processing indicator - show when processing */}
+              {isProcessing && isInputExpanded && !isRecording && (
+                <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg backdrop-blur-sm">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
+                  <span className="text-sm text-purple-300 flex-1">Processing your message...</span>
+                </div>
+              )}
+
+              {/* Workflow indicator - show when any workflow is active */}
+              {sessionId && !currentProjectId && isInputExpanded && !isRecording && !isProcessing && (
+                <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg backdrop-blur-sm">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                  <span className="text-sm text-blue-300 flex-1">Interactive mind dump active - answer the questions for better extraction</span>
+                </div>
+              )}
+
+              {/* Replying to indicator - only show when expanded and not recording and not processing */}
+              {replyingToTask && isInputExpanded && !isRecording && !isProcessing && (
+                <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg backdrop-blur-sm">
+                  <Reply className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                  <span className="text-sm text-blue-300 flex-1 truncate">Replying to: <strong>{replyingToTask.title}</strong></span>
+                  <button
+                    type="button"
+                    onClick={handleCancelReply}
+                    className="p-0.5 hover:bg-blue-500/20 rounded transition-colors pointer-events-auto"
+                  >
+                    <X className="w-3.5 h-3.5 text-blue-400" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Input bar - floating at the bottom */}
@@ -1097,51 +1194,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             )}
             <form onSubmit={handleSubmit} className="pointer-events-auto max-w-4xl mx-auto relative z-10 flex justify-end">
               <div className="relative group transition-all duration-300" style={{ width: isInputExpanded ? '100%' : '64px' }}>
-                {/* Recording indicator - show when recording */}
-                {isRecording && isInputExpanded && (
-                  <div className="absolute -top-12 left-0 right-0 flex items-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/30 rounded-lg">
-                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                    <span className="text-sm text-red-300 flex-1">Recording... {formatRecordingTime(recordingTime)}</span>
-                    <button
-                      type="button"
-                      onClick={handleMicrophoneClick}
-                      className="p-0.5 hover:bg-red-500/20 rounded transition-colors"
-                    >
-                      <MicOff className="w-3.5 h-3.5 text-red-400" />
-                    </button>
-                  </div>
-                )}
-
-                {/* Processing indicator - show when processing */}
-                {isProcessing && isInputExpanded && !isRecording && (
-                  <div className="absolute -top-12 left-0 right-0 flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
-                    <span className="text-sm text-purple-300 flex-1">Processing your message...</span>
-                  </div>
-                )}
-
-                {/* Workflow indicator - show when any workflow is active */}
-                {sessionId && !currentProjectId && isInputExpanded && !isRecording && !isProcessing && (
-                  <div className="absolute -top-12 left-0 right-0 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                    <span className="text-sm text-blue-300 flex-1">Interactive mind dump active - answer the questions for better extraction</span>
-                  </div>
-                )}
-
-                {/* Replying to indicator - only show when expanded and not recording and not processing */}
-                {replyingToTask && isInputExpanded && !isRecording && !isProcessing && (
-                  <div className="absolute -top-12 left-0 right-0 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                    <Reply className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                    <span className="text-sm text-blue-300 flex-1 truncate">Replying to: <strong>{replyingToTask.title}</strong></span>
-                    <button
-                      type="button"
-                      onClick={handleCancelReply}
-                      className="p-0.5 hover:bg-blue-500/20 rounded transition-colors"
-                    >
-                      <X className="w-3.5 h-3.5 text-blue-400" />
-                    </button>
-                  </div>
-                )}
 
                 {/* Icon when collapsed */}
                 {!isInputExpanded && (
