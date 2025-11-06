@@ -976,6 +976,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   node={node}
                   onNodeClick={handleNodeClick}
                   onProblemClick={() => {
+                    console.log('Problem bubble clicked for node:', node.label);
+                    console.log('Node has problem:', node.hasProblem);
+                    console.log('Node problem data:', node.problemData);
                     setSelectedProjectForProblems(node);
                     setIsProblemsOpen(true);
                   }}

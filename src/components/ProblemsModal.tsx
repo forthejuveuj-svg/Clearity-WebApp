@@ -20,17 +20,22 @@ interface Node {
   parentProjectNames?: string[];
 }
 
-interface Problem {
+// Simple problem interface from database
+interface SimpleProblem {
   id: string;
   title: string;
   description?: string;
-  tag?: string;
-  reasoning?: string[];
   effect?: string;
   status: 'active' | 'ongoing' | 'resolved';
   created_at: string;
   updated_at?: string;
   project_id?: string;
+}
+
+// Extended problem interface with additional fields
+interface Problem extends SimpleProblem {
+  tag?: string;
+  reasoning?: string[];
   microAction?: {
     title: string;
     description: string;
@@ -81,11 +86,51 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
       if (selectedProject) {
         // Show problems specific to the selected project
         const projectProblems = selectedProject.problemData || [];
-        setProblems(projectProblems);
+        console.log('Selected project:', selectedProject.label);
+        console.log('Project problems data:', projectProblems);
+        
+        // Convert simple problems to extended problems for consistent interface
+        let extendedProblems: Problem[] = projectProblems.map((problem: SimpleProblem | Problem) => ({
+          ...problem,
+          // Ensure all required fields exist
+          tag: (problem as Problem).tag,
+          reasoning: (problem as Problem).reasoning,
+          microAction: (problem as Problem).microAction,
+          solutions: (problem as Problem).solutions,
+          isSolvable: (problem as Problem).isSolvable
+        }));
+        
+        // If no problems found, create a test problem for demonstration
+        if (extendedProblems.length === 0) {
+          extendedProblems = [{
+            id: `test-problem-${selectedProject.id}`,
+            title: `Sample problem for ${selectedProject.label}`,
+            description: 'This is a test problem to demonstrate the conversion functionality.',
+            effect: 'This problem is blocking progress on the project.',
+            status: 'active' as const,
+            created_at: new Date().toISOString(),
+            project_id: selectedProject.projectId || selectedProject.id,
+            tag: 'test',
+            reasoning: ['This is a demonstration problem', 'Created to test the subproject conversion feature'],
+            isSolvable: true
+          }];
+        }
+        
+        console.log('Extended problems:', extendedProblems);
+        setProblems(extendedProblems);
       } else {
         // Show all active problems when no specific project is selected
         const activeProblems = await getActiveProblems();
-        setProblems(activeProblems);
+        // Convert simple problems to extended problems
+        const extendedProblems: Problem[] = activeProblems.map((problem: SimpleProblem) => ({
+          ...problem,
+          tag: undefined,
+          reasoning: undefined,
+          microAction: undefined,
+          solutions: undefined,
+          isSolvable: undefined
+        }));
+        setProblems(extendedProblems);
       }
     } catch (error) {
       console.error('Error loading problems:', error);
@@ -120,6 +165,9 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
   };
 
   const handleConvertToProject = async (problem: Problem) => {
+    console.log('Converting problem to project:', problem);
+    console.log('Selected project:', selectedProject);
+    
     setConvertingProblem(problem.id);
     try {
       if (selectedProject) {
@@ -132,10 +180,17 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
           created_at: new Date().toISOString()
         };
         
+        console.log('Creating subproject with data:', subprojectData);
         const subproject = await createProject(subprojectData);
+        console.log('Created subproject:', subproject);
         
         // Update local state to remove the converted problem
         setProblems(prev => prev.filter(p => p.id !== problem.id));
+        
+        // If this was a test problem, we don't need to update the database
+        if (problem.id.startsWith('test-problem-')) {
+          console.log('Test problem converted, no database update needed');
+        }
         
         // Notify parent component
         onProblemConverted?.(problem.id, subproject.id);
@@ -143,7 +198,9 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
         console.log(`Successfully converted problem "${problem.title}" to subproject "${subproject.name}" under project "${selectedProject.label}"`);
       } else {
         // Use existing convertProblemToProject for general problems
+        console.log('Converting to standalone project');
         const project = await convertProblemToProject(problem);
+        console.log('Created project:', project);
         
         // Update local state to remove the converted problem
         setProblems(prev => prev.filter(p => p.id !== problem.id));
@@ -155,6 +212,7 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
       }
     } catch (error) {
       console.error('Error converting problem to project:', error);
+      console.error('Error details:', error);
       // You might want to show a toast notification here
     } finally {
       setConvertingProblem(null);
