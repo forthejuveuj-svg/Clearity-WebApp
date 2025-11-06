@@ -33,6 +33,12 @@ interface TaskManagerAssessParams {
   context?: any;
 }
 
+interface ProjectChatParams {
+  text: string;
+  project_id: string;
+  user_id: string;
+}
+
 // Mock data generators
 const generateMockMindMapData = (text: string) => {
   const words = text.split(' ').slice(0, 10);
@@ -152,6 +158,25 @@ export class APIServiceMock {
       result: { message: mockResponse },
       output: mockResponse,
       method: 'taskmanager_assess'
+    };
+  }
+
+  static async projectChat(params: ProjectChatParams): Promise<RPCResponse> {
+    await this.simulateDelay(800);
+    
+    const mockResponses = [
+      `Great question about your project! Based on what I can see, here are some thoughts on "${params.text}".`,
+      `I'd be happy to help with that aspect of your project. Let me share some insights...`,
+      `That's an interesting point about your project. Here's what I think would work best...`,
+      `Good thinking! For this project, I'd recommend focusing on these key areas...`
+    ];
+    
+    const randomResponse = mockResponses[Math.floor(Math.random() * mockResponses.length)];
+    
+    return {
+      success: true,
+      output: randomResponse,
+      method: 'project_chat'
     };
   }
 

@@ -36,7 +36,7 @@ export class MessageModeHandler {
   private state: MessageModeState = {
     messageCount: 0
   };
-  private onProjectFocusCallback?: (message: string) => void;
+  private onProjectFocusCallback?: (message: string, messageType?: string) => void;
 
   constructor() {
     this.reset();
@@ -84,16 +84,22 @@ export class MessageModeHandler {
   }
 
   /**
-   * Set project focus and trigger callback for not started projects
+   * Set project focus and trigger callback with appropriate message based on project status
    */
   setProjectFocus(project: ProjectFocus) {
     this.state.projectFocus = project;
     this.state.messageCount = 0;
     
-    // If project is not started, trigger callback to send AI message
-    if (project.status === 'not_started' && this.onProjectFocusCallback) {
-      const message = `Would you like me to help you start organizing the project "${project.name}"? I can break it down into manageable tasks and create a roadmap for you.`;
-      this.onProjectFocusCallback(message, 'project_organization');
+    if (this.onProjectFocusCallback) {
+      if (project.status === 'not_started') {
+        // Project not started - offer to help organize it
+        const message = `Would you like me to help you start organizing the project "${project.name}"? I can break it down into manageable tasks and create a roadmap for you.`;
+        this.onProjectFocusCallback(message, 'project_organization');
+      } else {
+        // Project already started - offer to help with it
+        const message = `Do you need help with "${project.name}"?`;
+        this.onProjectFocusCallback(message, 'project_chat');
+      }
     }
   }
 
@@ -138,8 +144,15 @@ export class MessageModeHandler {
         if (response.success) {
           this.clearSelection();
         }
+      } else if (this.state.projectFocus && this.state.projectFocus.status === 'started') {
+        // Project is focused and started - use project chat
+        response = await APIService.projectChat({
+          text,
+          project_id: this.state.projectFocus.id,
+          user_id: userId
+        });
       } else {
-        // No object selected - call minddump to create new entities
+        // No object selected or project not started - call minddump to create new entities
         response = await APIService.minddump({
           text,
           user_id: userId

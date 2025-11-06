@@ -22,7 +22,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   audioSnippets?: any[];
-  messageType?: "project_organization" | "normal";
+  messageType?: "project_organization" | "project_chat" | "normal";
   autoRemove?: boolean; // Flag to mark messages for automatic removal
 }
 
@@ -62,13 +62,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Helper function to remove project organization messages
-  // These messages are ONLY removed in two specific cases:
-  // 1. User responds with "No" (declines the project organization offer)
-  // 2. New project organization message is added (replaces old one when clicking different project)
+  // Helper function to remove project focus messages (both organization and chat)
+  // These messages are ONLY removed in specific cases:
+  // 1. User responds with "No" (declines the offer)
+  // 2. New project focus message is added (replaces old one when clicking different project)
   // All other messages remain as part of the natural conversation flow
-  const removeProjectOrganizationMessages = (messages: Message[]) => {
-    return messages.filter(msg => msg.messageType !== 'project_organization');
+  const removeProjectFocusMessages = (messages: Message[]) => {
+    return messages.filter(msg => msg.messageType !== 'project_organization' && msg.messageType !== 'project_chat');
   };
 
   const [visibleNodes, setVisibleNodes] = useState<string[]>([]);
@@ -89,16 +89,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
     // Set up callback for project focus events
     messageModeHandler.setOnProjectFocusCallback((message: string, messageType?: string) => {
-      // Remove any existing project organization messages before adding new one
-      if (messageType === 'project_organization') {
-        setMessages(prev => removeProjectOrganizationMessages(prev));
+      // Remove any existing project focus messages before adding new one
+      if (messageType === 'project_organization' || messageType === 'project_chat') {
+        setMessages(prev => removeProjectFocusMessages(prev));
       }
 
       setMessages(prev => [...prev, {
         role: "assistant",
         content: message,
-        messageType: messageType as "project_organization" | "normal" | undefined,
-        autoRemove: messageType === 'project_organization'
+        messageType: messageType as "project_organization" | "project_chat" | "normal" | undefined,
+        autoRemove: messageType === 'project_organization' || messageType === 'project_chat'
       }]);
     });
   }, []);
@@ -412,9 +412,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       // Matches: "No", "no", "NO", "No.", "No!", "No?", "No thanks", etc.
       const isNoResponse = /^no\b/i.test(userMessage);
 
-      // ONLY remove project organization messages if user says "No"
+      // ONLY remove project focus messages if user says "No"
       // All other messages should remain as part of the conversation
-      const filteredMessages = isNoResponse ? removeProjectOrganizationMessages(messages) : messages;
+      const filteredMessages = isNoResponse ? removeProjectFocusMessages(messages) : messages;
 
       setMessages([...filteredMessages, { role: "user", content: userMessage }]);
       setInput("");

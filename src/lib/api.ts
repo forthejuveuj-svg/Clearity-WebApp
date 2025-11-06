@@ -37,6 +37,12 @@ interface TaskManagerAssessParams {
   context?: any;
 }
 
+interface ProjectChatParams {
+  text: string;
+  project_id: string;
+  user_id: string;
+}
+
 export class APIService {
   private static get useMockAPI(): boolean {
     return import.meta.env.DEV && window.location.hostname === 'localhost';
@@ -113,6 +119,13 @@ export class APIService {
       };
     }
     return response;
+  }
+
+  static async projectChat(params: ProjectChatParams): Promise<RPCResponse> {
+    if (this.useMockAPI) {
+      return APIServiceMock.projectChat(params);
+    }
+    return this.makeRPCCall('project_chat', params);
   }
 
   static async healthCheck(): Promise<RPCResponse> {
