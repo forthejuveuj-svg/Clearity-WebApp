@@ -70,10 +70,19 @@ function getRandomPosition() {
   let attempts = 0;
   const maxAttempts = 50;
 
+  // Bounding box constraints: 20% left/right margins, 15% top/bottom margins
+  const leftMargin = 20;   // 20% from left
+  const rightMargin = 20;  // 20% from right  
+  const topMargin = 15;    // 15% from top
+  const bottomMargin = 15; // 15% from bottom
+  
+  const availableWidth = 100 - leftMargin - rightMargin;   // 60% available width
+  const availableHeight = 100 - topMargin - bottomMargin; // 70% available height
+
   while (attempts < maxAttempts) {
     const position = {
-      x: Math.floor(Math.random() * 80) + 10, // 10-90 range (80% width)
-      y: Math.floor(Math.random() * 80) + 10  // 10-90 range (80% height)
+      x: Math.floor(Math.random() * availableWidth) + leftMargin,     // 20-80% range
+      y: Math.floor(Math.random() * availableHeight) + topMargin      // 15-85% range
     };
 
     // Check if this position is far enough from existing positions
@@ -92,10 +101,10 @@ function getRandomPosition() {
     attempts++;
   }
 
-  // If we can't find a non-overlapping position, return a random one
+  // If we can't find a non-overlapping position, return a random one within bounds
   const fallbackPosition = {
-    x: Math.floor(Math.random() * 80) + 10,
-    y: Math.floor(Math.random() * 80) + 10
+    x: Math.floor(Math.random() * availableWidth) + leftMargin,
+    y: Math.floor(Math.random() * availableHeight) + topMargin
   };
   usedPositions.push(fallbackPosition);
   return fallbackPosition;
