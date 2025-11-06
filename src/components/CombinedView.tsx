@@ -435,9 +435,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       try {
         // Check if we're in project mode (project is focused)
         if (currentProjectId && currentProjectStatus) {
-          // Both project types use WebSocket workflows, but different ones
-          const workflowType = currentProjectStatus === 'not_started' ? 'projectmanager' : 'project_chat_workflow';
-          
+          // Check if the last message was a project chat message (not project organization)
+          const lastAssistantMessage = messages.filter(m => m.role === 'assistant').pop();
+          const isProjectChatMessage = lastAssistantMessage?.messageType === 'project_chat';
+
+          // Use project chat workflow if responding to "Do you need help with..." message
+          const workflowType = isProjectChatMessage ? 'project_chat_workflow' :
+            (currentProjectStatus === 'not_started' ? 'projectmanager' : 'project_chat_workflow');
+
           // If workflow hasn't started yet, start it
           if (!sessionId || !connected) {
             await startWorkflow(currentProjectId, userId, workflowType);
@@ -502,9 +507,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           saveCurrentSession(subprojects, projectIdToUse);
           setMindMapNodes(subprojects);
           setParentNodeTitle(node.label);
-          // Track project ID for project manager mode
+          // Track project ID for project chat mode (projects with subprojects are considered started)
           setCurrentProjectId(projectIdToUse);
-          setCurrentProjectStatus('not_started'); // Navigating to subprojects implies not started
+          setCurrentProjectStatus('started'); // Projects with subprojects should use project chat
 
           // Trigger project chat initiator for projects with subprojects
           messageModeHandler.setProjectFocus({
@@ -541,7 +546,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       const isStarted = node.color === 'blue' || node.color === 'teal'; // Assume blue/teal = started
       setCurrentProjectStatus(isStarted ? 'started' : 'not_started');
 
-      // Silently switch to project mode - user doesn't see any indication
+      // Switch to project mode and show appropriate message based on project status
       messageModeHandler.setProjectFocus({
         id: projectIdToUse,
         name: node.label,
