@@ -36,7 +36,7 @@ export class MessageModeHandler {
   private state: MessageModeState = {
     messageCount: 0
   };
-  private onProjectFocusCallback?: (message: string, messageType?: string) => void;
+  private onProjectFocusCallback?: (message: string, messageType?: string, clearMessages?: boolean) => void;
 
   constructor() {
     this.reset();
@@ -99,11 +99,11 @@ export class MessageModeHandler {
       if (project.status === 'not_started') {
         // Project not started - offer to help organize it
         const message = `Would you like me to help you start organizing the project "${sanitizedName}"? I can break it down into manageable tasks and create a roadmap for you.`;
-        this.onProjectFocusCallback(message, 'project_organization');
+        this.onProjectFocusCallback(message, 'project_organization', true); // Pass clearMessages flag
       } else {
         // Project already started - offer to help with it
         const message = `Do you need help with "${sanitizedName}"?`;
-        this.onProjectFocusCallback(message, 'project_chat');
+        this.onProjectFocusCallback(message, 'project_chat', true); // Pass clearMessages flag
       }
     }
   }
@@ -126,7 +126,7 @@ export class MessageModeHandler {
   /**
    * Set callback for project focus events
    */
-  setOnProjectFocusCallback(callback: (message: string, messageType?: string) => void) {
+  setOnProjectFocusCallback(callback: (message: string, messageType?: string, clearMessages?: boolean) => void) {
     this.onProjectFocusCallback = callback;
   }
 

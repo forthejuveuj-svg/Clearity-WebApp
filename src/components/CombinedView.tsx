@@ -88,18 +88,28 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     messageModeHandler.reset();
 
     // Set up callback for project focus events
-    messageModeHandler.setOnProjectFocusCallback((message: string, messageType?: string) => {
-      // Remove any existing project focus messages before adding new one
-      if (messageType === 'project_organization' || messageType === 'project_chat') {
-        setMessages(prev => removeProjectFocusMessages(prev));
-      }
+    messageModeHandler.setOnProjectFocusCallback((message: string, messageType?: string, clearMessages?: boolean) => {
+      if (clearMessages) {
+        // Clear all messages when project focus is sent
+        setMessages([{
+          role: "assistant",
+          content: message,
+          messageType: messageType as "project_organization" | "project_chat" | "normal" | undefined,
+          autoRemove: messageType === 'project_organization' || messageType === 'project_chat'
+        }]);
+      } else {
+        // Remove any existing project focus messages before adding new one
+        if (messageType === 'project_organization' || messageType === 'project_chat') {
+          setMessages(prev => removeProjectFocusMessages(prev));
+        }
 
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: message,
-        messageType: messageType as "project_organization" | "project_chat" | "normal" | undefined,
-        autoRemove: messageType === 'project_organization' || messageType === 'project_chat'
-      }]);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: message,
+          messageType: messageType as "project_organization" | "project_chat" | "normal" | undefined,
+          autoRemove: messageType === 'project_organization' || messageType === 'project_chat'
+        }]);
+      }
     });
   }, []);
 
