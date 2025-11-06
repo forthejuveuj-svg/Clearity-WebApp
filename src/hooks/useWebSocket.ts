@@ -22,7 +22,7 @@ interface UseWebSocketReturn {
   currentQuestion: WorkflowQuestion | null;
   progress: string | null;
   sendResponse: (response: any) => void;
-  startWorkflow: (projectId: string, userId: string, workflowType?: 'projectmanager' | 'project_chat_workflow') => Promise<void>;
+  startWorkflow: (projectId: string | null, userId: string, workflowType?: 'projectmanager' | 'project_chat_workflow' | 'minddump', text?: string) => Promise<void>;
   disconnect: () => void;
 }
 
@@ -210,8 +210,8 @@ export const useWebSocket = (
     });
   }, []);
 
-  // Start workflow for a project - this is when we connect
-  const startWorkflow = useCallback(async (projectId: string, userId: string, workflowType: 'projectmanager' | 'project_chat_workflow' = 'projectmanager') => {
+  // Start workflow for a project or mind dump - this is when we connect
+  const startWorkflow = useCallback(async (projectId: string | null, userId: string, workflowType: 'projectmanager' | 'project_chat_workflow' | 'minddump' = 'projectmanager', text?: string) => {
     try {
       // Initialize socket connection first
       await initializeSocket();
@@ -236,6 +236,10 @@ export const useWebSocket = (
 
       // Call RPC to start workflow
       console.log('Calling RPC:', `${BACKEND_URL}/rpc`);
+      const params = workflowType === 'minddump' 
+        ? { text: text, user_id: userId, session_id: newSessionId }
+        : { project_id: projectId, user_id: userId, session_id: newSessionId };
+      
       const response = await fetch(`${BACKEND_URL}/rpc`, {
         method: 'POST',
         headers: {
@@ -243,11 +247,7 @@ export const useWebSocket = (
         },
         body: JSON.stringify({
           method: workflowType,
-          params: {
-            project_id: projectId,
-            user_id: userId,
-            session_id: newSessionId
-          }
+          params: params
         })
       });
 

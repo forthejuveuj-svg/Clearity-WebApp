@@ -83,7 +83,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // WebSocket for project manager workflow (silent connection)
+  // WebSocket for all workflows (project manager, project chat, and mind dump)
   const {
     connected,
     sessionId,
@@ -95,10 +95,19 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   } = useWebSocket(
     (results) => {
       // Workflow completed - show summary in chat
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: "Project planning workflow completed! I've broken down your project and assessed the required skills."
-      }]);
+      if (results.message) {
+        // Mind dump completion
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: results.message + (results.enhanced ? " (Enhanced with follow-up questions)" : "")
+        }]);
+      } else {
+        // Project workflow completion
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: "Project planning workflow completed! I've broken down your project and assessed the required skills."
+        }]);
+      }
       reloadNodes({ forceRefresh: true }); // Force refresh after workflow completion
       setCurrentProjectId(null);
       setCurrentProjectStatus(null);
@@ -147,6 +156,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         console.log('Project focus changed, disconnecting WebSocket');
         disconnect();
       }
+
     });
   }, [connected, sessionId, disconnect]);
 
@@ -171,6 +181,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }]);
     }
   }, [progress]);
+
+
 
   // Single mind map state - data comes directly from database
   const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
@@ -482,18 +494,24 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           return;
         }
 
-        // Normal minddump mode
-        const result = await processUserMessage(userMessage, userId);
-
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: result.success ? result.output! : getDefaultErrorMessage(result.error)
-        }]);
-
-        if (result.success) {
-          setShowSubprojects(true);
-          reloadNodes({ showSubprojects: true, forceRefresh: true }); // Force refresh after successful processing
+        // No project selected - always use interactive mind dump workflow via WebSocket
+        if (!sessionId || !connected) {
+          // Start mind dump workflow
+          await startWorkflow(null, userId, 'minddump', userMessage);
+          // Wait a moment for session to register
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
+
+        // If there's a current question, send response to workflow
+        if (currentQuestion) {
+          sendResponse(userMessage);
+          setIsProcessing(false);
+          return;
+        }
+
+        // If no question yet, workflow is processing - just wait
+        setIsProcessing(false);
+        return;
       } catch (error) {
         console.error('Error processing message:', error);
         setMessages(prev => [...prev, {
@@ -1099,6 +1117,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   <div className="absolute -top-12 left-0 right-0 flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg">
                     <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
                     <span className="text-sm text-purple-300 flex-1">Processing your message...</span>
+                  </div>
+                )}
+
+                {/* Workflow indicator - show when any workflow is active */}
+                {sessionId && !currentProjectId && isInputExpanded && !isRecording && !isProcessing && (
+                  <div className="absolute -top-12 left-0 right-0 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                    <span className="text-sm text-blue-300 flex-1">Interactive mind dump active - answer the questions for better extraction</span>
                   </div>
                 )}
 
