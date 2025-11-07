@@ -83,6 +83,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Store selected entities from autocomplete to send with message (in order of appearance)
+  const [selectedEntities, setSelectedEntities] = useState<Array<{ id: string; type: string }>>([]);
 
   // Ref for auto-scrolling chat messages
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -435,11 +438,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Handler for entity autocomplete selection
   const handleEntitySelect = (entity: EntitySuggestion, newText: string) => {
     setInput(newText);
-    messageModeHandler.selectObject({
-      id: entity.id,
-      name: entity.name,
-      type: entity.type
-    });
+    // Store the selected entity ID and type in order of appearance
+    setSelectedEntities(prev => [...prev, { id: entity.id, type: entity.type }]);
     textareaRef.current?.focus();
   };
 
@@ -470,6 +470,35 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }
 
       try {
+        // Check if there are selected entities from autocomplete
+        if (selectedEntities.length > 0) {
+          // Use fix_nodes to update all selected entities (in order of appearance)
+          const response = await APIService.fixNodes({
+            text: userMessage,
+            user_id: userId,
+            selected_objects: selectedEntities
+          });
+
+          if (response.success) {
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: response.output || "No output."
+            }]);
+            // Reload nodes to show changes
+            reloadNodes({ forceRefresh: true });
+          } else {
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: response.error || "Failed to update the entities."
+            }]);
+          }
+          
+          // Clear selected entities after sending
+          setSelectedEntities([]);
+          setIsProcessing(false);
+          return;
+        }
+
         // Check if we're in project mode (project is focused)
         if (currentProjectId && currentProjectStatus) {
           // Check if the last message was a project chat message (not project organization)
@@ -531,6 +560,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Handle node clicks for project focus and subproject navigation
   const handleNodeClick = async (node: Node) => {
+    // Reset selected entities when changing nodes
+    setSelectedEntities([]);
+    
     // Check if node has subprojects (indicated by subNodes or specific keywords)
     const hasSubprojects = node.subNodes && node.subNodes.length > 0;
     const projectKeywords = ['project', 'course', 'learning', 'study', 'work', 'build', 'create'];

@@ -23,8 +23,9 @@ interface MindDumpParams {
 interface FixNodesParams {
   text: string;
   user_id: string;
-  selected_object_id: string;
-  selected_object_type: string;
+  selected_objects?: Array<{ id: string; type: string }>; // New format - multiple objects
+  selected_object_id?: string; // Legacy format - single object
+  selected_object_type?: string; // Legacy format - single object
 }
 
 interface ProjectManagerParams {
