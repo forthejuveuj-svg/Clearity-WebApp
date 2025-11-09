@@ -165,7 +165,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Handle workflow questions in chat
   useEffect(() => {
+    console.log('CombinedView: currentQuestion changed:', currentQuestion);
     if (currentQuestion) {
+      console.log('CombinedView: Adding question to chat:', currentQuestion.question);
       // Add question to chat as assistant message
       setMessages(prev => [...prev, {
         role: "assistant",

@@ -105,9 +105,10 @@ export const useWebSocket = (
       });
 
       socket.on('workflow_question', (data: WorkflowQuestion) => {
-        console.log('Received question:', data);
+        console.log('WebSocket: Received workflow_question:', data);
         currentQuestionState = data;
         setCurrentQuestion(data);
+        console.log('WebSocket: Set currentQuestion state to:', data);
       });
 
       socket.on('workflow_message', (data: any) => {
