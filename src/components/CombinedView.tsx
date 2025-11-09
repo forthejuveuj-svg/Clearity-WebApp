@@ -11,10 +11,10 @@ import { handleJWTError, detectJWTError } from "@/utils/jwtErrorHandler";
 import { useGlobalData } from "@/hooks/useGlobalData";
 import { messageModeHandler } from "@/utils/messageModeHandler";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { getCachedSessionsFromToday, validateCachedNodesAgainstDatabase, clearAllSessionsAndCache } from "@/utils/sessionUtils";
 import { processUserMessage, getDefaultErrorMessage } from "@/utils/messageProcessor";
 import { MindMapNode } from "./MindMapNode";
 import { SessionManager, SessionData } from "@/utils/sessionManager";
-import { clearAllSessionsAndCache } from "@/utils/sessionUtils";
 
 interface Message {
   role: "user" | "assistant";
@@ -65,22 +65,17 @@ export function CombinedView({
   // Auth and global state
   const { user, signOut } = useAuth();
   const globalData = useGlobalData();
-
+  
   // Basic state
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Mind map state
-  const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
-  const [parentNodeTitle, setParentNodeTitle] = useState<string | null>(null);
-  const [clickedProjectNode, setClickedProjectNode] = useState<Node | null>(null);
-  const [showSubprojects, setShowSubprojects] = useState(false);
-  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
-  const [currentProjectStatus, setCurrentProjectStatus] = useState<'started' | 'not_started' | null>(null);
+  // Helper function to remove project focus messages
+  const removeProjectFocusMessages = (messages: Message[]) => {
+    return messages.filter(msg => msg.messageType !== 'project_organization' && msg.messageType !== 'project_chat');
+  };
 
   // UI state
   const [visibleNodes, setVisibleNodes] = useState<string[]>([]);
@@ -94,15 +89,23 @@ export function CombinedView({
   const [currentView, setCurrentView] = useState<'mindmap' | 'tasks'>(initialView);
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Refs
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Mind map state
+  const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
+  const [parentNodeTitle, setParentNodeTitle] = useState<string | null>(null);
+  const [clickedProjectNode, setClickedProjectNode] = useState<Node | null>(null);
+  const [showSubprojects, setShowSubprojects] = useState(false);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [currentProjectStatus, setCurrentProjectStatus] = useState<'started' | 'not_started' | null>(null);
 
   // Session management
   const [sessionHistory, setSessionHistory] = useState<SessionData[]>([]);
   const [currentSessionIndex, setCurrentSessionIndex] = useState(-1);
-
-  // Refs
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // WebSocket for interactive chat workflow
   const {
@@ -128,7 +131,7 @@ export function CombinedView({
       if (results.projects || results.problems) {
         try {
           const { createMinddumpFromData } = await import('@/utils/generateMindMapJson');
-          await createMinddumpFromData(results, userId);
+          await createMinddumpFromData(results, user?.id);
           // Reload to show the new minddump
           await reloadNodes({ forceRefresh: true });
         } catch (error) {
@@ -151,26 +154,57 @@ export function CombinedView({
     }
   );
 
-  // Initialize user ID
-  useEffect(() => {
-    if (user?.id) {
-      setUserId(user.id);
-    }
-  }, [user]);
+  // Audio recording hook
+  const {
+    isRecording,
+    startRecording,
+    stopRecording
+  } = useAudioRecording();
 
-  // Helper functions
-  const removeProjectFocusMessages = (messages: Message[]) => {
-    return messages.filter(msg => msg.messageType !== 'project_organization' && msg.messageType !== 'project_chat');
+  // Session management functions
+  const saveCurrentSession = (nodes: Node[], projectNode: Node | null = null) => {
+    const sessionData: SessionData = {
+      id: `session_${Date.now()}`,
+      nodes,
+      timestamp: Date.now(),
+      parentNodeTitle: parentNodeTitle
+    };
+    
+    const newHistory = [...sessionHistory.slice(0, currentSessionIndex + 1), sessionData];
+    setSessionHistory(newHistory);
+    setCurrentSessionIndex(newHistory.length - 1);
   };
 
-  const saveCurrentSession = (nodes: Node[], projectNode: Node | null = null) => {
-    console.log('Saving session with', nodes.length, 'nodes');
+  const navigateToSession = (index: number) => {
+    if (index >= 0 && index < sessionHistory.length) {
+      const session = sessionHistory[index];
+      setCurrentSessionIndex(index);
+      setMindMapNodes(session.nodes);
+      
+      if (session.parentNodeTitle) {
+        setParentNodeTitle(session.parentNodeTitle);
+      }
+    }
+  };
+
+  const navigateBack = () => {
+    const prevIndex = currentSessionIndex - 1;
+    if (prevIndex >= 0) {
+      navigateToSession(prevIndex);
+    }
+  };
+
+  const navigateForward = () => {
+    const nextIndex = currentSessionIndex + 1;
+    if (nextIndex < sessionHistory.length) {
+      navigateToSession(nextIndex);
+    }
   };
 
   // Function to reload mind map nodes
   const reloadNodes = async (options = {}) => {
     try {
-      const finalOptions = { showTodayOnly: true, forceRefresh: false, userId: userId, ...options };
+      const finalOptions = { showTodayOnly: true, forceRefresh: false, userId: user?.id, ...options };
       const data = await generateMindMapJson(finalOptions);
       if (data?.nodes) {
         setMindMapNodes(data.nodes);
@@ -180,43 +214,67 @@ export function CombinedView({
       }
     } catch (error) {
       console.error('Error reloading nodes:', error);
+      if (detectJWTError(error)) {
+        handleJWTError(error, signOut);
+      }
     }
   };
 
   // Initialize data on component mount
   useEffect(() => {
     const initializeData = async () => {
-      if (!userId) return;
-
+      if (!user?.id) return;
+      
       try {
         // Try to load latest minddump, fallback to database
         const data = await generateMindMapJson({
           showTodayOnly: true,
           forceRefresh: false,
-          userId: userId,
+          userId: user.id,
           onJWTError: (message: string) => {
             console.warn('JWT error during data initialization:', message);
           }
         });
-
+        
         if (data?.nodes) {
           setMindMapNodes(data.nodes);
           setParentNodeTitle(data.parentNode || null);
+          
+          // Save this as a new session
+          if (data.nodes.length > 0) {
+            saveCurrentSession(data.nodes, null);
+          }
         }
       } catch (error) {
         console.error('Error initializing data:', error);
+        if (detectJWTError(error)) {
+          handleJWTError(error, signOut);
+        }
       }
     };
 
     initializeData();
-  }, [userId]);
+  }, [user?.id]);
+
+  // Reset message mode handler when component mounts
+  useEffect(() => {
+    messageModeHandler.reset();
+    
+    // Set up callback for project focus change events (for cleanup)
+    messageModeHandler.setOnProjectFocusChangeCallback(() => {
+      // Disconnect WebSocket when project focus changes
+      if (connected || sessionId) {
+        console.log('Project focus changed, disconnecting WebSocket');
+        disconnect();
+      }
+    });
+  }, [connected, sessionId, disconnect]);
 
   // Handle workflow questions in chat
   useEffect(() => {
     console.log('CombinedView: currentQuestion changed:', currentQuestion);
     if (currentQuestion) {
       console.log('CombinedView: Adding question to chat:', currentQuestion.question);
-      // Add question to chat as assistant message
       setMessages(prev => [...prev, {
         role: "assistant",
         content: currentQuestion.question + (currentQuestion.options ? `\n\nOptions: ${currentQuestion.options.join(', ')}` : '')
@@ -227,7 +285,6 @@ export function CombinedView({
   // Handle workflow progress messages in chat
   useEffect(() => {
     if (progress) {
-      // Add progress message
       setMessages(prev => [...prev, {
         role: "assistant",
         content: `⏳ ${progress}`
@@ -245,7 +302,7 @@ export function CombinedView({
     setInput("");
     setIsProcessing(true);
 
-    if (!userId) {
+    if (!user?.id) {
       setMessages(prev => [...prev, {
         role: "assistant",
         content: "Please log in to use the AI processing features."
@@ -258,7 +315,7 @@ export function CombinedView({
       // Start interactive chat workflow with the user's message
       if (!sessionId || !connected) {
         console.log('Starting workflow with user message:', userMessage);
-        await startWorkflow(userId, userMessage);
+        await startWorkflow(user.id, userMessage);
         setIsProcessing(false);
         return;
       }
@@ -273,9 +330,9 @@ export function CombinedView({
 
       // If connected but no question, start new workflow with this message
       console.log('Starting new workflow with message:', userMessage);
-      disconnect(); // Disconnect current session
-      await new Promise(resolve => setTimeout(resolve, 100)); // Brief pause
-      await startWorkflow(userId, userMessage);
+      disconnect();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await startWorkflow(user.id, userMessage);
       setIsProcessing(false);
       return;
     } catch (error) {
@@ -296,15 +353,25 @@ export function CombinedView({
         chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
       }
     };
-
+    
     const timeoutId = setTimeout(scrollToMaxBottom, 50);
     return () => clearTimeout(timeoutId);
   }, [messages]);
 
+  // Show nodes only when they exist
+  useEffect(() => {
+    if (mindMapNodes.length > 0) {
+      const allNodeIds = mindMapNodes.map(n => n.id);
+      setVisibleNodes(allNodeIds);
+    } else {
+      setVisibleNodes([]);
+    }
+  }, [mindMapNodes, parentNodeTitle]);
+
   return (
     <div className="h-screen w-screen flex flex-col relative overflow-hidden bg-gradient-to-br from-black via-slate-900 to-black fixed inset-0">
       {/* Mind Map Section */}
-      <div
+      <div 
         className="relative flex-1 overflow-hidden"
         style={{ height: `${mapHeight}%` }}
       >
@@ -327,12 +394,12 @@ export function CombinedView({
       </div>
 
       {/* Chat Section */}
-      <div
+      <div 
         className="bg-black/40 backdrop-blur-sm border-t border-white/20 flex flex-col"
         style={{ height: `${100 - mapHeight}%` }}
       >
         {/* Messages */}
-        <div
+        <div 
           ref={chatContainerRef}
           className="flex-1 overflow-y-auto p-4 space-y-4"
         >
@@ -342,12 +409,26 @@ export function CombinedView({
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[80%] p-3 rounded-lg ${message.role === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white/10 text-white border border-white/20'
-                  }`}
+                className={`max-w-[80%] p-3 rounded-lg ${
+                  message.role === 'user'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white/10 text-white border border-white/20'
+                }`}
               >
-                {message.content}
+                {typingMessages.has(index) ? (
+                  <TypingAnimation
+                    text={message.content}
+                    onComplete={() => {
+                      setTypingMessages(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete(index);
+                        return newSet;
+                      });
+                    }}
+                  />
+                ) : (
+                  message.content
+                )}
               </div>
             </div>
           ))}
@@ -386,6 +467,17 @@ export function CombinedView({
           </div>
         </div>
       </div>
+
+      {/* Problems Modal */}
+      {isProblemsOpen && selectedProjectForProblems && (
+        <ProblemsModal
+          isOpen={isProblemsOpen}
+          onClose={() => {
+            setIsProblemsOpen(false);
+            setSelectedProjectForProblems(null);
+          }}
+        />
+      )}
     </div>
   );
 }
