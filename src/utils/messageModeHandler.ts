@@ -147,39 +147,20 @@ export class MessageModeHandler {
     this.state.messageCount++;
 
     try {
-      let response;
+      // Use the simplified chat API for all messages
+      const response = await APIService.chat({
+        text,
+        user_id: userId
+      });
 
-      if (this.state.selectedObject) {
-        // Object is selected - call fix_nodes to update it
-        response = await APIService.fixNodes({
-          text,
-          user_id: userId,
-          selected_object_id: this.state.selectedObject.id,
-          selected_object_type: this.state.selectedObject.type
-        });
-
-        // After successful update, clear selection
-        if (response.success) {
-          this.clearSelection();
-        }
-      } else if (this.state.projectFocus && this.state.projectFocus.status === 'started') {
-        // Project is focused and started - use project chat
-        response = await APIService.projectChat({
-          text,
-          project_id: this.state.projectFocus.id,
-          user_id: userId
-        });
-      } else {
-        // No object selected or project not started - call minddump to create new entities
-        response = await APIService.minddump({
-          text,
-          user_id: userId
-        });
+      // Clear selection after processing if there was one
+      if (this.state.selectedObject && response.success) {
+        this.clearSelection();
       }
 
       return {
         success: response.success,
-        output: response.output || response.result || "Processing completed successfully.",
+        output: response.chat_response || "Processing completed successfully.",
         error: response.error
       };
 

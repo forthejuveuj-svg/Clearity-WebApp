@@ -10,8 +10,7 @@ import { generateMindMapJson } from "../utils/generateMindMapJson";
 import { handleJWTError, detectJWTError } from "@/utils/jwtErrorHandler";
 import { useGlobalData } from "@/hooks/useGlobalData";
 import { messageModeHandler } from "@/utils/messageModeHandler";
-import { EntityAutocomplete } from "./EntityAutocomplete";
-import { EntitySuggestion } from "@/hooks/useEntityAutocomplete";
+// Removed EntityAutocomplete - using simple chat workflow instead
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { getCachedSessionsFromToday, validateCachedNodesAgainstDatabase, clearAllSessionsAndCache } from "@/utils/sessionUtils";
 import { processUserMessage, getDefaultErrorMessage } from "@/utils/messageProcessor";
@@ -83,47 +82,43 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  
-  // Store selected entities from autocomplete to send with message (in order of appearance)
-  const [selectedEntities, setSelectedEntities] = useState<Array<{ id: string; type: string }>>([]);
+
+  // Removed selectedEntities - using simple chat workflow instead
 
   // Ref for auto-scrolling chat messages
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // WebSocket for all workflows (project manager, project chat, and mind dump)
+  // WebSocket for interactive chat workflow
   const {
     connected,
     sessionId,
     currentQuestion,
     progress,
     sendResponse,
-    startWorkflow,
+    startChatWorkflow,
     disconnect,
   } = useWebSocket(
     (results) => {
       // Workflow completed - show summary in chat
-      if (results.message) {
-        // Mind dump completion
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: results.message + (results.enhanced ? " (Enhanced with follow-up questions)" : "")
-        }]);
-      } else {
-        // Project workflow completion
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: "Project planning workflow completed! I've broken down your project and assessed the required skills."
-        }]);
-      }
-      reloadNodes({ forceRefresh: true }); // Force refresh after workflow completion
-      setCurrentProjectId(null);
-      setCurrentProjectStatus(null);
-    },
-    (error) => {
+      console.log('Chat workflow completed with results:', results);
+
+      // Add completion message to chat
       setMessages(prev => [...prev, {
         role: "assistant",
-        content: `Workflow error: ${error}`
+        content: "✅ Chat completed! Your thoughts have been organized into projects and problems."
+      }]);
+
+      // Force reload nodes to show new data
+      reloadNodes({ forceRefresh: true });
+    },
+    (error) => {
+      // Workflow error - show in chat
+      console.error('Chat workflow error:', error);
+
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `❌ Chat workflow error: ${error}`
       }]);
     }
   );
@@ -171,7 +166,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Handle workflow questions in chat
   useEffect(() => {
     if (currentQuestion) {
-      // Add question to chat as assistant message (don't remove project org messages - this is part of workflow)
+      // Add question to chat as assistant message
       setMessages(prev => [...prev, {
         role: "assistant",
         content: currentQuestion.question + (currentQuestion.options ? `\n\nOptions: ${currentQuestion.options.join(', ')}` : '')
@@ -182,7 +177,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Handle workflow progress messages in chat
   useEffect(() => {
     if (progress) {
-      // Add progress message (don't remove project org messages - this is part of workflow)
+      // Add progress message
       setMessages(prev => [...prev, {
         role: "assistant",
         content: progress
@@ -435,13 +430,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   }, [mindMapNodes, parentNodeTitle]);
 
-  // Handler for entity autocomplete selection
-  const handleEntitySelect = (entity: EntitySuggestion, newText: string) => {
-    setInput(newText);
-    // Store the selected entity ID and type in order of appearance
-    setSelectedEntities(prev => [...prev, { id: entity.id, type: entity.type }]);
-    textareaRef.current?.focus();
-  };
+  // Removed handleEntitySelect - using simple chat workflow instead
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -470,68 +459,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }
 
       try {
-        // Check if there are selected entities from autocomplete
-        if (selectedEntities.length > 0) {
-          // Use fix_nodes to update all selected entities (in order of appearance)
-          const response = await APIService.fixNodes({
-            text: userMessage,
-            user_id: userId,
-            selected_objects: selectedEntities
-          });
-
-          if (response.success) {
-            setMessages(prev => [...prev, {
-              role: "assistant",
-              content: response.output || "No output."
-            }]);
-            // Reload nodes to show changes
-            reloadNodes({ forceRefresh: true });
-          } else {
-            setMessages(prev => [...prev, {
-              role: "assistant",
-              content: response.error || "Failed to update the entities."
-            }]);
-          }
-          
-          // Clear selected entities after sending
-          setSelectedEntities([]);
-          setIsProcessing(false);
-          return;
-        }
-
-        // Check if we're in project mode (project is focused)
-        if (currentProjectId && currentProjectStatus) {
-          // Check if the last message was a project chat message (not project organization)
-          const lastAssistantMessage = messages.filter(m => m.role === 'assistant').pop();
-          const isProjectChatMessage = lastAssistantMessage?.messageType === 'project_chat';
-
-          // Use project chat workflow if responding to "Do you need help with..." message
-          const workflowType = isProjectChatMessage ? 'project_chat_workflow' :
-            (currentProjectStatus === 'not_started' ? 'projectmanager' : 'project_chat_workflow');
-
-          // If workflow hasn't started yet, start it
-          if (!sessionId || !connected) {
-            await startWorkflow(currentProjectId, userId, workflowType);
-            // Wait a moment for session to register
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-
-          // If there's a current question, send response to workflow
-          if (currentQuestion) {
-            sendResponse(userMessage);
-            setIsProcessing(false);
-            return;
-          }
-
-          // If no question yet, workflow is processing - just wait
-          setIsProcessing(false);
-          return;
-        }
-
-        // No project selected - always use interactive mind dump workflow via WebSocket
+        // Start interactive chat workflow via WebSocket if not already connected
         if (!sessionId || !connected) {
-          // Start mind dump workflow
-          await startWorkflow(null, userId, 'minddump', userMessage);
+          await startChatWorkflow(userId);
           // Wait a moment for session to register
           await new Promise(resolve => setTimeout(resolve, 500));
         }
@@ -560,9 +490,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Handle node clicks for project focus and subproject navigation
   const handleNodeClick = async (node: Node) => {
-    // Reset selected entities when changing nodes
-    setSelectedEntities([]);
-    
+    // Removed selectedEntities reset - using simple chat workflow instead
+
     // Check if node has subprojects (indicated by subNodes or specific keywords)
     const hasSubprojects = node.subNodes && node.subNodes.length > 0;
     const projectKeywords = ['project', 'course', 'learning', 'study', 'work', 'build', 'create'];
@@ -642,7 +571,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     if (userId) {
       setIsProcessing(true);
       try {
-        const response = await APIService.minddump({
+        const response = await APIService.chat({
           text: taskMessage,
           user_id: userId
         });
@@ -650,7 +579,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         if (response.success) {
           setMessages(prev => [...prev, {
             role: "assistant",
-            content: response.output
+            content: response.chat_response || "Task processed successfully."
           }]);
 
           // Reload nodes when processing is successful
@@ -862,7 +791,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
     if (isRecording && isInputExpanded) bannerCount++;
     if (isProcessing && isInputExpanded && !isRecording) bannerCount++;
-    if (sessionId && !currentProjectId && isInputExpanded && !isRecording && !isProcessing) bannerCount++;
+    if (sessionId && isInputExpanded && !isRecording && !isProcessing) bannerCount++;
     if (replyingToTask && isInputExpanded && !isRecording && !isProcessing) bannerCount++;
 
     // Base padding + banner height (48px per banner + 8px margin)
@@ -1205,11 +1134,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 </div>
               )}
 
-              {/* Workflow indicator - show when any workflow is active */}
-              {sessionId && !currentProjectId && isInputExpanded && !isRecording && !isProcessing && (
+              {/* Workflow indicator - show when chat workflow is active */}
+              {sessionId && isInputExpanded && !isRecording && !isProcessing && (
                 <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg backdrop-blur-sm">
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                  <span className="text-sm text-blue-300 flex-1">Interactive mind dump active - answer the questions for better extraction</span>
+                  <span className="text-sm text-blue-300 flex-1">Interactive chat active - answer the questions for better organization</span>
                 </div>
               )}
 
@@ -1278,12 +1207,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   style={{ paddingRight: isInputExpanded ? '80px' : '20px', minHeight: '48px' }}
                 />
 
-                {/* Entity Autocomplete */}
-                <EntityAutocomplete
-                  inputValue={input}
-                  onSelectEntity={handleEntitySelect}
-                  inputRef={textareaRef as any}
-                />
+                {/* Removed EntityAutocomplete - using simple chat workflow instead */}
 
                 <div className={`absolute right-3 bottom-3 flex items-center gap-2 transition-opacity duration-300 ${isInputExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                   <button

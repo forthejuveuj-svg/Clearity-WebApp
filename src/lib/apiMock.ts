@@ -4,106 +4,94 @@
 
 interface RPCResponse<T = any> {
   success: boolean;
-  result?: T;
-  output?: string;
+  chat_response?: string;
+  entities_stored?: { projects: number; problems: number };
+  extracted_data?: { projects: any[]; problems: any[] };
+  all_data_json?: { projects: any[]; problems: any[] };
+  data?: { projects: any[]; problems: any[] };
+  entities?: {
+    projects: { count: number; entities: any[] };
+    problems: { count: number; entities: any[] };
+    total_entities: number;
+  };
+  message?: string;
   error?: string;
   method?: string;
 }
 
-interface MindDumpParams {
+interface ChatParams {
   text: string;
-  user_id: string;
-  use_relator?: boolean;
+  user_id?: string;
 }
 
-interface FixNodesParams {
-  text: string;
-  user_id: string;
-  selected_object_id: string;
-  selected_object_type: string;
+interface GetDataParams {
+  user_id?: string;
 }
 
-interface ProjectManagerParams {
-  text: string;
+interface ShowEntitiesParams {
+  user_id?: string;
 }
 
-interface TaskManagerAssessParams {
-  user_message: string;
-  task_object: any;
-  context?: any;
-}
-
-interface ProjectChatParams {
-  text: string;
-  project_id: string;
-  user_id: string;
-}
-
-interface ProjectChatWorkflowParams {
-  project_id: string;
-  user_id: string;
-  session_id: string;
+interface ClearDataParams {
+  user_id?: string;
 }
 
 // Mock data generators
-const generateMockMindMapData = (text: string) => {
-  const words = text.split(' ').slice(0, 10);
-  const nodes = words.map((word, index) => ({
-    id: `node-${index}`,
-    label: word,
-    x: Math.random() * 400 + 100,
-    y: Math.random() * 300 + 100,
-    connections: index > 0 ? [`node-${index - 1}`] : []
-  }));
-
-  return {
-    nodes,
-    connections: nodes.slice(1).map((node, index) => ({
-      from: `node-${index}`,
-      to: node.id,
-      label: 'relates to'
-    }))
-  };
+const generateMockProjects = (text: string) => {
+  const projectTypes = ['web development', 'mobile app', 'data analysis', 'machine learning'];
+  const randomType = projectTypes[Math.floor(Math.random() * projectTypes.length)];
+  
+  return [{
+    id: `project-${Date.now()}`,
+    user_id: 'mock-user',
+    name: `${randomType.charAt(0).toUpperCase() + randomType.slice(1)} Project`,
+    status: 'not_started',
+    priority_score: 0.7,
+    progress_percent: 0,
+    description: `A ${randomType} project based on: ${text.slice(0, 100)}...`,
+    key_points: ['innovative', 'scalable', 'user-friendly'],
+    tasks: [],
+    effort_estimate_hours: 40,
+    learning_objectives: ['Learn new technologies', 'Improve skills'],
+    project_files: {},
+    subproject_from: [],
+    created_at: new Date().toISOString(),
+    last_updated: new Date().toISOString()
+  }];
 };
 
-const generateMockProjectResponse = (text: string) => {
-  return `Based on your input: "${text.slice(0, 50)}...", here's a mock project analysis:
-
-## Project Overview
-This appears to be a ${text.includes('web') ? 'web development' : text.includes('mobile') ? 'mobile app' : 'software'} project.
-
-## Key Components
-- Frontend development
-- Backend API
-- Database design
-- Testing strategy
-
-## Next Steps
-1. Define requirements
-2. Create wireframes
-3. Set up development environment
-4. Begin implementation
-
-This is mock data for development purposes.`;
+const generateMockProblems = (text: string) => {
+  const problemTypes = ['technical', 'organizational', 'personal'];
+  const randomType = problemTypes[Math.floor(Math.random() * problemTypes.length)];
+  
+  return [{
+    id: `problem-${Date.now()}`,
+    user_id: 'mock-user',
+    name: `${randomType.charAt(0).toUpperCase() + randomType.slice(1)} Challenge`,
+    type: randomType,
+    severity: Math.floor(Math.random() * 5) + 3, // 3-7
+    status: 'active',
+    solution_state: 'planned',
+    project_id: `project-${Date.now()}`,
+    emotion: 'concerned',
+    proposed_solution: `Address the ${randomType} issues mentioned in: ${text.slice(0, 50)}...`,
+    recurrence_rate: 0.3,
+    duration_hours: 2,
+    root_cause: 'Needs further analysis',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }];
 };
 
-const generateMockTaskResponse = (message: string) => {
-  return `Task Assessment (Mock):
-
-Input: "${message.slice(0, 50)}..."
-
-## Analysis
-- Priority: Medium
-- Estimated effort: 2-4 hours
-- Dependencies: None identified
-- Risk level: Low
-
-## Recommendations
-1. Break down into smaller subtasks
-2. Set clear acceptance criteria
-3. Assign appropriate resources
-
-This is mock data for development purposes.`;
+const generateMockChatResponse = (text: string) => {
+  const responses = [
+    `I understand you're working on something interesting! Based on what you've shared: "${text.slice(0, 50)}...", I can see there are some projects and challenges to explore.`,
+    `That's a great point! I've extracted some key projects and potential problems from your message. Let me help you organize these thoughts.`,
+    `Thanks for sharing that with me. I can see several actionable items and challenges in what you've described. Here's what I found...`,
+    `Interesting! From your message, I can identify some projects that might be worth pursuing and some challenges to address.`
+  ];
+  
+  return responses[Math.floor(Math.random() * responses.length)];
 };
 
 export class APIServiceMock {
@@ -111,88 +99,78 @@ export class APIServiceMock {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  static async minddump(params: MindDumpParams): Promise<RPCResponse> {
+  static async chat(params: ChatParams): Promise<RPCResponse> {
     await this.simulateDelay(1500);
     
-    const mockData = generateMockMindMapData(params.text);
+    const mockProjects = generateMockProjects(params.text);
+    const mockProblems = generateMockProblems(params.text);
+    const chatResponse = generateMockChatResponse(params.text);
     
     return {
       success: true,
-      result: mockData,
-      output: `Processed mind dump for user ${params.user_id}. Generated ${mockData.nodes.length} nodes.`,
-      method: 'minddump'
-    };
-  }
-
-  static async fixNodes(params: FixNodesParams): Promise<RPCResponse> {
-    await this.simulateDelay(800);
-    
-    return {
-      success: true,
-      result: {
-        updated_entity: {
-          id: params.selected_object_id,
-          type: params.selected_object_type,
-          changed_fields: ['status', 'priority_score']
-        }
+      chat_response: chatResponse,
+      entities_stored: { 
+        projects: mockProjects.length, 
+        problems: mockProblems.length 
       },
-      output: `✓ Updated selected ${params.selected_object_type} based on: "${params.text.slice(0, 50)}..."`,
-      method: 'fix_nodes'
+      extracted_data: { 
+        projects: mockProjects, 
+        problems: mockProblems 
+      },
+      all_data_json: { 
+        projects: mockProjects, 
+        problems: mockProblems 
+      },
+      method: 'chat'
     };
   }
 
-  static async projectManager(params: ProjectManagerParams): Promise<RPCResponse> {
-    await this.simulateDelay(2000);
+  static async getData(params: GetDataParams): Promise<RPCResponse> {
+    await this.simulateDelay(300);
     
-    const mockResponse = generateMockProjectResponse(params.text);
+    const mockProjects = generateMockProjects("sample data");
+    const mockProblems = generateMockProblems("sample data");
     
     return {
       success: true,
-      result: { message: mockResponse },
-      output: mockResponse,
-      method: 'projectmanager'
+      data: {
+        projects: mockProjects,
+        problems: mockProblems
+      },
+      method: 'get_data'
     };
   }
 
-  static async taskManagerAssess(params: TaskManagerAssessParams): Promise<RPCResponse> {
-    await this.simulateDelay(1200);
+  static async showEntities(params: ShowEntitiesParams): Promise<RPCResponse> {
+    await this.simulateDelay(400);
     
-    const mockResponse = generateMockTaskResponse(params.user_message);
+    const mockProjects = generateMockProjects("sample data");
+    const mockProblems = generateMockProblems("sample data");
     
     return {
       success: true,
-      result: { message: mockResponse },
-      output: mockResponse,
-      method: 'taskmanager_assess'
+      entities: {
+        projects: {
+          count: mockProjects.length,
+          entities: mockProjects
+        },
+        problems: {
+          count: mockProblems.length,
+          entities: mockProblems
+        },
+        total_entities: mockProjects.length + mockProblems.length
+      },
+      method: 'show_entities'
     };
   }
 
-  static async projectChat(params: ProjectChatParams): Promise<RPCResponse> {
-    await this.simulateDelay(800);
-    
-    const mockResponses = [
-      `Great question about your project! Based on what I can see, here are some thoughts on "${params.text}".`,
-      `I'd be happy to help with that aspect of your project. Let me share some insights...`,
-      `That's an interesting point about your project. Here's what I think would work best...`,
-      `Good thinking! For this project, I'd recommend focusing on these key areas...`
-    ];
-    
-    const randomResponse = mockResponses[Math.floor(Math.random() * mockResponses.length)];
+  static async clearData(params: ClearDataParams): Promise<RPCResponse> {
+    await this.simulateDelay(200);
     
     return {
       success: true,
-      output: randomResponse,
-      method: 'project_chat'
-    };
-  }
-
-  static async projectChatWorkflow(params: ProjectChatWorkflowParams): Promise<RPCResponse> {
-    await this.simulateDelay(500);
-    
-    return {
-      success: true,
-      result: { message: `Project chat workflow started for session ${params.session_id}` },
-      method: 'project_chat_workflow'
+      message: `All data cleared for user ${params.user_id || 'default_user'}`,
+      method: 'clear_data'
     };
   }
 
@@ -201,8 +179,10 @@ export class APIServiceMock {
     
     return {
       success: true,
-      result: {
+      data: {
         status: 'healthy',
+        server: 'Mock RPC Server',
+        methods: ['chat', 'get_data', 'show_entities', 'clear_data'],
         version: '1.0.0-mock',
         timestamp: new Date().toISOString()
       }

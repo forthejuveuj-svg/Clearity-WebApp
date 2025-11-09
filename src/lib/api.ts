@@ -1,5 +1,5 @@
 /**
- * API service for backend RPC calls
+ * API service for simplified RPC calls
  */
 
 import { config } from './config';
@@ -9,45 +9,36 @@ const BACKEND_URL = config.backendUrl;
 
 interface RPCResponse<T = any> {
   success: boolean;
-  result?: T;
-  output?: string;
+  chat_response?: string;
+  entities_stored?: { projects: number; problems: number };
+  extracted_data?: { projects: any[]; problems: any[] };
+  all_data_json?: { projects: any[]; problems: any[] };
+  data?: { projects: any[]; problems: any[] };
+  entities?: {
+    projects: { count: number; entities: any[] };
+    problems: { count: number; entities: any[] };
+    total_entities: number;
+  };
+  message?: string;
   error?: string;
   method?: string;
 }
 
-interface MindDumpParams {
+interface ChatParams {
   text: string;
-  user_id: string;
+  user_id?: string;
 }
 
-interface FixNodesParams {
-  text: string;
-  user_id: string;
-  selected_objects?: Array<{ id: string; type: string }>; // New format - multiple objects
-  selected_object_id?: string; // Legacy format - single object
-  selected_object_type?: string; // Legacy format - single object
+interface GetDataParams {
+  user_id?: string;
 }
 
-interface ProjectManagerParams {
-  text: string;
+interface ShowEntitiesParams {
+  user_id?: string;
 }
 
-interface TaskManagerAssessParams {
-  user_message: string;
-  task_object: any;
-  context?: any;
-}
-
-interface ProjectChatParams {
-  text: string;
-  project_id: string;
-  user_id: string;
-}
-
-interface ProjectChatWorkflowParams {
-  project_id: string;
-  user_id: string;
-  session_id: string;
+interface ClearDataParams {
+  user_id?: string;
 }
 
 export class APIService {
@@ -82,64 +73,61 @@ export class APIService {
     }
   }
 
-  static async minddump(params: MindDumpParams): Promise<RPCResponse> {
+  // Main chat method - replaces minddump, fixNodes, projectChat, etc.
+  static async chat(params: ChatParams): Promise<RPCResponse> {
     if (this.useMockAPI) {
-      return APIServiceMock.minddump(params);
+      return APIServiceMock.chat(params);
     }
-    return this.makeRPCCall('minddump', params);
+    return this.makeRPCCall('chat', params);
   }
 
-  static async fixNodes(params: FixNodesParams): Promise<RPCResponse> {
+  // Get all stored data as JSON
+  static async getData(params: GetDataParams = {}): Promise<RPCResponse> {
     if (this.useMockAPI) {
-      return APIServiceMock.fixNodes(params);
+      return APIServiceMock.getData(params);
     }
-    return this.makeRPCCall('fix_nodes', params);
+    return this.makeRPCCall('get_data', params);
   }
 
-  static async projectManager(params: ProjectManagerParams): Promise<RPCResponse> {
+  // Show detailed view of entities
+  static async showEntities(params: ShowEntitiesParams = {}): Promise<RPCResponse> {
     if (this.useMockAPI) {
-      return APIServiceMock.projectManager(params);
+      return APIServiceMock.showEntities(params);
     }
-    
-    const response = await this.makeRPCCall('projectmanager', params);
-    // Transform the response to match expected format
-    if (response.success && response.result?.message) {
-      return {
-        ...response,
-        output: response.result.message
-      };
-    }
-    return response;
+    return this.makeRPCCall('show_entities', params);
   }
 
-  static async taskManagerAssess(params: TaskManagerAssessParams): Promise<RPCResponse> {
+  // Clear all data for a user
+  static async clearData(params: ClearDataParams = {}): Promise<RPCResponse> {
     if (this.useMockAPI) {
-      return APIServiceMock.taskManagerAssess(params);
+      return APIServiceMock.clearData(params);
     }
-    
-    const response = await this.makeRPCCall('taskmanager_assess', params);
-    // Transform the response to match expected format
-    if (response.success && response.result?.message) {
-      return {
-        ...response,
-        output: response.result.message
-      };
-    }
-    return response;
+    return this.makeRPCCall('clear_data', params);
   }
 
-  static async projectChat(params: ProjectChatParams): Promise<RPCResponse> {
-    if (this.useMockAPI) {
-      return APIServiceMock.projectChat(params);
-    }
-    return this.makeRPCCall('project_chat', params);
+  // Legacy methods for backward compatibility - all redirect to chat
+  static async minddump(params: { text: string; user_id: string }): Promise<RPCResponse> {
+    return this.chat(params);
   }
 
-  static async projectChatWorkflow(params: ProjectChatWorkflowParams): Promise<RPCResponse> {
-    if (this.useMockAPI) {
-      return APIServiceMock.projectChatWorkflow(params);
-    }
-    return this.makeRPCCall('project_chat_workflow', params);
+  static async fixNodes(params: { text: string; user_id: string; [key: string]: any }): Promise<RPCResponse> {
+    return this.chat({ text: params.text, user_id: params.user_id });
+  }
+
+  static async projectManager(params: { text: string }): Promise<RPCResponse> {
+    return this.chat({ text: params.text });
+  }
+
+  static async taskManagerAssess(params: { user_message: string; [key: string]: any }): Promise<RPCResponse> {
+    return this.chat({ text: params.user_message });
+  }
+
+  static async projectChat(params: { text: string; project_id?: string; user_id?: string }): Promise<RPCResponse> {
+    return this.chat({ text: params.text, user_id: params.user_id });
+  }
+
+  static async projectChatWorkflow(params: { project_id?: string; user_id?: string; session_id?: string }): Promise<RPCResponse> {
+    return this.chat({ text: "Continue our conversation about this project", user_id: params.user_id });
   }
 
   static async healthCheck(): Promise<RPCResponse> {
@@ -152,9 +140,10 @@ export class APIService {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+      const result = await response.json();
       return {
         success: true,
-        result: await response.json()
+        data: result
       };
     } catch (error) {
       return {

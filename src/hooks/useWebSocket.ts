@@ -1,7 +1,7 @@
 /**
- * WebSocket Hook for Project Manager Workflow
+ * WebSocket Hook for Interactive Chat Workflow
  * 
- * Lazy connection - only connects when project manager is triggered
+ * Lazy connection - only connects when chat workflow is triggered
  */
 
 import { useState, useCallback } from 'react';
@@ -22,7 +22,7 @@ interface UseWebSocketReturn {
   currentQuestion: WorkflowQuestion | null;
   progress: string | null;
   sendResponse: (response: any) => void;
-  startWorkflow: (projectId: string | null, userId: string, workflowType?: 'projectmanager' | 'project_chat_workflow' | 'minddump', text?: string) => Promise<void>;
+  startChatWorkflow: (userId: string) => Promise<void>;
   disconnect: () => void;
 }
 
@@ -72,13 +72,13 @@ export const useWebSocket = (
       // Create new socket
       console.log('Initializing WebSocket connection to:', BACKEND_URL);
       socket = io(BACKEND_URL, {
-        transports: ['websocket', 'polling'], // include polling as fallback
-        autoConnect: true,                     // connect immediately
-        timeout: 10000,                        // 10s for initial handshake
-        forceNew: false,                        // reuse existing connection if possible
-        reconnection: true,                     // allow automatic retries
-        reconnectionDelay: 1000,                // wait 1s between retries
-        reconnectionAttempts: 10                // try up to 10 times before giving up
+        transports: ['websocket', 'polling'],
+        autoConnect: true,
+        timeout: 10000,
+        forceNew: false,
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 10
       });
 
       // Set up event handlers
@@ -179,7 +179,6 @@ export const useWebSocket = (
       socket.connect();
     });
   }, [onComplete, onError]);
-
   // Disconnect socket when workflow is done
   const disconnectSocket = useCallback(() => {
     if (socket) {
@@ -210,8 +209,8 @@ export const useWebSocket = (
     });
   }, []);
 
-  // Start workflow for a project or mind dump - this is when we connect
-  const startWorkflow = useCallback(async (projectId: string | null, userId: string, workflowType: 'projectmanager' | 'project_chat_workflow' | 'minddump' = 'projectmanager', text?: string) => {
+  // Start chat workflow - this is when we connect
+  const startChatWorkflow = useCallback(async (userId: string) => {
     try {
       // Initialize socket connection first
       await initializeSocket();
@@ -234,20 +233,16 @@ export const useWebSocket = (
       // Wait a bit for registration
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Call RPC to start workflow
+      // Call RPC to start chat workflow
       console.log('Calling RPC:', `${BACKEND_URL}/rpc`);
-      const params = workflowType === 'minddump' 
-        ? { text: text, user_id: userId, session_id: newSessionId }
-        : { project_id: projectId, user_id: userId, session_id: newSessionId };
-      
       const response = await fetch(`${BACKEND_URL}/rpc`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          method: workflowType,
-          params: params
+          method: 'chat_workflow',
+          params: { user_id: userId, session_id: newSessionId }
         })
       });
 
@@ -262,15 +257,15 @@ export const useWebSocket = (
       const result = await response.json();
 
       if (!result.success) {
-        console.error('Failed to start workflow:', result.error);
+        console.error('Failed to start chat workflow:', result.error);
         disconnectSocket(); // Clean up on error
         throw new Error(result.error);
       }
 
-      console.log('Workflow started successfully:', result);
+      console.log('Chat workflow started successfully:', result);
       setSessionId(newSessionId);
     } catch (error) {
-      console.error('Error starting workflow:', error);
+      console.error('Error starting chat workflow:', error);
       disconnectSocket(); // Clean up on any error
       throw error;
     }
@@ -282,7 +277,7 @@ export const useWebSocket = (
     currentQuestion,
     progress,
     sendResponse,
-    startWorkflow,
+    startChatWorkflow,
     disconnect: disconnectSocket
   };
 };
