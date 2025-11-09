@@ -22,7 +22,7 @@ interface UseWebSocketReturn {
   currentQuestion: WorkflowQuestion | null;
   progress: string | null;
   sendResponse: (response: any) => void;
-  startWorkflow: (userId: string) => Promise<void>;
+  startWorkflow: (userId: string, text?: string) => Promise<void>;
   disconnect: () => void;
 }
 
@@ -197,7 +197,7 @@ export const useWebSocket = (
 
   // Send response to workflow
   const sendResponse = useCallback((response: any) => {
-    if (!socket || !currentSessionId || !currentQuestionState) {
+    if (!socket || !currentSessionId) {
       console.warn('Cannot send response: socket not ready');
       return;
     }
@@ -206,12 +206,12 @@ export const useWebSocket = (
     socket.emit('workflow_response', {
       session_id: currentSessionId,
       response: response,
-      question: currentQuestionState.question
+      question: currentQuestionState?.question || ''
     });
   }, []);
 
   // Start chat workflow - this is when we connect
-  const startWorkflow = useCallback(async (userId: string) => {
+  const startWorkflow = useCallback(async (userId: string, text?: string) => {
     try {
       // Initialize socket connection first
       await initializeSocket();
@@ -234,8 +234,13 @@ export const useWebSocket = (
       // Wait a bit for registration
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Call RPC to start chat workflow
+      // Call RPC to start chat workflow with initial text
       console.log('Calling RPC:', `${BACKEND_URL}/rpc`);
+      const params: any = { user_id: userId, session_id: newSessionId };
+      if (text) {
+        params.text = text;
+      }
+      
       const response = await fetch(`${BACKEND_URL}/rpc`, {
         method: 'POST',
         headers: {
@@ -243,7 +248,7 @@ export const useWebSocket = (
         },
         body: JSON.stringify({
           method: 'chat_workflow',
-          params: { user_id: userId, session_id: newSessionId }
+          params: params
         })
       });
 

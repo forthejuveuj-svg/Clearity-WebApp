@@ -461,21 +461,27 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }
 
       try {
-        // Start interactive chat workflow via WebSocket if not already connected
+        // Start interactive chat workflow with the user's message
         if (!sessionId || !connected) {
-          await startWorkflow(userId);
-          // Wait a moment for session to register
-          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log('Starting workflow with user message:', userMessage);
+          await startWorkflow(userId, userMessage);
+          setIsProcessing(false);
+          return;
         }
 
-        // If there's a current question, send response to workflow
+        // If already connected and there's a current question, send response via WebSocket
         if (currentQuestion) {
+          console.log('Responding to AI question via WebSocket:', userMessage);
           sendResponse(userMessage);
           setIsProcessing(false);
           return;
         }
 
-        // If no question yet, workflow is processing - just wait
+        // If connected but no question, start new workflow with this message
+        console.log('Starting new workflow with message:', userMessage);
+        disconnect(); // Disconnect current session
+        await new Promise(resolve => setTimeout(resolve, 100)); // Brief pause
+        await startWorkflow(userId, userMessage);
         setIsProcessing(false);
         return;
       } catch (error) {
