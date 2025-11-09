@@ -52,7 +52,7 @@ interface CombinedViewProps {
   initialView?: 'mindmap' | 'tasks';
 }
 
-export default function CombinedView({
+export function CombinedView({
   initialMessage,
   onBack,
   onViewChange,
@@ -343,8 +343,8 @@ export default function CombinedView({
             >
               <div
                 className={`max-w-[80%] p-3 rounded-lg ${message.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white/10 text-white border border-white/20'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white/10 text-white border border-white/20'
                   }`}
               >
                 {message.content}
