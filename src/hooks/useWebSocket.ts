@@ -22,7 +22,7 @@ interface UseWebSocketReturn {
   currentQuestion: WorkflowQuestion | null;
   progress: string | null;
   sendResponse: (response: any) => void;
-  startWorkflow: (projectId: string | null, userId: string, workflowType?: 'projectmanager' | 'project_chat_workflow' | 'chat_workflow', text?: string) => Promise<void>;
+  startWorkflow: (userId: string) => Promise<void>;
   disconnect: () => void;
 }
 
@@ -60,7 +60,7 @@ export const useWebSocket = (
         const timeout = setTimeout(() => {
           reject(new Error('Connection timeout'));
         }, 10000);
-        
+
         socket.once('connect', () => {
           clearTimeout(timeout);
           setConnected(true);
@@ -165,7 +165,7 @@ export const useWebSocket = (
       const timeout = setTimeout(() => {
         reject(new Error('Connection timeout'));
       }, 10000);
-      
+
       socket.once('connect', () => {
         clearTimeout(timeout);
         setConnected(true);
@@ -210,8 +210,8 @@ export const useWebSocket = (
     });
   }, []);
 
-  // Start workflow for a project or mind dump - this is when we connect
-  const startWorkflow = useCallback(async (projectId: string | null, userId: string, workflowType: 'projectmanager' | 'project_chat_workflow' | 'chat_workflow' = 'chat_workflow', text?: string) => {
+  // Start chat workflow - this is when we connect
+  const startWorkflow = useCallback(async (userId: string) => {
     try {
       // Initialize socket connection first
       await initializeSocket();
@@ -234,20 +234,16 @@ export const useWebSocket = (
       // Wait a bit for registration
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Call RPC to start workflow
+      // Call RPC to start chat workflow
       console.log('Calling RPC:', `${BACKEND_URL}/rpc`);
-      const params = workflowType === 'minddump' 
-        ? { text: text, user_id: userId, session_id: newSessionId }
-        : { user_id: userId, session_id: newSessionId };
-      
       const response = await fetch(`${BACKEND_URL}/rpc`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          method: workflowType,
-          params: params
+          method: 'chat_workflow',
+          params: { user_id: userId, session_id: newSessionId }
         })
       });
 
@@ -262,7 +258,7 @@ export const useWebSocket = (
       const result = await response.json();
 
       if (!result.success) {
-        console.error('Failed to start chat workflow:', result.error);
+        console.error('Failed to start workflow:', result.error);
         disconnectSocket(); // Clean up on error
         throw new Error(result.error);
       }
