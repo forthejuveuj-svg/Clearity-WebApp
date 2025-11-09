@@ -3,7 +3,7 @@
  * Handles all minddump-related API calls
  */
 
-import { config } from '@/lib/config';
+import { getLatestMinddump, searchMinddumps, getMinddump, createMinddump } from '@/utils/supabaseClient.js';
 
 export interface Minddump {
   id: string;
@@ -32,85 +32,45 @@ export interface Minddump {
 }
 
 class MinddumpService {
-  private baseUrl = config.backendUrl;
-
-  async getLatestMinddump(userId: string): Promise<Minddump | null> {
+  async getLatestMinddump(): Promise<Minddump | null> {
     try {
-      const response = await fetch(`${this.baseUrl}/rpc`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          method: 'get_latest_minddump',
-          params: { user_id: userId }
-        })
-      });
-
-      const result = await response.json();
-      
-      if (result.success) {
-        return result.minddump;
-      } else {
-        console.error('Failed to get latest minddump:', result.error);
-        return null;
-      }
+      return await getLatestMinddump();
     } catch (error) {
       console.error('Error getting latest minddump:', error);
       return null;
     }
   }
 
-  async searchMinddumps(userId: string, query: string): Promise<Minddump[]> {
+  async searchMinddumps(query: string): Promise<Minddump[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/rpc`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          method: 'search_minddumps',
-          params: { user_id: userId, query }
-        })
-      });
-
-      const result = await response.json();
-      
-      if (result.success) {
-        return result.minddumps || [];
-      } else {
-        console.error('Failed to search minddumps:', result.error);
-        return [];
-      }
+      return await searchMinddumps(query);
     } catch (error) {
       console.error('Error searching minddumps:', error);
       return [];
     }
   }
 
-  async getMinddump(userId: string, minddumpId: string): Promise<Minddump | null> {
+  async getMinddump(minddumpId: string): Promise<Minddump | null> {
     try {
-      const response = await fetch(`${this.baseUrl}/rpc`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          method: 'get_minddump',
-          params: { user_id: userId, minddump_id: minddumpId }
-        })
-      });
-
-      const result = await response.json();
-      
-      if (result.success) {
-        return result.minddump;
-      } else {
-        console.error('Failed to get minddump:', result.error);
-        return null;
-      }
+      return await getMinddump(minddumpId);
     } catch (error) {
       console.error('Error getting minddump:', error);
+      return null;
+    }
+  }
+
+  async createMinddump(prompt: string, title: string, nodes: any, layoutData?: any, metadata?: any): Promise<Minddump | null> {
+    try {
+      const minddumpData = {
+        prompt,
+        title,
+        nodes,
+        layout_data: layoutData || {},
+        metadata: metadata || {}
+      };
+      return await createMinddump(minddumpData);
+    } catch (error) {
+      console.error('Error creating minddump:', error);
       return null;
     }
   }

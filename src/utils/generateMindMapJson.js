@@ -1,4 +1,4 @@
-import { getAllDataFromCache, initializeData, filterElements, isJWTError, refreshAllData } from './supabaseClient.js';
+import { getAllDataFromCache, initializeData, filterElements, isJWTError, refreshAllData, createMinddump } from './supabaseClient.js';
 
 async function fetchSupabaseData(onJWTError = null, forceRefresh = false) {
   try {
@@ -408,7 +408,7 @@ export async function getLatestMinddump(userId) {
 
 export async function generateMindMapJson(options = {}) {
   try {
-    const { showSubprojects = false, parentProjectId = null, onJWTError = null, showTodayOnly = true, forceRefresh = false, userId = null } = options;
+    const { showSubprojects = false, parentProjectId = null, onJWTError = null, showTodayOnly = true, forceRefresh = false } = options;
     
     // If userId is provided and showTodayOnly is true, try to load latest minddump first
     if (userId && showTodayOnly && !parentProjectId) {
@@ -528,6 +528,91 @@ export async function generateMindMapJson(options = {}) {
       _timestamp: Date.now(),
       unifierTriggered: nodes.length >= 8 && !parentProjectId && !showSubprojects
     };
+
+    // Save minddump to Supabase if we have nodes
+    if (nodes.length > 0) {
+      try {
+        console.log('💾 Saving minddump to Supabase...');
+        
+        // Generate title based on context
+        let title = 'Mind Map';
+        if (parentNode) {
+          title = `${parentNode} - Subprojects`;
+        } else if (showTodayOnly) {
+          title = `Today's Projects - ${new Date().toLocaleDateString()}`;
+        } else {
+          title = `Projects Overview - ${new Date().toLocaleDateString()}`;
+        }
+
+        // Generate prompt based on context
+        let prompt = 'Generated mind map from projects and problems';
+        if (parentProjectId) {
+          prompt = `Subprojects view for project: ${parentNode}`;
+        } else if (showTodayOnly) {
+          prompt = "Today's projects and related problems";
+        } else {
+          prompt = 'Overview of all active projects and problems';
+        }
+
+        // Prepare nodes data for storage
+        const nodesData = {
+          projects: filteredProjects.map(p => ({
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            status: p.status,
+            created_at: p.created_at,
+            user_id: p.user_id
+          })),
+          problems: problems.filter(prob => 
+            filteredProjects.some(proj => 
+              prob.related_projects && prob.related_projects.includes(proj.id)
+            )
+          ).map(p => ({
+            id: p.id,
+            title: p.title,
+            description: p.description,
+            status: p.status,
+            created_at: p.created_at,
+            user_id: p.user_id
+          }))
+        };
+
+        // Metadata
+        const metadata = {
+          entities_count: {
+            projects: filteredProjects.length,
+            problems: problems.length
+          },
+          processing_time_ms: Date.now() - result._timestamp,
+          version: '1.0',
+          view_type: parentProjectId ? 'subprojects' : (showTodayOnly ? 'today' : 'overview'),
+          parent_project_id: parentProjectId,
+          show_today_only: showTodayOnly,
+          tags: [parentProjectId ? 'subprojects' : 'overview', showTodayOnly ? 'today' : 'all-time']
+        };
+
+        const minddumpData = {
+          prompt,
+          title,
+          nodes: nodesData,
+          layout_data: {}, // empty for now
+          metadata
+        };
+
+        const savedMinddump = await createMinddump(minddumpData, { onJWTError });
+
+        if (savedMinddump) {
+          console.log('✅ Minddump saved successfully:', savedMinddump.id);
+          result.minddumpId = savedMinddump.id;
+        } else {
+          console.warn('⚠️ Failed to save minddump');
+        }
+      } catch (error) {
+        console.error('❌ Error saving minddump:', error);
+        // Don't throw - continue with the result even if saving fails
+      }
+    }
 
     return result;
   } catch (error) {

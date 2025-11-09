@@ -438,6 +438,166 @@ export async function convertProblemToProject(problem, options = {}) {
   }
 }
 
+// Minddump functions
+
+// Create a new minddump
+export async function createMinddump(minddumpData, options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      if (isJWTError(sessionError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw sessionError;
+      }
+    }
+
+    if (!session?.user) {
+      throw new Error('No authenticated user');
+    }
+
+    const { data: minddump, error } = await supabase
+      .from('minddumps')
+      .insert([{ ...minddumpData, user_id: session.user.id }])
+      .select()
+      .single();
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    return minddump;
+  } catch (error) {
+    console.error('Error creating minddump:', error);
+    throw error;
+  }
+}
+
+// Get latest minddump for user
+export async function getLatestMinddump(options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      if (isJWTError(sessionError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw sessionError;
+      }
+    }
+
+    if (!session?.user) {
+      return null;
+    }
+
+    const { data: minddumps, error } = await supabase
+      .from('minddumps')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    return minddumps && minddumps.length > 0 ? minddumps[0] : null;
+  } catch (error) {
+    console.error('Error getting latest minddump:', error);
+    throw error;
+  }
+}
+
+// Search minddumps
+export async function searchMinddumps(query, options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      if (isJWTError(sessionError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw sessionError;
+      }
+    }
+
+    if (!session?.user) {
+      return [];
+    }
+
+    const { data: minddumps, error } = await supabase
+      .from('minddumps')
+      .select('id, title, prompt, created_at, metadata')
+      .eq('user_id', session.user.id)
+      .or(`title.ilike.%${query}%,prompt.ilike.%${query}%`)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    return minddumps || [];
+  } catch (error) {
+    console.error('Error searching minddumps:', error);
+    throw error;
+  }
+}
+
+// Get specific minddump by ID
+export async function getMinddump(minddumpId, options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      if (isJWTError(sessionError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw sessionError;
+      }
+    }
+
+    if (!session?.user) {
+      return null;
+    }
+
+    const { data: minddumps, error } = await supabase
+      .from('minddumps')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .eq('id', minddumpId);
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    return minddumps && minddumps.length > 0 ? minddumps[0] : null;
+  } catch (error) {
+    console.error('Error getting minddump:', error);
+    throw error;
+  }
+}
+
 // Clear cache (useful for logout)
 export function clearDataCache() {
   globalDataStore = {
