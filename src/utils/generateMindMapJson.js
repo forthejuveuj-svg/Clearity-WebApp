@@ -408,12 +408,12 @@ export async function getLatestMinddump(userId) {
 
 export async function generateMindMapJson(options = {}) {
   try {
-    const { showSubprojects = false, parentProjectId = null, onJWTError = null, showTodayOnly = true, forceRefresh = false } = options;
+    const { showSubprojects = false, parentProjectId = null, onJWTError = null, forceRefresh = false } = options;
     
     // Fallback to original database query
     const { projects, knowledgeNodes, problems } = await fetchSupabaseData(onJWTError, forceRefresh);
 
-    // Apply filtering based on options using unified filterElements
+    // Apply filtering based on options
     let filteredProjects;
 
     if (parentProjectId) {
@@ -427,17 +427,9 @@ export async function generateMindMapJson(options = {}) {
       } else {
         filteredProjects = [];
       }
-    } else if (showTodayOnly) {
-      // Filter by today's date - only check created_at
-      const today = new Date().toISOString().split('T')[0];
-
-      filteredProjects = projects.filter(project => {
-        const createdDate = project.created_at ? new Date(project.created_at).toISOString().split('T')[0] : null;
-        return createdDate === today;
-      });
     } else {
-      // Default: show parent projects only (empty subproject_from)
-      filteredProjects = filterElements(projects, 'subproject_from', 'empty');
+      // Show all projects (no date filtering)
+      filteredProjects = projects;
     }
 
     // Clear used positions
@@ -523,14 +515,12 @@ export async function generateMindMapJson(options = {}) {
     // Save minddump to Supabase if we have nodes
     if (nodes.length > 0) {
       try {
-        console.log('💾 Saving minddump to Supabase...');
+        console.log('💾 Saving minddump to Supabase with', nodes.length, 'nodes...');
         
         // Generate title based on context
         let title = 'Mind Map';
         if (parentNode) {
           title = `${parentNode} - Subprojects`;
-        } else if (showTodayOnly) {
-          title = `Today's Projects - ${new Date().toLocaleDateString()}`;
         } else {
           title = `Projects Overview - ${new Date().toLocaleDateString()}`;
         }
@@ -539,8 +529,6 @@ export async function generateMindMapJson(options = {}) {
         let prompt = 'Generated mind map from projects and problems';
         if (parentProjectId) {
           prompt = `Subprojects view for project: ${parentNode}`;
-        } else if (showTodayOnly) {
-          prompt = "Today's projects and related problems";
         } else {
           prompt = 'Overview of all active projects and problems';
         }
@@ -577,10 +565,9 @@ export async function generateMindMapJson(options = {}) {
           },
           processing_time_ms: Date.now() - result._timestamp,
           version: '1.0',
-          view_type: parentProjectId ? 'subprojects' : (showTodayOnly ? 'today' : 'overview'),
+          view_type: parentProjectId ? 'subprojects' : 'overview',
           parent_project_id: parentProjectId,
-          show_today_only: showTodayOnly,
-          tags: [parentProjectId ? 'subprojects' : 'overview', showTodayOnly ? 'today' : 'all-time']
+          tags: [parentProjectId ? 'subprojects' : 'overview']
         };
 
         const minddumpData = {
@@ -603,6 +590,8 @@ export async function generateMindMapJson(options = {}) {
         console.error('❌ Error saving minddump:', error);
         // Don't throw - continue with the result even if saving fails
       }
+    } else {
+      console.log('🚫 No nodes to save - skipping minddump creation');
     }
 
     return result;

@@ -204,14 +204,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Function to reload mind map nodes from database (after minddump or other operations)
   const reloadNodes = async (options = {}) => {
     try {
-      // Always show today's projects by default, use cache unless forceRefresh is specified
-      const finalOptions = { showTodayOnly: true, forceRefresh: false, ...options };
+      // Use cache unless forceRefresh is specified
+      const finalOptions = { forceRefresh: false, ...options };
       const data = await generateMindMapJson(finalOptions);
       if (data) {
         setMindMapNodes(data.nodes || []);
         setParentNodeTitle(data.parentNode || null);
         saveCurrentSession(data.nodes || []);
-        console.log('Mind map nodes reloaded:', data.nodes?.length || 0, 'nodes from today', finalOptions.forceRefresh ? '(forced refresh)' : '(from cache)');
+        console.log('Mind map nodes reloaded:', data.nodes?.length || 0, 'nodes', finalOptions.forceRefresh ? '(forced refresh)' : '(from cache)');
       }
     } catch (error) {
       console.error('Error reloading nodes:', error);
@@ -262,12 +262,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     try {
       const data = await generateMindMapJson({
         parentProjectId: nodeId,
-        showTodayOnly: true,
         onJWTError: (message: string) => {
           console.warn('JWT error during subproject loading:', message);
         }
       });
-      console.log(`Loaded ${data.nodes?.length || 0} subprojects for project ${nodeId} from today's database entries`);
+      console.log(`Loaded ${data.nodes?.length || 0} subprojects for project ${nodeId} from database`);
       return data.nodes || [];
     } catch (error) {
       console.error('Error loading subprojects from database:', error);
@@ -289,9 +288,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   useEffect(() => {
     const initializeData = async () => {
       try {
-        // Use cached data for faster loading, only show today's projects
+        // Use cached data for faster loading
         const dbData = await generateMindMapJson({
-          showTodayOnly: true,
           forceRefresh: false, // Use cache first - no need to hit database on initialization
           onJWTError: (message: string) => {
             console.warn('JWT error during data initialization:', message);
@@ -299,7 +297,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         });
         const dbNodes = dbData?.nodes || [];
 
-        // Show projects from today
+        // Show all projects
         setMindMapNodes(dbNodes);
         setParentNodeTitle(dbData.parentNode || null);
 
@@ -738,7 +736,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         await globalData.refresh();
         // Reload the mind map with fresh data
         const dbData = await generateMindMapJson({
-          showTodayOnly: true,
           forceRefresh: true // Force fresh data
         });
         setMindMapNodes(dbData?.nodes || []);
