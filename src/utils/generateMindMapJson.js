@@ -170,9 +170,256 @@ function getDateKey(date) {
   return date.toISOString().split('T')[0]; // YYYY-MM-DD format
 }
 
+// New function to create minddump from chat workflow results
+export async function createMinddumpFromData(results, userId) {
+  try {
+    console.log('Creating minddump from chat results:', results);
+    
+    // Import supabase client
+    const { createClient } = await import('@supabase/supabase-js');
+    
+    // Get supabase config (you'll need to add this)
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase configuration missing');
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Generate nodes from projects and problems
+    const nodes = [];
+    usedPositions.length = 0; // Clear positions
+    
+    // Create project nodes
+    if (results.projects) {
+      results.projects.forEach(project => {
+        const position = getRandomPosition();
+        const color = getRandomColor();
+        
+        const node = {
+          id: projectToId(project.name),
+          projectId: project.id,
+          label: project.name.length > 12 ? project.name.replace(/\s+/g, '\n') : project.name,
+          x: position.x,
+          y: position.y,
+          color,
+          type: 'project',
+          data: project
+        };
+        nodes.push(node);
+      });
+    }
+    
+    // Create problem nodes
+    if (results.problems) {
+      results.problems.forEach(problem => {
+        const position = getRandomPosition();
+        
+        const node = {
+          id: `problem-${problem.id}`,
+          problemId: problem.id,
+          label: problem.name.length > 12 ? problem.name.replace(/\s+/g, '\n') : problem.name,
+          x: position.x,
+          y: position.y,
+          color: 'red',
+          type: 'problem',
+          data: problem,
+          hasProblem: true
+        };
+        nodes.push(node);
+      });
+    }
+    
+    // Generate title from first project or problem
+    const firstEntity = results.projects?.[0] || results.problems?.[0];
+    const title = firstEntity ? 
+      (firstEntity.name.length > 50 ? firstEntity.name.substring(0, 50) + '...' : firstEntity.name) :
+      'New Minddump';
+    
+    // Create minddump data
+    const minddumpData = {
+      user_id: userId,
+      prompt: results.original_prompt || 'Chat workflow result',
+      title: title,
+      nodes: {
+        projects: results.projects || [],
+        problems: results.problems || []
+      },
+      layout_data: {
+        viewport: { x: 0, y: 0, zoom: 1.0 },
+        canvas_size: { width: 1200, height: 800 },
+        node_positions: nodes.map(n => ({
+          id: n.id,
+          x: n.x,
+          y: n.y,
+          color: n.color
+        }))
+      },
+      metadata: {
+        entities_count: results.entities_created || { projects: 0, problems: 0 },
+        ai_model: 'gpt-4o-mini',
+        version: '1.0',
+        created_from: 'chat_workflow'
+      }
+    };
+    
+    // Save to supabase
+    const { data, error } = await supabase
+      .table('minddumps')
+      .insert(minddumpData)
+      .select()
+      .single();
+    
+    if (error) {
+      throw error;
+    }
+    
+    console.log('Minddump created successfully:', data.id);
+    return data;
+    
+  } catch (error) {
+    console.error('Error creating minddump:', error);
+    throw error;
+  }
+}
+
+// New function to load minddump and generate nodes
+export async function generateMindMapFromMinddump(minddumpId, userId) {
+  try {
+    console.log('Loading minddump:', minddumpId);
+    
+    // Import supabase client
+    const { createClient } = await import('@supabase/supabase-js');
+    
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase configuration missing');
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Get minddump from database
+    const { data: minddump, error } = await supabase
+      .table('minddumps')
+      .select('*')
+      .eq('id', minddumpId)
+      .eq('user_id', userId)
+      .single();
+    
+    if (error || !minddump) {
+      throw new Error('Minddump not found');
+    }
+    
+    // Generate nodes from stored data
+    const nodes = [];
+    const storedPositions = minddump.layout_data?.node_positions || [];
+    
+    // Create project nodes
+    if (minddump.nodes.projects) {
+      minddump.nodes.projects.forEach(project => {
+        const storedPos = storedPositions.find(p => p.id === projectToId(project.name));
+        const position = storedPos || getRandomPosition();
+        
+        const node = {
+          id: projectToId(project.name),
+          projectId: project.id,
+          label: project.name.length > 12 ? project.name.replace(/\s+/g, '\n') : project.name,
+          x: position.x,
+          y: position.y,
+          color: storedPos?.color || getRandomColor(),
+          type: 'project',
+          data: project
+        };
+        nodes.push(node);
+      });
+    }
+    
+    // Create problem nodes
+    if (minddump.nodes.problems) {
+      minddump.nodes.problems.forEach(problem => {
+        const storedPos = storedPositions.find(p => p.id === `problem-${problem.id}`);
+        const position = storedPos || getRandomPosition();
+        
+        const node = {
+          id: `problem-${problem.id}`,
+          problemId: problem.id,
+          label: problem.name.length > 12 ? problem.name.replace(/\s+/g, '\n') : problem.name,
+          x: position.x,
+          y: position.y,
+          color: storedPos?.color || 'red',
+          type: 'problem',
+          data: problem,
+          hasProblem: true
+        };
+        nodes.push(node);
+      });
+    }
+    
+    return {
+      nodes,
+      parentNode: minddump.title,
+      _timestamp: Date.now(),
+      minddumpId: minddump.id
+    };
+    
+  } catch (error) {
+    console.error('Error loading minddump:', error);
+    return getFallbackJson();
+  }
+}
+
+// New function to get latest minddump
+export async function getLatestMinddump(userId) {
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      return null;
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    const { data, error } = await supabase
+      .table('minddumps')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (error || !data) {
+      return null;
+    }
+    
+    return await generateMindMapFromMinddump(data.id, userId);
+    
+  } catch (error) {
+    console.error('Error getting latest minddump:', error);
+    return null;
+  }
+}
+
 export async function generateMindMapJson(options = {}) {
   try {
-    const { showSubprojects = false, parentProjectId = null, onJWTError = null, showTodayOnly = true, forceRefresh = false } = options;
+    const { showSubprojects = false, parentProjectId = null, onJWTError = null, showTodayOnly = true, forceRefresh = false, userId = null } = options;
+    
+    // If userId is provided and showTodayOnly is true, try to load latest minddump first
+    if (userId && showTodayOnly && !parentProjectId) {
+      const latestMinddump = await getLatestMinddump(userId);
+      if (latestMinddump) {
+        console.log('Loaded latest minddump instead of database query');
+        return latestMinddump;
+      }
+    }
+    
+    // Fallback to original database query
     const { projects, knowledgeNodes, problems } = await fetchSupabaseData(onJWTError, forceRefresh);
 
     // Apply filtering based on options using unified filterElements
