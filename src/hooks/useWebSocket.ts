@@ -22,7 +22,7 @@ interface UseWebSocketReturn {
   currentQuestion: WorkflowQuestion | null;
   progress: string | null;
   sendResponse: (response: any) => void;
-  startChatWorkflow: (userId: string) => Promise<void>;
+  startWorkflow: (projectId: string | null, userId: string, workflowType?: 'projectmanager' | 'project_chat_workflow' | 'chat_workflow', text?: string) => Promise<void>;
   disconnect: () => void;
 }
 
@@ -210,8 +210,8 @@ export const useWebSocket = (
     });
   }, []);
 
-  // Start chat workflow - this is when we connect
-  const startChatWorkflow = useCallback(async (userId: string) => {
+  // Start workflow for a project or mind dump - this is when we connect
+  const startWorkflow = useCallback(async (projectId: string | null, userId: string, workflowType: 'projectmanager' | 'project_chat_workflow' | 'chat_workflow' = 'chat_workflow', text?: string) => {
     try {
       // Initialize socket connection first
       await initializeSocket();
@@ -234,16 +234,20 @@ export const useWebSocket = (
       // Wait a bit for registration
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Call RPC to start chat workflow
+      // Call RPC to start workflow
       console.log('Calling RPC:', `${BACKEND_URL}/rpc`);
+      const params = workflowType === 'minddump' 
+        ? { text: text, user_id: userId, session_id: newSessionId }
+        : { user_id: userId, session_id: newSessionId };
+      
       const response = await fetch(`${BACKEND_URL}/rpc`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          method: 'chat_workflow',
-          params: { user_id: userId, session_id: newSessionId }
+          method: workflowType,
+          params: params
         })
       });
 
@@ -263,10 +267,10 @@ export const useWebSocket = (
         throw new Error(result.error);
       }
 
-      console.log('Chat workflow started successfully:', result);
+      console.log('Workflow started successfully:', result);
       setSessionId(newSessionId);
     } catch (error) {
-      console.error('Error starting chat workflow:', error);
+      console.error('Error starting workflow:', error);
       disconnectSocket(); // Clean up on any error
       throw error;
     }
@@ -278,7 +282,7 @@ export const useWebSocket = (
     currentQuestion,
     progress,
     sendResponse,
-    startChatWorkflow,
+    startWorkflow,
     disconnect: disconnectSocket
   };
 };

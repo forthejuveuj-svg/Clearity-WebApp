@@ -96,7 +96,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     currentQuestion,
     progress,
     sendResponse,
-    startChatWorkflow,
+    startWorkflow,
     disconnect,
   } = useWebSocket(
     (results) => {
@@ -463,7 +463,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       try {
         // Start interactive chat workflow via WebSocket if not already connected
         if (!sessionId || !connected) {
-          await startChatWorkflow(userId);
+          await startWorkflow(null, userId, 'chat_workflow');
           // Wait a moment for session to register
           await new Promise(resolve => setTimeout(resolve, 500));
         }
