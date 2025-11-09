@@ -410,15 +410,6 @@ export async function generateMindMapJson(options = {}) {
   try {
     const { showSubprojects = false, parentProjectId = null, onJWTError = null, showTodayOnly = true, forceRefresh = false } = options;
     
-    // If userId is provided and showTodayOnly is true, try to load latest minddump first
-    if (userId && showTodayOnly && !parentProjectId) {
-      const latestMinddump = await getLatestMinddump(userId);
-      if (latestMinddump) {
-        console.log('Loaded latest minddump instead of database query');
-        return latestMinddump;
-      }
-    }
-    
     // Fallback to original database query
     const { projects, knowledgeNodes, problems } = await fetchSupabaseData(onJWTError, forceRefresh);
 
