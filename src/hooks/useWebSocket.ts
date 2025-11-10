@@ -11,9 +11,6 @@ import { config } from '@/lib/config';
 interface WorkflowQuestion {
   session_id: string;
   question: string;
-  type: 'yes_no' | 'multiple_choice' | 'free_text' | 'scale';
-  options?: string[];
-  context?: Record<string, any>;
 }
 
 interface UseWebSocketReturn {
@@ -116,10 +113,7 @@ export const useWebSocket = (
         // Convert workflow_message to workflow_question format for compatibility
         const questionData: WorkflowQuestion = {
           session_id: data.session_id,
-          question: data.message,
-          type: 'free_text',
-          options: undefined,
-          context: undefined
+          question: data.message
         };
         currentQuestionState = questionData;
         setCurrentQuestion(questionData);

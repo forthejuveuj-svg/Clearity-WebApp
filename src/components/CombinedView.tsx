@@ -125,7 +125,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         console.log('CombinedView: Previous messages count:', prev.length);
         const newMessages = [...prev, {
           role: "assistant" as const,
-          content: currentQuestion.question + (currentQuestion.options ? `\n\nOptions: ${currentQuestion.options.join(', ')}` : '')
+          content: currentQuestion.question
         }];
         console.log('CombinedView: New messages count:', newMessages.length);
         return newMessages;
