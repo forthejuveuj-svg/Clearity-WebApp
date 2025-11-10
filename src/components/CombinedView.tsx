@@ -208,7 +208,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const reloadNodes = async (options: any = {}) => {
     try {
       const { clearNodes, ...restOptions } = options;
-      
+
       // If clearNodes is true, clear the current nodes first
       if (clearNodes) {
         setMindMapNodes([]);
@@ -216,7 +216,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         console.log('Mind map cleared for new session');
         return;
       }
-      
+
       // Use cache unless forceRefresh is specified
       const finalOptions = { forceRefresh: false, ...restOptions };
       const data = await generateMindMapJson(finalOptions);
@@ -299,7 +299,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     try {
       console.log('Loading minddump:', minddump.title);
       const data = await generateMindMapFromMinddump(minddump.id);
-      
+
       if (data && data.nodes) {
         setMindMapNodes(data.nodes);
         setParentNodeTitle(data.parentNode || minddump.title);
@@ -401,44 +401,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   }, [initialMessage, hasInitialized, userId]);
 
-  // Handle new messages when initialMessage changes (e.g., from task manager)
-  useEffect(() => {
-    if (initialMessage && hasInitialized && userId && messages.length > 0 && messages[messages.length - 1].content !== initialMessage) {
-      // Add new user message (don't remove project organization messages - they're part of conversation)
-      setMessages(prev => [...prev, { role: "user", content: initialMessage }]);
-
-      // Process new message
-      const processNewMessage = async () => {
-        setIsProcessing(true);
-        try {
-          const result = await processUserMessage(initialMessage, userId);
-
-          const responseMessage = result.success
-            ? result.output!
-            : "I understand. Let me help you with that task. What specific aspect would you like to focus on first?";
-
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: responseMessage
-          }]);
-
-          if (result.success) {
-            setShowSubprojects(true);
-            reloadNodes({ showSubprojects: true, forceRefresh: true }); // Force refresh after successful processing
-          }
-        } catch (error) {
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
-          }]);
-        } finally {
-          setIsProcessing(false);
-        }
-      };
-
-      processNewMessage();
-    }
-  }, [initialMessage, hasInitialized, userId, messages]);
+  // Removed duplicate useEffect - initialMessage is already handled in the first useEffect
 
 
 

@@ -196,8 +196,8 @@ const Index = () => {
       });
     }
     
-    // Set an initial message to start a new mind map
-    setInitialMessage("Let's create a new mind map! What would you like to organize or explore?");
+    // Clear any existing initial message to start fresh
+    setInitialMessage("");
   };
 
   const handleAuthSuccess = () => {
