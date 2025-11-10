@@ -128,7 +128,8 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
 
       {/* Thought labels */}
       {node.thoughts && node.thoughts.map((thought, idx) => {
-        const angles = [60, 90, 120];
+        // Adjusted angles to position key points higher up to reduce overlap
+        const angles = [30, 60, 90];
         const angle = angles[idx];
         const screenWidth = window.innerWidth;
         
@@ -153,7 +154,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
         return (
           <div
             key={idx}
-            className={`absolute font-semibold whitespace-nowrap px-3 py-1.5 lg:px-6 lg:py-3 rounded-full border backdrop-blur-sm transition-all duration-1000 ease-out hover:scale-125 hover:brightness-150 hover:shadow-lg cursor-pointer z-20 ${getThoughtColor(node.color)}`}
+            className={`absolute font-semibold whitespace-nowrap px-3 py-1.5 lg:px-6 lg:py-3 rounded-full border backdrop-blur-sm transition-all duration-1000 ease-out hover:scale-125 hover:brightness-150 hover:shadow-lg hover:z-50 cursor-pointer z-20 ${getThoughtColor(node.color)}`}
             style={{
               left: `calc(50% + ${x}px)`,
               top: `calc(50% + ${y}px)`,
