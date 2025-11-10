@@ -57,16 +57,21 @@ export const MinddumpSearchBar: React.FC<MinddumpSearchBarProps> = ({
         }
     };
 
-    const handleCancelEdit = (e: React.MouseEvent) => {
+    const handleCancelEdit = (e: React.MouseEvent | React.KeyboardEvent) => {
         e.stopPropagation();
         setEditingId(null);
-        setEditingTitle('');
+        setEditingTitle(''); // Reset to empty - original title will be shown when not editing
     };
 
-    const handleKeyPress = (e: React.KeyboardEvent) => {
+    const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
+            e.preventDefault();
             handleSaveEdit(e as any);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            handleCancelEdit(e as any);
         }
+        // Space and other keys work normally - no special handling needed
     };
 
     if (isLoading) {
@@ -125,7 +130,7 @@ export const MinddumpSearchBar: React.FC<MinddumpSearchBarProps> = ({
                                                 type="text"
                                                 value={editingTitle}
                                                 onChange={(e) => setEditingTitle(e.target.value)}
-                                                onKeyDown={handleKeyPress}
+                                                onKeyDown={handleKeyDown}
                                                 className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-purple-500"
                                                 autoFocus
                                                 onClick={(e) => e.stopPropagation()}
