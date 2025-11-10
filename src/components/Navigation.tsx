@@ -74,18 +74,6 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
           <img src={ClearityLogo} alt="Clearity Logo" className="w-full h-full object-cover" />
         </button>
         
-        {/* New Mind Dump Button */}
-        {user && onCreateNewMinddump && (
-          <button
-            onClick={onCreateNewMinddump}
-            className="p-2.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 backdrop-blur-sm border border-blue-500/30 hover:border-blue-500/50 transition-all duration-300 hover:scale-110 group"
-            title="Create New Mind Map"
-            aria-label="Create New Mind Map"
-          >
-            <Plus className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors" />
-          </button>
-        )}
-        
         {user && (
           <div className="relative" ref={userMenuRef}>
             <button 
@@ -134,6 +122,18 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
               </div>
             )}
           </div>
+        )}
+
+        {/* New Mind Dump Button */}
+        {user && onCreateNewMinddump && (
+          <button
+            onClick={onCreateNewMinddump}
+            className="p-2.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 backdrop-blur-sm border border-blue-500/30 hover:border-blue-500/50 transition-all duration-300 hover:scale-110 group"
+            title="Create New Mind Map"
+            aria-label="Create New Mind Map"
+          >
+            <Plus className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors" />
+          </button>
         )}
         
         <button 
