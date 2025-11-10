@@ -1312,7 +1312,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               <MinddumpSearchBar 
                 query={searchQuery}
                 onSelectMinddump={(minddump) => {
-                  console.log('🎯 Direct minddump selection:', minddump.title);
+                  console.log('🎯 CombinedView direct callback triggered:', minddump.title);
+                  console.log('🔍 handleMinddumpSelect exists?', typeof handleMinddumpSelect);
                   handleMinddumpSelect(minddump);
                   setIsSearchModalOpen(false);
                 }}

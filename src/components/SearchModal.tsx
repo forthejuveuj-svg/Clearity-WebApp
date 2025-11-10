@@ -103,20 +103,9 @@ export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalPr
 
         {/* Search Results */}
         <div className="px-6 pb-6">
-          <MinddumpSearchBar 
-            query={searchQuery}
-            onSelectMinddump={(minddump) => {
-              console.log('🎯 Direct callback from MinddumpSearchBar:', minddump.title);
-              if (onMinddumpSelect) {
-                onMinddumpSelect(minddump);
-                handleClose();
-              } else {
-                console.warn('⚠️ No onMinddumpSelect in direct callback');
-              }
-            }}
-            onNeedsRefresh={setNeedsRefresh}
-            className="border-0 bg-transparent"
-          />
+          <div className="text-gray-400 text-sm">
+            SearchModal is deprecated - using direct implementation in CombinedView
+          </div>
         </div>
       </div>
     </div>
