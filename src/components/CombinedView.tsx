@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Mic, MicOff, ArrowUp, MessageSquare, X, Reply, Search } from "lucide-react";
 import { TypingAnimation } from "./TypingAnimation";
 import { ProblemsModal, ProblemsModalProps } from "./ProblemsModal";
@@ -295,7 +295,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   };
 
-  const handleMinddumpSelect = async (minddump: any) => {
+  const handleMinddumpSelect = React.useCallback(async (minddump: any) => {
     try {
       console.log('🔄 Loading minddump:', minddump.title, 'ID:', minddump.id);
       const data = await generateMindMapFromMinddump(minddump.id);
@@ -318,7 +318,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       setMindMapNodes([]);
       setParentNodeTitle(null);
     }
-  };
+  }, []);
 
   // Initialize data on component mount
   useEffect(() => {
@@ -1267,14 +1267,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       {/* Search Modal */}
       <SearchModal
         isOpen={isSearchModalOpen}
-        onClose={() => {
-          console.log('🔒 Closing search modal');
-          setIsSearchModalOpen(false);
-        }}
-        onMinddumpSelect={(minddump) => {
-          console.log('🎯 CombinedView onMinddumpSelect called:', minddump.title);
-          handleMinddumpSelect(minddump);
-        }}
+        onClose={() => setIsSearchModalOpen(false)}
+        onMinddumpSelect={handleMinddumpSelect}
       />
 
       {/* Problems Modal */}
