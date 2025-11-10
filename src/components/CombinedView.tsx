@@ -1267,8 +1267,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       {/* Search Modal */}
       <SearchModal
         isOpen={isSearchModalOpen}
-        onClose={() => setIsSearchModalOpen(false)}
-        onMinddumpSelect={handleMinddumpSelect}
+        onClose={() => {
+          console.log('🔒 Closing search modal');
+          setIsSearchModalOpen(false);
+        }}
+        onMinddumpSelect={(minddump) => {
+          console.log('🎯 CombinedView onMinddumpSelect called:', minddump.title);
+          handleMinddumpSelect(minddump);
+        }}
       />
 
       {/* Problems Modal */}

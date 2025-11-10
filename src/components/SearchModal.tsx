@@ -13,7 +13,7 @@ export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalPr
   const [searchQuery, setSearchQuery] = useState("");
   const [needsRefresh, setNeedsRefresh] = useState(false);
   
-  console.log('SearchModal render:', { isOpen, searchQuery });
+  console.log('SearchModal render:', { isOpen, searchQuery, hasCallback: !!onMinddumpSelect });
 
   const handleSearch = (query: string) => {
     if (query.trim()) {
