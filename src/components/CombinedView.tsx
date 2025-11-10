@@ -152,69 +152,79 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           if (minddump) {
             console.log('Minddump created from AI results:', minddump.id);
 
-            // Load the new minddump into the mind map
+            // Load the new minddump into the mind map IMMEDIATELY (user sees results right away)
             await handleMinddumpSelect(minddump);
+
+            // PRESERVE sessionId before it gets cleared
+            const preservedSessionId = sessionId;
+            const preservedUserId = userId;
 
             // Check if we should merge nodes (more than 2 projects)
             const projectCount = workflowData.projects?.length || 0;
             console.log(`🔍 [CombinedView] Checking merge condition:`, {
               projectCount,
-              hasSessionId: !!sessionId,
-              sessionId,
-              shouldMerge: projectCount > 2 && !!sessionId
+              hasSessionId: !!preservedSessionId,
+              sessionId: preservedSessionId,
+              shouldMerge: projectCount > 2 && !!preservedSessionId
             });
 
-            if (projectCount > 2 && sessionId) {
-              console.log(`🔄 [CombinedView] Starting node merge for ${projectCount} projects`);
+            // Run unifier in background if needed (user already sees the minddump)
+            if (projectCount > 2 && preservedSessionId) {
+              console.log(`🔄 [CombinedView] Starting node merge for ${projectCount} projects (background process)`);
               console.log(`📊 [CombinedView] Merge data:`, {
                 projects: workflowData.projects?.map(p => ({ id: p.id, name: p.name })),
                 problems: workflowData.problems?.map(p => ({ id: p.id, name: p.name }))
               });
               setIsMergingNodes(true);
 
-              try {
-                console.log(`🚀 [CombinedView] Calling APIService.mergeAndSimplifyNodes...`);
-                // Call merge RPC with the minddump data
-                const mergeResult: any = await APIService.mergeAndSimplifyNodes({
-                  user_id: userId,
-                  session_id: sessionId,
-                  data_json: {
-                    projects: workflowData.projects || [],
-                    problems: workflowData.problems || []
-                  }
-                });
-                console.log(`📥 [CombinedView] Received merge result:`, mergeResult);
+              // Run merge in background - don't block UI
+              (async () => {
+                try {
+                  console.log(`🚀 [CombinedView] Calling APIService.mergeAndSimplifyNodes with preserved sessionId...`);
+                  // Call merge RPC with PRESERVED sessionId
+                  const mergeResult: any = await APIService.mergeAndSimplifyNodes({
+                    user_id: preservedUserId,
+                    session_id: preservedSessionId,
+                    data_json: {
+                      projects: workflowData.projects || [],
+                      problems: workflowData.problems || []
+                    }
+                  });
+                  console.log(`📥 [CombinedView] Received merge result:`, mergeResult);
 
-                if (mergeResult.success) {
-                  const originalCount = projectCount;
-                  const mergedCount = mergeResult.merged_counts?.projects || 0;
+                  if (mergeResult.success) {
+                    const originalCount = projectCount;
+                    const mergedCount = mergeResult.merged_counts?.projects || 0;
 
-                  console.log(`✅ Node merge completed: ${originalCount} -> ${mergedCount} projects`);
+                    console.log(`✅ Node merge completed: ${originalCount} -> ${mergedCount} projects`);
 
-                  // Only update if nodes were actually merged (fewer nodes)
-                  if (mergedCount < originalCount) {
-                    console.log('📊 Updating minddump with merged nodes');
+                    // Only update if nodes were actually merged (fewer nodes)
+                    if (mergedCount < originalCount) {
+                      console.log('📊 Updating minddump with merged nodes');
 
-                    // Update the minddump with merged data
-                    const { updateMinddumpNodes } = await import('../utils/supabaseClient.js');
-                    await updateMinddumpNodes(minddump.id, {
-                      projects: mergeResult.projects || [],
-                      problems: mergeResult.problems || []
-                    });
+                      // Update the minddump with merged data
+                      const { updateMinddumpNodes } = await import('../utils/supabaseClient.js');
+                      await updateMinddumpNodes(minddump.id, {
+                        projects: mergeResult.projects || [],
+                        problems: mergeResult.problems || []
+                      });
 
-                    // Reload the minddump to show merged nodes
-                    await handleMinddumpSelect(minddump);
+                      // Reload the minddump to show merged nodes
+                      console.log('🔄 Reloading minddump with merged data...');
+                      await handleMinddumpSelect(minddump);
+                      console.log('✅ Minddump reloaded with merged nodes');
+                    } else {
+                      console.log('ℹ️ No nodes were merged, keeping original layout');
+                    }
                   } else {
-                    console.log('ℹ️ No nodes were merged, keeping original layout');
+                    console.warn('⚠️ Node merge failed:', mergeResult.error);
                   }
-                } else {
-                  console.warn('⚠️ Node merge failed:', mergeResult.error);
+                } catch (error) {
+                  console.error('❌ Error during node merge:', error);
+                } finally {
+                  setIsMergingNodes(false);
                 }
-              } catch (error) {
-                console.error('❌ Error during node merge:', error);
-              } finally {
-                setIsMergingNodes(false);
-              }
+              })();
             }
           } else {
             console.warn('Failed to create minddump from AI results');
