@@ -195,34 +195,14 @@ export async function createMinddumpFromData(results, userId) {
           x: position.x,
           y: position.y,
           color,
-          type: 'project',
           data: project
         };
         nodes.push(node);
       });
     }
     
-    // Create problem nodes
-    if (results.problems) {
-      results.problems.forEach(problem => {
-        const position = getRandomPosition();
-        
-        const node = {
-          id: `problem-${problem.id}`,
-          problemId: problem.id,
-          label: (problem.name || problem.title || 'Problem').length > 12 ? 
-            (problem.name || problem.title || 'Problem').replace(/\s+/g, '\n') : 
-            (problem.name || problem.title || 'Problem'),
-          x: position.x,
-          y: position.y,
-          color: 'red',
-          type: 'problem',
-          data: problem,
-          hasProblem: true
-        };
-        nodes.push(node);
-      });
-    }
+    // Don't create separate problem nodes - let problems be handled through the problems array in the data structure
+    // The AI can work with the problems directly from results.problems
     
     // Generate title from first project or problem, or use chat response
     let title = 'Chat Workflow Result';
@@ -342,28 +322,8 @@ export async function generateMindMapFromMinddump(minddumpId) {
       });
     }
     
-    // Create problem nodes
-    if (minddump.nodes.problems) {
-      minddump.nodes.problems.forEach(problem => {
-        const storedPos = storedPositions.find(p => p.id === `problem-${problem.id}`);
-        const position = storedPos || getRandomPosition();
-        
-        const node = {
-          id: `problem-${problem.id}`,
-          problemId: problem.id,
-          label: (problem.title || problem.name || 'Problem').length > 12 ? (problem.title || problem.name || 'Problem').replace(/\s+/g, '\n') : (problem.title || problem.name || 'Problem'),
-          x: position.x,
-          y: position.y,
-          color: storedPos?.color || 'red',
-          type: 'problem',
-          data: problem,
-          hasProblem: true,
-          problemType: problem.type || 'general',
-          problemData: [problem] // Wrap in array for compatibility
-        };
-        nodes.push(node);
-      });
-    }
+    // Don't create separate problem nodes - problems are handled through the data structure
+    // The AI merger can work with problems directly from the minddump.nodes.problems array
     
     return {
       nodes,

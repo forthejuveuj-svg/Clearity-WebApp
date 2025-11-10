@@ -33,6 +33,7 @@ export interface Node {
   x: number;
   y: number;
   color: "blue" | "violet" | "red" | "teal";
+  data?: any; // Raw data from backend (projects or problems)
   subNodes?: { label: string; id?: string }[];
   tension?: number;
   thoughts?: string[];
@@ -558,12 +559,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Handle node clicks for project focus and subproject navigation
   const handleNodeClick = async (node: Node) => {
-    // Removed selectedEntities reset - using simple chat workflow instead
+    console.log('Node clicked:', node.label, 'ID:', node.id);
 
+    // Handle project nodes
     // Check if node has subprojects (indicated by subNodes or specific keywords)
     const hasSubprojects = node.subNodes && node.subNodes.length > 0;
     const projectKeywords = ['project', 'course', 'learning', 'study', 'work', 'build', 'create'];
-    const isProject = projectKeywords.some(keyword =>
+    const isProject = node.projectId || projectKeywords.some(keyword =>
       node.label.toLowerCase().includes(keyword)
     );
 
@@ -926,7 +928,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   onNodeClick={handleNodeClick}
                   onProblemClick={() => {
                     console.log('Problem bubble clicked for node:', node.label);
-                    console.log('Full node object:', node);
                     console.log('Node ID:', node.id);
                     console.log('Node projectId:', node.projectId);
                     console.log('Node has problem:', node.hasProblem);

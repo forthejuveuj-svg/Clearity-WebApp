@@ -102,6 +102,7 @@ export class MessageModeHandler {
     
     if (this.onProjectFocusCallback) {
       const sanitizedName = project.name.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+      
       if (project.status === 'not_started') {
         // Project not started - offer to help organize it
         const message = `Would you like me to help you start organizing the project "${sanitizedName}"? I can break it down into manageable tasks and create a roadmap for you.`;
