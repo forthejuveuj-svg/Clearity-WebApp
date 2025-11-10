@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Search, X } from "lucide-react";
 import { MinddumpSearchBar } from "./MinddumpSearchBar";
 import { MinddumpSearchResult } from "@/hooks/useMinddumpSearch";
@@ -28,8 +28,9 @@ export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalPr
     }
   };
 
-  const handleMinddumpSelect = (minddump: MinddumpSearchResult) => {
+  const handleMinddumpSelect = React.useCallback((minddump: MinddumpSearchResult) => {
     console.log('🔄 SearchModal handleMinddumpSelect called:', minddump.title);
+    console.log('🔍 onMinddumpSelect exists?', !!onMinddumpSelect);
     // Call the callback if provided
     if (onMinddumpSelect) {
       console.log('📞 Calling onMinddumpSelect callback');
@@ -38,7 +39,7 @@ export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalPr
       console.warn('⚠️ No onMinddumpSelect callback provided');
     }
     handleClose();
-  };
+  }, [onMinddumpSelect]);
 
   const handleClose = async () => {
     // If there were changes, refresh the cache before closing
@@ -104,7 +105,15 @@ export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalPr
         <div className="px-6 pb-6">
           <MinddumpSearchBar 
             query={searchQuery}
-            onSelectMinddump={handleMinddumpSelect}
+            onSelectMinddump={(minddump) => {
+              console.log('🎯 Direct callback from MinddumpSearchBar:', minddump.title);
+              if (onMinddumpSelect) {
+                onMinddumpSelect(minddump);
+                handleClose();
+              } else {
+                console.warn('⚠️ No onMinddumpSelect in direct callback');
+              }
+            }}
             onNeedsRefresh={setNeedsRefresh}
             className="border-0 bg-transparent"
           />

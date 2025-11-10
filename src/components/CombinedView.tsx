@@ -296,6 +296,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   };
 
   const handleMinddumpSelect = React.useCallback(async (minddump: any) => {
+    console.log('🎯 CombinedView handleMinddumpSelect called:', minddump.title);
     try {
       console.log('🔄 Loading minddump:', minddump.title, 'ID:', minddump.id);
       const data = await generateMindMapFromMinddump(minddump.id);
