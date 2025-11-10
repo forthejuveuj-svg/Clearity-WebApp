@@ -121,21 +121,32 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     if (currentQuestion) {
       console.log('CombinedView: Adding question to chat:', currentQuestion.question);
       // Add question to chat as assistant message
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: currentQuestion.question + (currentQuestion.options ? `\n\nOptions: ${currentQuestion.options.join(', ')}` : '')
-      }]);
+      setMessages(prev => {
+        console.log('CombinedView: Previous messages count:', prev.length);
+        const newMessages = [...prev, {
+          role: "assistant" as const,
+          content: currentQuestion.question + (currentQuestion.options ? `\n\nOptions: ${currentQuestion.options.join(', ')}` : '')
+        }];
+        console.log('CombinedView: New messages count:', newMessages.length);
+        return newMessages;
+      });
     }
   }, [currentQuestion]);
 
   // Handle workflow progress messages in chat
   useEffect(() => {
     if (progress) {
+      console.log('CombinedView: Adding progress message:', progress);
       // Add progress message
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: progress
-      }]);
+      setMessages(prev => {
+        console.log('CombinedView: Previous messages count (progress):', prev.length);
+        const newMessages = [...prev, {
+          role: "assistant" as const,
+          content: progress
+        }];
+        console.log('CombinedView: New messages count (progress):', newMessages.length);
+        return newMessages;
+      });
     }
   }, [progress]);
 
@@ -384,7 +395,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim() && !isProcessing) {
+    if (input.trim() && (!isProcessing || currentQuestion)) {
       const userMessage = input.trim();
 
       // Check if user is responding with "No" to remove project organization messages
@@ -395,7 +406,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       // All other messages should remain as part of the conversation
       const filteredMessages = isNoResponse ? removeProjectFocusMessages(messages) : messages;
 
-      setMessages([...filteredMessages, { role: "user", content: userMessage }]);
+      console.log('CombinedView: Adding user message:', userMessage);
+      setMessages(prev => {
+        console.log('CombinedView: Previous messages count (user):', prev.length);
+        const newMessages = [...filteredMessages, { role: "user" as const, content: userMessage }];
+        console.log('CombinedView: New messages count (user):', newMessages.length);
+        return newMessages;
+      });
       setInput("");
       setIsProcessing(true);
 
