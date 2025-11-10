@@ -1009,7 +1009,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 <textarea
                   ref={textareaRef}
                   value={input}
-                  onChange={(e) => !isProcessing && setInput(e.target.value)}
+                  onChange={(e) => (!isProcessing || currentQuestion) && setInput(e.target.value)}
                   onFocus={handleInputFocus}
                   onBlur={handleInputBlur}
                   onKeyDown={(e) => {
@@ -1019,17 +1019,20 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                       handleSubmit(e as any);
                     }
                   }}
-                  placeholder={isInputExpanded && !isProcessing ? messageModeHandler.getPlaceholder() : ""}
-                  disabled={isProcessing}
+                  placeholder={isInputExpanded && (!isProcessing || currentQuestion) ?
+                    (currentQuestion ? "Type your answer..." : messageModeHandler.getPlaceholder()) : ""}
+                  disabled={isProcessing && !currentQuestion}
                   rows={1}
                   className={`w-full px-5 py-3 bg-gray-900 border rounded-3xl 
                              text-sm text-white placeholder:text-white/50
                              focus:outline-none focus:ring-2 focus:border-blue-500/50
                              transition-all duration-300 hover:border-white/30
                              resize-none
-                             ${isProcessing
+                             ${isProcessing && !currentQuestion
                       ? 'border-purple-500/50 text-purple-300 cursor-not-allowed'
-                      : 'border-white/20 focus:ring-blue-500/50'
+                      : currentQuestion
+                        ? 'border-blue-500/50 text-blue-300 focus:ring-blue-500/50'
+                        : 'border-white/20 focus:ring-blue-500/50'
                     }
                              ${isInputExpanded ? 'pr-20' : 'cursor-pointer'}`}
                   style={{ paddingRight: isInputExpanded ? '80px' : '20px', minHeight: '48px' }}
@@ -1040,12 +1043,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 <div className={`absolute right-3 bottom-3 flex items-center gap-2 transition-opacity duration-300 ${isInputExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                   <button
                     type="submit"
-                    disabled={!input.trim() || isProcessing}
+                    disabled={!input.trim() || (isProcessing && !currentQuestion)}
                     className="p-2 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 
                                disabled:opacity-30 disabled:cursor-not-allowed
                                transition-all duration-300 hover:scale-110 shadow-lg shadow-blue-500/25"
                   >
-                    {isProcessing ? (
+                    {isProcessing && !currentQuestion ? (
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     ) : (
                       <ArrowUp className="w-4 h-4 text-white" />
