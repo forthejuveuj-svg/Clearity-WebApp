@@ -3,6 +3,7 @@ import { Search, Star, User, CheckSquare, Network, LogOut, Plus } from "lucide-r
 import { useNavigate } from "react-router-dom";
 import ClearityLogo from "@/assets/clearity-logo.svg";
 import { SearchModal } from "./SearchModal";
+
 import { useAuthContext } from "./AuthProvider";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -22,10 +23,9 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
   const { user } = useAuthContext();
   const { signOut } = useAuth();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isTaskManagerOpen, setIsTaskManagerOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  
+
   // Check if user is paid (simulated - in real app this would come from auth state)
   const isPaidUser = localStorage.getItem("isPaidUser") === "true";
   const selectedPlan = localStorage.getItem("selectedPlan") || "Monthly";
@@ -47,7 +47,7 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
   const handleSignOut = async () => {
     try {
       await signOut();
-      
+
       navigate('/');
       setShowUserMenu(false);
     } catch (error) {
@@ -59,7 +59,7 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
     <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex items-center justify-between">
       {/* Logo and Settings */}
       <div className="flex items-center gap-3">
-        <button 
+        <button
           onClick={() => {
             if (onLogoClick) {
               onLogoClick();
@@ -72,18 +72,18 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
         >
           <img src={ClearityLogo} alt="Clearity Logo" className="w-full h-full object-cover" />
         </button>
-        
+
         {user && (
           <div className="relative" ref={userMenuRef}>
-            <button 
+            <button
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:scale-110"
               aria-label="User Menu"
             >
               {user.user_metadata?.avatar_url ? (
-                <img 
-                  src={user.user_metadata.avatar_url} 
-                  alt="User Avatar" 
+                <img
+                  src={user.user_metadata.avatar_url}
+                  alt="User Avatar"
                   className="w-5 h-5 rounded-full"
                 />
               ) : (
@@ -134,15 +134,13 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
             <Plus className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors" />
           </button>
         )}
-        
-        <button 
+
+        <button
           onClick={() => {
             if (onToggleView) {
               onToggleView();
             } else if (onOpenTaskManager) {
               onOpenTaskManager();
-            } else {
-              setIsTaskManagerOpen(true);
             }
           }}
           className="hidden p-2.5 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:scale-110"
@@ -158,7 +156,7 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
 
       {/* Right actions */}
       <div className="flex items-center gap-4">
-        <button 
+        <button
           onClick={() => setIsSearchOpen(true)}
           className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:scale-110"
           aria-label="Search"
@@ -176,10 +174,10 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
             Sign Up
           </button>
         )}
-        
+
         {isPaidUser ? (
           <div className="relative group">
-            <button 
+            <button
               onClick={() => navigate('/pricing')}
               className="px-4 py-2 rounded-xl text-white font-medium text-sm flex items-center gap-2 transition-all duration-300 hover:scale-105"
               style={{
@@ -191,7 +189,7 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
               <Star className="w-4 h-4" />
               Pro
             </button>
-            
+
             <div className="absolute top-full mt-2 right-0 bg-gray-900 border border-white/20 rounded-lg px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
               <p className="text-xs text-white/70">
                 Plan: <span className="text-purple-400 font-semibold">{selectedPlan}</span>
@@ -201,7 +199,7 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
           </div>
         ) : (
           <div className="relative group">
-            <button 
+            <button
               onClick={() => navigate('/pricing')}
               className="px-4 py-2 rounded-xl text-white font-medium text-sm flex items-center gap-2 transition-all duration-300 hover:scale-105"
               style={{
@@ -213,7 +211,7 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
               <Star className="w-4 h-4" />
               Upgrade to Pro
             </button>
-            
+
             <div className="absolute top-full mt-2 right-0 bg-gray-900 border border-white/20 rounded-lg px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
               <p className="text-xs text-white/70">
                 AI Credits: <span className="text-red-400 font-semibold">10/30</span>
@@ -225,18 +223,13 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
       </div>
 
       {/* Search Modal */}
-      <SearchModal 
-        isOpen={isSearchOpen} 
+      <SearchModal
+        isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
       />
-      
-      {/* Task Manager Modal */}
-      <TaskManagerModal 
-        isOpen={isTaskManagerOpen} 
-        onClose={() => setIsTaskManagerOpen(false)}
-        onNavigateToChat={onNavigateToChat}
-      />
-      
+
+
+
     </nav>
   );
 };
