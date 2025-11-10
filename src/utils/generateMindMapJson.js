@@ -256,7 +256,8 @@ export async function createMinddumpFromData(results, userId) {
         version: '1.0',
         created_from: 'chat_workflow',
         workflow_insights: results.insights || null
-      }
+      },
+      conversation: results.conversation_history || []
     };
     
     // Use the existing createMinddump function which handles user_id automatically

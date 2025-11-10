@@ -17,6 +17,7 @@ import { SessionManager, SessionData } from "@/utils/sessionManager";
 import { SearchModal } from "./SearchModal";
 import { MinddumpSearchBar } from "./MinddumpSearchBar";
 import { generateMindMapFromMinddump } from "@/utils/generateMindMapJson";
+import { useConversation } from "@/contexts/ConversationContext";
 
 interface Message {
   role: "user" | "assistant";
@@ -57,6 +58,7 @@ interface CombinedViewProps {
 export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateToChat: onNavigateToChatProp, onViewChange, initialView = 'mindmap', onClearCache, onReloadNodes, onMinddumpSelect }: CombinedViewProps) => {
   const { userId, signOut } = useAuth();
   const globalData = useGlobalData();
+  const { currentConversation, addMessage, clearConversation, loadConversation, saveConversation } = useConversation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [input, setInput] = useState("");
@@ -140,7 +142,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             entities_created: results.data?.entities_created || results.data?.entities_stored || null
           };
           
-          // Create minddump from the AI results
+          // Create minddump from the AI results with conversation history
+          dataToProcess.conversation_history = currentConversation;
           const minddump = await createMinddumpFromData(dataToProcess, userId);
           
           if (minddump) {
@@ -188,6 +191,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         console.log('CombinedView: New messages count:', newMessages.length);
         return newMessages;
       });
+
+      // Add to conversation context
+      addMessage({
+        role: 'assistant',
+        content: currentQuestion.question,
+        timestamp: new Date().toISOString()
+      });
     }
   }, [currentQuestion]);
 
@@ -204,6 +214,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         }];
         console.log('CombinedView: New messages count (progress):', newMessages.length);
         return newMessages;
+      });
+
+      // Add to conversation context
+      addMessage({
+        role: 'assistant',
+        content: progress,
+        timestamp: new Date().toISOString()
       });
     }
   }, [progress]);
@@ -327,15 +344,31 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         setParentNodeTitle(data.parentNode || minddump.title);
         saveCurrentSession(data.nodes, minddump.title);
 
-
+        // Load conversation history
+        if (minddump.conversation && minddump.conversation.length > 0) {
+          console.log('💬 Loading conversation history:', minddump.conversation.length, 'messages');
+          loadConversation(minddump.id, minddump.conversation);
+          
+          // Convert conversation to messages format for display
+          const conversationMessages: Message[] = minddump.conversation.map((msg: any) => ({
+            role: msg.role,
+            content: msg.content,
+            messageType: 'normal'
+          }));
+          setMessages(conversationMessages);
+        } else {
+          // Clear conversation if no history
+          clearConversation();
+          setMessages([]);
+        }
 
         console.log('✅ Minddump loaded successfully');
       } else {
         console.warn('⚠️ No nodes found in minddump data');
         setMindMapNodes([]);
         setParentNodeTitle(minddump.title);
-
-
+        clearConversation();
+        setMessages([]);
       }
     } catch (error) {
       console.error('❌ Error loading minddump:', error);
@@ -471,6 +504,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         console.log('CombinedView: New messages count (user):', newMessages.length);
         return newMessages;
       });
+
+      // Add to conversation context
+      addMessage({
+        role: 'user',
+        content: userMessage,
+        timestamp: new Date().toISOString()
+      });
       setInput("");
       setIsProcessing(true);
 
@@ -484,6 +524,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         // Start interactive chat workflow with the user's message
         if (!sessionId || !connected) {
           console.log('Starting workflow with user message:', userMessage);
+          // Clear conversation when starting new workflow
+          clearConversation();
           await startWorkflow(userId, userMessage);
           setIsProcessing(false);
           return;
@@ -501,6 +543,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         console.log('Starting new workflow with message:', userMessage);
         disconnect(); // Disconnect current session
         await new Promise(resolve => setTimeout(resolve, 100)); // Brief pause
+        // Clear conversation when starting new workflow
+        clearConversation();
         await startWorkflow(userId, userMessage);
         setIsProcessing(false);
         return;

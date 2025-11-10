@@ -5,6 +5,12 @@
 
 import { getLatestMinddump, searchMinddumps, getMinddump, createMinddump } from '@/utils/supabaseClient.js';
 
+export interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
 export interface Minddump {
   id: string;
   user_id: string;
@@ -27,6 +33,7 @@ export interface Minddump {
     version?: string;
     tags?: string[];
   };
+  conversation: ConversationMessage[];
   created_at: string;
   updated_at: string;
 }
@@ -59,19 +66,30 @@ class MinddumpService {
     }
   }
 
-  async createMinddump(prompt: string, title: string, nodes: any, layoutData?: any, metadata?: any): Promise<Minddump | null> {
+  async createMinddump(prompt: string, title: string, nodes: any, layoutData?: any, metadata?: any, conversation?: ConversationMessage[]): Promise<Minddump | null> {
     try {
       const minddumpData = {
         prompt,
         title,
         nodes,
         layout_data: layoutData || {},
-        metadata: metadata || {}
+        metadata: metadata || {},
+        conversation: conversation || []
       };
       return await createMinddump(minddumpData);
     } catch (error) {
       console.error('Error creating minddump:', error);
       return null;
+    }
+  }
+
+  async updateMinddumpConversation(minddumpId: string, conversation: ConversationMessage[]): Promise<boolean> {
+    try {
+      const { updateMinddumpConversation } = await import('@/utils/supabaseClient.js');
+      return await updateMinddumpConversation(minddumpId, conversation);
+    } catch (error) {
+      console.error('Error updating minddump conversation:', error);
+      return false;
     }
   }
 
