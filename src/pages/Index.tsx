@@ -202,8 +202,7 @@ const Index = () => {
     // Clear any existing mind map and start fresh
     if (reloadNodesRef.current) {
       reloadNodesRef.current({ 
-        forceRefresh: true,
-        clearNodes: true // This will be a new option to clear existing nodes
+        startFresh: true // Clear current minddump tracking and start fresh
       });
     }
     

@@ -231,7 +231,10 @@ export async function createMinddumpFromData(results, userId) {
         }))
       },
       metadata: {
-        entities_count: results.entities_created || results.entities_stored || { projects: 0, problems: 0 },
+        entities_count: {
+          projects: nodes.length, // Use actual nodes displayed in layout
+          problems: results.problems?.length || 0
+        },
         ai_model: 'gpt-4o-mini',
         version: '1.0',
         created_from: 'chat_workflow',
@@ -250,6 +253,10 @@ export async function createMinddumpFromData(results, userId) {
     if (!savedMinddump) {
       throw new Error('Failed to save minddump');
     }
+    
+    // Track this as the current minddump
+    const { setCurrentMinddump } = await import('./supabaseClient.js');
+    setCurrentMinddump(savedMinddump.id);
     
     console.log('Minddump created successfully:', savedMinddump.id);
     return savedMinddump;
@@ -285,6 +292,10 @@ export async function generateMindMapFromMinddump(minddumpId) {
     if (!minddump) {
       throw new Error('Minddump not found');
     }
+    
+    // Track this as the current minddump
+    const { setCurrentMinddump } = await import('./supabaseClient.js');
+    setCurrentMinddump(minddumpId);
     
     console.log('Minddump loaded:', minddump.title, 'with', minddump.nodes);
     
@@ -374,7 +385,14 @@ export async function getLatestMinddump(userId) {
 
 export async function generateMindMapJson(options = {}) {
   try {
-    const { showSubprojects = false, parentProjectId = null, onJWTError = null, forceRefresh = false } = options;
+    const { showSubprojects = false, parentProjectId = null, onJWTError = null, forceRefresh = false, skipMinddumpLoad = false } = options;
+    
+    // Check if we should skip loading from existing minddumps and use fresh data
+    if (skipMinddumpLoad) {
+      // Import the clear function and clear current minddump tracking
+      const { clearCurrentMinddump } = await import('./supabaseClient.js');
+      clearCurrentMinddump();
+    }
     
     // Fallback to original database query
     const { projects, knowledgeNodes, problems } = await fetchSupabaseData(onJWTError, forceRefresh);
@@ -492,11 +510,15 @@ export async function generateMindMapJson(options = {}) {
           }))
         };
 
-        // Metadata
+        // Metadata - use actual node count from layout, not total entity count
         const metadata = {
           entities_count: {
-            projects: filteredProjects.length,
-            problems: problems.length
+            projects: nodes.length, // Use actual nodes displayed in layout
+            problems: problems.filter(prob => 
+              filteredProjects.some(proj => 
+                prob.related_projects && prob.related_projects.includes(proj.id)
+              )
+            ).length
           },
           processing_time_ms: Date.now() - result._timestamp,
           version: '1.0',
@@ -518,6 +540,10 @@ export async function generateMindMapJson(options = {}) {
         if (savedMinddump) {
           console.log('✅ Minddump saved successfully:', savedMinddump.id);
           result.minddumpId = savedMinddump.id;
+          
+          // Track this as the current minddump
+          const { setCurrentMinddump } = await import('./supabaseClient.js');
+          setCurrentMinddump(savedMinddump.id);
           
           // Cache is automatically updated by createMinddump function
         } else {

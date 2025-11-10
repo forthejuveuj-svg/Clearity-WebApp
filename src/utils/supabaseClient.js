@@ -441,7 +441,8 @@ export async function convertProblemToProject(problem, options = {}) {
 let minddumpCache = {
   data: [],
   lastUpdated: null,
-  isLoading: false
+  isLoading: false,
+  currentMinddumpId: null // Track the currently loaded minddump
 };
 
 // Minddump cache subscribers
@@ -471,7 +472,8 @@ export function getMinddumpsFromCache() {
   return {
     data: [...minddumpCache.data],
     lastUpdated: minddumpCache.lastUpdated,
-    isLoading: minddumpCache.isLoading
+    isLoading: minddumpCache.isLoading,
+    currentMinddumpId: minddumpCache.currentMinddumpId
   };
 }
 
@@ -514,9 +516,27 @@ export function clearMinddumpsCache() {
   minddumpCache = {
     data: [],
     lastUpdated: null,
-    isLoading: false
+    isLoading: false,
+    currentMinddumpId: null
   };
   notifyMinddumpSubscribers();
+}
+
+// Set current minddump (for tracking what's currently loaded)
+export function setCurrentMinddump(minddumpId) {
+  minddumpCache.currentMinddumpId = minddumpId;
+  notifyMinddumpSubscribers();
+}
+
+// Clear current minddump (for starting fresh)
+export function clearCurrentMinddump() {
+  minddumpCache.currentMinddumpId = null;
+  notifyMinddumpSubscribers();
+}
+
+// Get current minddump ID
+export function getCurrentMinddumpId() {
+  return minddumpCache.currentMinddumpId;
 }
 
 // Minddump functions

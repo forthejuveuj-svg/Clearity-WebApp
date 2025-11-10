@@ -241,13 +241,33 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Function to reload mind map nodes from database (after minddump or other operations)
   const reloadNodes = async (options: any = {}) => {
     try {
-      const { clearNodes, ...restOptions } = options;
+      const { clearNodes, startFresh, ...restOptions } = options;
 
       // If clearNodes is true, clear the current nodes first
       if (clearNodes) {
         setMindMapNodes([]);
         setParentNodeTitle(null);
         console.log('Mind map cleared for new session');
+        return;
+      }
+
+      // If startFresh is true, clear current minddump tracking and load fresh data
+      if (startFresh) {
+        const { clearCurrentMinddump } = await import('@/utils/supabaseClient.js');
+        clearCurrentMinddump();
+        setMindMapNodes([]);
+        setParentNodeTitle(null);
+        console.log('Starting fresh - cleared current minddump tracking');
+        
+        // Load fresh data without any minddump context
+        const finalOptions = { forceRefresh: true, skipMinddumpLoad: true, ...restOptions };
+        const data = await generateMindMapJson(finalOptions);
+        if (data) {
+          setMindMapNodes(data.nodes || []);
+          setParentNodeTitle(data.parentNode || null);
+          saveCurrentSession(data.nodes || []);
+          console.log('Fresh mind map loaded:', data.nodes?.length || 0, 'nodes');
+        }
         return;
       }
 
@@ -388,9 +408,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         const { initializeMinddumpsCache } = await import('@/utils/supabaseClient.js');
         await initializeMinddumpsCache();
 
-        // Use cached data for faster loading
+        // Check if there's a current minddump to avoid loading stale data
+        const { getCurrentMinddumpId } = await import('@/utils/supabaseClient.js');
+        const currentMinddumpId = getCurrentMinddumpId();
+        
+        // Use cached data for faster loading, but skip minddump load if none is set
         const dbData = await generateMindMapJson({
           forceRefresh: false, // Use cache first - no need to hit database on initialization
+          skipMinddumpLoad: !currentMinddumpId, // Skip loading minddumps if no current one is set
           onJWTError: (message: string) => {
             console.warn('JWT error during data initialization:', message);
           }
@@ -716,12 +741,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         clearAllSessionsAndCache();
         // Refresh global data from database
         await globalData.refresh();
-        // Reload the mind map with fresh data
-        const dbData = await generateMindMapJson({
-          forceRefresh: true // Force fresh data
-        });
-        setMindMapNodes(dbData?.nodes || []);
-        setParentNodeTitle(dbData.parentNode || null);
+        // Start fresh - clear current minddump and load fresh data
+        await reloadNodes({ startFresh: true });
       });
     }
     if (onReloadNodes) {
