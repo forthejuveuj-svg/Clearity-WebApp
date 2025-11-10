@@ -29,9 +29,13 @@ export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalPr
   };
 
   const handleMinddumpSelect = (minddump: MinddumpSearchResult) => {
+    console.log('🔄 SearchModal handleMinddumpSelect called:', minddump.title);
     // Call the callback if provided
     if (onMinddumpSelect) {
+      console.log('📞 Calling onMinddumpSelect callback');
       onMinddumpSelect(minddump);
+    } else {
+      console.warn('⚠️ No onMinddumpSelect callback provided');
     }
     handleClose();
   };

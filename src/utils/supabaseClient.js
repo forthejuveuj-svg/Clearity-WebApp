@@ -82,15 +82,14 @@ async function fetchFreshDataFromSupabase(options = {}) {
       return { projects: [], knowledgeNodes: [], problems: [] };
     }
 
-    // Fetch all data in parallel
-    const [projectsResult, knowledgeNodesResult, problemsResult] = await Promise.all([
+    // Fetch only projects and problems
+    const [projectsResult, problemsResult] = await Promise.all([
       supabase.from('projects').select(selectFields).order('created_at', { ascending: false }),
-      supabase.from('knowledge_nodes').select('*').order('created_at', { ascending: false }),
       supabase.from('problems').select('*').eq('status', 'active').order('created_at', { ascending: false })
     ]);
 
     // Check for errors
-    const errors = [projectsResult.error, knowledgeNodesResult.error, problemsResult.error].filter(Boolean);
+    const errors = [projectsResult.error, problemsResult.error].filter(Boolean);
 
     for (const error of errors) {
       console.error('Database query error:', error);
@@ -104,7 +103,7 @@ async function fetchFreshDataFromSupabase(options = {}) {
 
     const freshData = {
       projects: projectsResult.data || [],
-      knowledgeNodes: knowledgeNodesResult.data || [],
+      knowledgeNodes: [], // Removed knowledge nodes
       problems: problemsResult.data || []
     };
 

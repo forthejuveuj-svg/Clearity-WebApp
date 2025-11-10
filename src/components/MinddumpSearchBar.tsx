@@ -106,7 +106,11 @@ export const MinddumpSearchBar: React.FC<MinddumpSearchBarProps> = ({
                 {results.map((minddump) => (
                     <button
                         key={minddump.id}
-                        onClick={() => onSelectMinddump(minddump)}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            console.log('🎯 Minddump clicked:', minddump.title, minddump.id);
+                            onSelectMinddump(minddump);
+                        }}
                         className="p-5 bg-gray-800/50 border border-gray-700/50 rounded-xl hover:bg-gray-700/50 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-300 text-left group"
                     >
                         <div className="flex items-start gap-4">
