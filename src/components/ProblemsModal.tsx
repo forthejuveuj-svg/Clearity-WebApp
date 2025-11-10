@@ -26,7 +26,7 @@ interface Problem {
   name?: string;
   description?: string;
   effect?: string;
-  status: 'active' | 'ongoing' | 'resolved';
+  status: 'active' | 'identified' | 'ongoing' | 'resolved';
   created_at: string;
   updated_at?: string;
   project_id?: string;
@@ -91,9 +91,8 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
           console.log('Problem keys:', Object.keys(projectProblems[0]));
         }
 
-        // Filter to only show active problems
-        const activeProjectProblems = projectProblems.filter(p => p.status === 'active');
-        setProblems(activeProjectProblems);
+        // Show all problems (including 'active' and 'identified' status)
+        setProblems(projectProblems);
       } else {
         // Show all active problems when no specific project is selected
         const activeProblems = await getActiveProblems();
