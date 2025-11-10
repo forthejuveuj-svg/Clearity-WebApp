@@ -966,17 +966,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               );
             })}
 
-            {/* Empty state message */}
-            {allNodes && allNodes.length === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center text-gray-400 space-y-4">
-                  <div className="text-6xl">🧠</div>
-                  <div className="text-xl font-medium">Empty Canvas</div>
-                  <div className="text-sm">Start a conversation below to create your mind map</div>
-                </div>
-              </div>
-            )}
-
             {/* Render regular nodes */}
             {allNodes && allNodes
               .filter(node => visibleNodes.includes(node.id))

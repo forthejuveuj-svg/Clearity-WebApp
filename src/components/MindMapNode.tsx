@@ -14,6 +14,8 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   onProblemClick,
   getScaleTransform
 }) => {
+  const [isHovered, setIsHovered] = React.useState(false);
+
   const getCircleSize = () => {
     const screenWidth = window.innerWidth;
     if (screenWidth >= 1024) return { width: 144, height: 144 };
@@ -82,7 +84,10 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
         left: `${node.x}%`,
         top: `${node.y}%`,
         transform: `translate(-50%, -50%) ${getScaleTransform()}`,
+        zIndex: isHovered ? 50 : 10,
       }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Problem indicator */}
       {node.hasProblem && (
@@ -107,7 +112,6 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           hover:scale-110 hover:bg-gray-800/60
           cursor-pointer
           ring-4 ring-offset-16 ring-offset-transparent ${getRingClass(node.color)}
-          z-10
         `}
         style={{
           width: `${getCircleSize().width}px`,
