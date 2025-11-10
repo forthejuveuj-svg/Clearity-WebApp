@@ -340,21 +340,8 @@ export async function generateMindMapFromMinddump(minddumpId) {
           minddump.nodes.problems.filter(problem => {
             const isRelated = problem.project_id === project.id ||
               (problem.related_projects && problem.related_projects.includes(project.id));
-
-            if (isRelated) {
-              console.log(`✅ Found problem "${problem.title || problem.name}" for project "${project.name}"`);
-              console.log('   Problem data:', {
-                problem_id: problem.id,
-                project_id: problem.project_id,
-                related_projects: problem.related_projects,
-                status: problem.status
-              });
-            }
-
             return isRelated;
           }) : [];
-
-        console.log(`📊 Project "${project.name}" (ID: ${project.id}) has ${relatedProblems.length} problems`);
 
         const node = {
           id: nodeId,
@@ -369,15 +356,6 @@ export async function generateMindMapFromMinddump(minddumpId) {
           problemData: relatedProblems.length > 0 ? relatedProblems : undefined,
           thoughts: project.key_points || []
         };
-
-        if (relatedProblems.length > 0) {
-          console.log(`🔴 Node created with hasProblem=true:`, {
-            nodeId: node.id,
-            projectId: node.projectId,
-            problemCount: relatedProblems.length,
-            problemData: node.problemData
-          });
-        }
 
         nodes.push(node);
       });

@@ -32,7 +32,6 @@ export class SessionManager {
       localStorage.setItem('mindmap_sessions', JSON.stringify(updatedSessions));
       localStorage.setItem('mindmap_current_index', (updatedSessions.length - 1).toString());
       
-      console.log(`Saved session with ${nodes.length} nodes to cache`);
       return newSession;
     } catch (error) {
       console.error('Error saving session:', error);

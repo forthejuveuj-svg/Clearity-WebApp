@@ -407,10 +407,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       console.log('🔄 Loading minddump:', minddump.title, 'ID:', minddump.id);
       const data = await generateMindMapFromMinddump(minddump.id);
 
-      console.log('📊 Minddump data received:', data);
-
       if (data && data.nodes) {
-        console.log('✅ Setting mind map nodes:', data.nodes.length, 'nodes');
         setMindMapNodes(data.nodes);
         setParentNodeTitle(data.parentNode || minddump.title);
         saveCurrentSession(data.nodes, minddump.title);
@@ -432,8 +429,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           clearConversation();
           setMessages([]);
         }
-
-        console.log('✅ Minddump loaded successfully');
       } else {
         console.warn('⚠️ No nodes found in minddump data');
         setMindMapNodes([]);
