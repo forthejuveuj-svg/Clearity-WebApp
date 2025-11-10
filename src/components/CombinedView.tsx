@@ -105,12 +105,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       // Workflow completed - show summary in chat
       console.log('Chat workflow completed with results:', results);
 
-      // Add completion message to chat
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: "✅ Chat completed! Your thoughts have been organized into projects and problems."
-      }]);
-
       // Force reload nodes to show new data
       reloadNodes({ forceRefresh: true });
     },
@@ -118,52 +112,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       // Workflow error - show in chat
       console.error('Chat workflow error:', error);
 
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: `❌ Chat workflow error: ${error}`
-      }]);
     }
   );
-
-  // Reset message mode handler when component mounts
-  useEffect(() => {
-    messageModeHandler.reset();
-
-    // Set up callback for project focus events
-    messageModeHandler.setOnProjectFocusCallback((message: string, messageType?: string, clearMessages?: boolean) => {
-      if (clearMessages) {
-        // Clear all messages when project focus is sent
-        setMessages([{
-          role: "assistant",
-          content: message,
-          messageType: messageType as "project_organization" | "project_chat" | "normal" | undefined,
-          autoRemove: messageType === 'project_organization' || messageType === 'project_chat'
-        }]);
-      } else {
-        // Remove any existing project focus messages before adding new one
-        if (messageType === 'project_organization' || messageType === 'project_chat') {
-          setMessages(prev => removeProjectFocusMessages(prev));
-        }
-
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: message,
-          messageType: messageType as "project_organization" | "project_chat" | "normal" | undefined,
-          autoRemove: messageType === 'project_organization' || messageType === 'project_chat'
-        }]);
-      }
-    });
-
-    // Set up callback for project focus change events (for cleanup)
-    messageModeHandler.setOnProjectFocusChangeCallback(() => {
-      // Disconnect WebSocket when project focus changes
-      if (connected || sessionId) {
-        console.log('Project focus changed, disconnecting WebSocket');
-        disconnect();
-      }
-
-    });
-  }, [connected, sessionId, disconnect]);
 
   // Handle workflow questions in chat
   useEffect(() => {
@@ -188,8 +138,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }]);
     }
   }, [progress]);
-
-
 
   // Single mind map state - data comes directly from database
   const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
@@ -297,11 +245,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const handleMinddumpSelect = React.useCallback(async (minddump: any) => {
     console.log('🎯 CombinedView handleMinddumpSelect called:', minddump.title);
 
-    // Show loading message
-    setMessages(prev => [...prev, {
-      role: "assistant",
-      content: `� Loading mmind map: "${minddump.title}" from database...`
-    }]);
 
     try {
       console.log('🔄 Loading minddump:', minddump.title, 'ID:', minddump.id);
@@ -315,11 +258,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         setParentNodeTitle(data.parentNode || minddump.title);
         saveCurrentSession(data.nodes, minddump.title);
 
-        // Show success message
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: `✅ Mind map "${minddump.title}" loaded successfully! Found ${data.nodes.length} items.`
-        }]);
+
 
         console.log('✅ Minddump loaded successfully');
       } else {
@@ -327,22 +266,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         setMindMapNodes([]);
         setParentNodeTitle(minddump.title);
 
-        // Show warning message
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: `⚠️ Mind map "${minddump.title}" was loaded but contains no items.`
-        }]);
+
       }
     } catch (error) {
       console.error('❌ Error loading minddump:', error);
       setMindMapNodes([]);
       setParentNodeTitle(null);
 
-      // Show error message
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: `❌ Failed to load mind map "${minddump.title}". Please try again.`
-      }]);
+
     }
   }, []);
 
@@ -370,12 +301,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         // Save this as a new session (for navigation history)
         if (dbNodes.length > 0) {
           saveCurrentSession(dbNodes, null);
-        } else {
-          // Show welcome message when no data is available
-          setMessages([{
-            role: "assistant",
-            content: "👋 Welcome! You can:\n\n• **Chat with me** to create new mind maps from your thoughts\n• **Load saved mind maps** using the buttons above\n• **Browse your collection** to find specific mind maps\n\nWhat would you like to do?"
-          }]);
         }
 
       } catch (error) {
@@ -391,12 +316,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
         setMindMapNodes([]);
         setParentNodeTitle(null);
-
-        // Show error message with options
-        setMessages([{
-          role: "assistant",
-          content: "⚠️ Couldn't load your data right now. You can still:\n\n• **Chat with me** to create new mind maps\n• **Try loading** a saved mind map using the buttons above\n\nWhat would you like to do?"
-        }]);
       }
     };
 
@@ -419,28 +338,18 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     if (!hasInitialized && userId) {
       // Initialize even if initialMessage is empty
       if (initialMessage) {
-        setMessages([{ role: "user", content: initialMessage }]);
-
         // Process initial message
         const processInitialMessage = async () => {
           setIsProcessing(true);
           try {
             const result = await processUserMessage(initialMessage, userId);
 
-            setMessages(prev => [...prev, {
-              role: "assistant",
-              content: result.success ? result.output! : getDefaultErrorMessage(result.error)
-            }]);
-
             if (result.success) {
               setShowSubprojects(true);
               reloadNodes({ showSubprojects: true, forceRefresh: true }); // Force refresh after successful minddump
             }
           } catch (error) {
-            setMessages(prev => [...prev, {
-              role: "assistant",
-              content: getDefaultErrorMessage()
-            }]);
+            console.error('Error processing initial message:', error);
           } finally {
             setIsProcessing(false);
           }
@@ -491,10 +400,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       setIsProcessing(true);
 
       if (!userId) {
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: "Please log in to use the AI processing features."
-        }]);
+        console.warn('User not logged in');
         setIsProcessing(false);
         return;
       }
@@ -525,10 +431,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         return;
       } catch (error) {
         console.error('Error processing message:', error);
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: getDefaultErrorMessage()
-        }]);
       } finally {
         setIsProcessing(false);
       }
@@ -612,34 +514,17 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
     const taskMessage = `Let's discuss "${task.title}". What would you like to know or work on?`;
 
-    // Add task message to chat (don't remove project organization messages - they're part of conversation)
-    setMessages(prev => [...prev, { role: "user", content: taskMessage }]);
-
     if (userId) {
       setIsProcessing(true);
       try {
         const result = await processUserMessage(taskMessage, userId);
 
         if (result.success) {
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: result.output || "Task processed successfully."
-          }]);
-
           // Reload nodes when processing is successful
           reloadNodes({ forceRefresh: true }); // Force refresh after successful processing
-        } else {
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: getDefaultErrorMessage(result.error)
-          }]);
         }
       } catch (error) {
         console.error('Error processing task message:', error);
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: getDefaultErrorMessage(error instanceof Error ? error.message : String(error))
-        }]);
       } finally {
         setIsProcessing(false);
       }
@@ -935,28 +820,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 />
               ))}
 
-            {/* Empty state indicator when no nodes */}
-            {(!allNodes || allNodes.length === 0) && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center max-w-md mx-auto px-6">
-                  <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/30 flex items-center justify-center">
-                    <Search className="w-10 h-10 text-purple-400" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-3">No Mind Map Loaded</h3>
-                  <p className="text-gray-400 text-sm leading-relaxed mb-6">
-                    Start by loading a saved mind map or chat with me to create a new one from your thoughts.
-                  </p>
-                  <div className="flex gap-3 justify-center">
-                    <button
-                      onClick={() => setIsSearchModalOpen(true)}
-                      className="px-4 py-2 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/50 rounded-lg hover:from-purple-600/30 hover:to-blue-600/30 hover:border-purple-400/70 transition-all duration-200 text-sm font-medium text-purple-300"
-                    >
-                      Browse Mind Maps
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+
 
             {/* Large indicator node in top right - shows current context - only visible when in subproject view */}
             {parentNodeTitle && (
@@ -1010,7 +874,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         ) : (
           // Task Manager View
           <div className="h-full w-full bg-gray-900">
-            
+
           </div>
         )}
       </div>
@@ -1171,8 +1035,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                              transition-all duration-300 hover:border-white/30
                              resize-none
                              ${isProcessing
-                        ? 'border-purple-500/50 text-purple-300 cursor-not-allowed'
-                        : 'border-white/20 focus:ring-blue-500/50'
+                      ? 'border-purple-500/50 text-purple-300 cursor-not-allowed'
+                      : 'border-white/20 focus:ring-blue-500/50'
                     }
                              ${isInputExpanded ? 'pr-20' : 'cursor-pointer'}`}
                   style={{ paddingRight: isInputExpanded ? '80px' : '20px', minHeight: '48px' }}
