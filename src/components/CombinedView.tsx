@@ -299,6 +299,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   const handleMinddumpSelect = React.useCallback(async (minddump: any) => {
     console.log('🎯 CombinedView handleMinddumpSelect called:', minddump.title);
+
+    // Show loading message
+    setMessages(prev => [...prev, {
+      role: "assistant",
+      content: `� Loading mmind map: "${minddump.title}" from database...`
+    }]);
+
     try {
       console.log('🔄 Loading minddump:', minddump.title, 'ID:', minddump.id);
       const data = await generateMindMapFromMinddump(minddump.id);
@@ -310,16 +317,35 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         setMindMapNodes(data.nodes);
         setParentNodeTitle(data.parentNode || minddump.title);
         saveCurrentSession(data.nodes, minddump.title);
+
+        // Show success message
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `✅ Mind map "${minddump.title}" loaded successfully! Found ${data.nodes.length} items.`
+        }]);
+
         console.log('✅ Minddump loaded successfully');
       } else {
         console.warn('⚠️ No nodes found in minddump data');
         setMindMapNodes([]);
         setParentNodeTitle(minddump.title);
+
+        // Show warning message
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `⚠️ Mind map "${minddump.title}" was loaded but contains no items.`
+        }]);
       }
     } catch (error) {
       console.error('❌ Error loading minddump:', error);
       setMindMapNodes([]);
       setParentNodeTitle(null);
+
+      // Show error message
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `❌ Failed to load mind map "${minddump.title}". Please try again.`
+      }]);
     }
   }, []);
 
@@ -347,6 +373,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         // Save this as a new session (for navigation history)
         if (dbNodes.length > 0) {
           saveCurrentSession(dbNodes, null);
+        } else {
+          // Show welcome message when no data is available
+          setMessages([{
+            role: "assistant",
+            content: "👋 Welcome! You can:\n\n• **Chat with me** to create new mind maps from your thoughts\n• **Load saved mind maps** using the buttons above\n• **Browse your collection** to find specific mind maps\n\nWhat would you like to do?"
+          }]);
         }
 
       } catch (error) {
@@ -362,6 +394,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
         setMindMapNodes([]);
         setParentNodeTitle(null);
+
+        // Show error message with options
+        setMessages([{
+          role: "assistant",
+          content: "⚠️ Couldn't load your data right now. You can still:\n\n• **Chat with me** to create new mind maps\n• **Try loading** a saved mind map using the buttons above\n\nWhat would you like to do?"
+        }]);
       }
     };
 
@@ -892,17 +930,68 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               ))}
             </div>
 
-            {/* Search Button */}
-            <button
-              onClick={() => {
-                console.log('Search button clicked, opening modal');
-                setIsSearchModalOpen(true);
-              }}
-              className="absolute top-4 right-4 z-30 p-3 bg-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-xl hover:bg-gray-800/80 hover:border-gray-600/50 transition-all duration-200 group"
-              title="Search Mind Maps"
-            >
-              <Search className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
-            </button>
+            {/* Mind Map Controls */}
+            <div className="absolute top-4 right-4 z-30 flex gap-3">
+              {/* Quick Load Latest Button */}
+              <button
+                onClick={async () => {
+                  console.log('Quick load latest clicked');
+                  setMessages(prev => [...prev, {
+                    role: "assistant",
+                    content: "🔄 Loading your most recent mind map..."
+                  }]);
+
+                  try {
+                    // Import the function to get latest minddump
+                    const { getLatestMinddump } = await import('@/utils/supabaseClient.js');
+                    const latestMinddump = await getLatestMinddump();
+
+                    if (latestMinddump) {
+                      await handleMinddumpSelect(latestMinddump);
+                    } else {
+                      setMessages(prev => [...prev, {
+                        role: "assistant",
+                        content: "📭 No saved mind maps found. Create one by chatting with me!"
+                      }]);
+                    }
+                  } catch (error) {
+                    console.error('Error loading latest minddump:', error);
+                    setMessages(prev => [...prev, {
+                      role: "assistant",
+                      content: "❌ Failed to load latest mind map. Please try the search option."
+                    }]);
+                  }
+                }}
+                className="px-3 py-2 bg-gradient-to-r from-teal-600/20 to-green-600/20 backdrop-blur-sm border border-teal-500/50 rounded-lg hover:from-teal-600/30 hover:to-green-600/30 hover:border-teal-400/70 transition-all duration-200 group shadow-lg shadow-teal-500/10"
+                title="Load Latest Mind Map"
+              >
+                <div className="flex items-center gap-1.5">
+                  <div className="w-4 h-4 rounded bg-teal-400/30 flex items-center justify-center">
+                    <div className="w-2 h-2 bg-teal-400 rounded-full"></div>
+                  </div>
+                  <span className="text-xs font-medium text-teal-300 group-hover:text-teal-200 transition-colors">
+                    Latest
+                  </span>
+                </div>
+              </button>
+
+              {/* Search/Browse Button */}
+              <button
+                onClick={() => {
+                  console.log('Search button clicked, opening modal');
+                  setIsSearchModalOpen(true);
+                }}
+                className="px-4 py-3 bg-gradient-to-r from-purple-600/20 to-blue-600/20 backdrop-blur-sm border border-purple-500/50 rounded-xl hover:from-purple-600/30 hover:to-blue-600/30 hover:border-purple-400/70 transition-all duration-200 group shadow-lg shadow-purple-500/10"
+                title="Browse & Search Mind Maps"
+              >
+                <div className="flex items-center gap-2">
+                  <Search className="w-5 h-5 text-purple-400 group-hover:text-purple-300 transition-colors" />
+                  <span className="text-sm font-medium text-purple-300 group-hover:text-purple-200 transition-colors">
+                    Browse
+                  </span>
+                </div>
+              </button>
+            </div>
 
             {/* Beautiful Neural Connection lines */}
             {allNodes && allNodes.length > 0 && connections.map((conn, idx) => {
@@ -969,6 +1058,29 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   getScaleTransform={getScaleTransform}
                 />
               ))}
+
+            {/* Empty state indicator when no nodes */}
+            {(!allNodes || allNodes.length === 0) && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center max-w-md mx-auto px-6">
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/30 flex items-center justify-center">
+                    <Search className="w-10 h-10 text-purple-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-3">No Mind Map Loaded</h3>
+                  <p className="text-gray-400 text-sm leading-relaxed mb-6">
+                    Start by loading a saved mind map or chat with me to create a new one from your thoughts.
+                  </p>
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={() => setIsSearchModalOpen(true)}
+                      className="px-4 py-2 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/50 rounded-lg hover:from-purple-600/30 hover:to-blue-600/30 hover:border-purple-400/70 transition-all duration-200 text-sm font-medium text-purple-300"
+                    >
+                      Browse Mind Maps
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Large indicator node in top right - shows current context - only visible when in subproject view */}
             {parentNodeTitle && (
@@ -1271,16 +1383,24 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       {isSearchModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Backdrop */}
-          <div 
+          <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setIsSearchModalOpen(false)}
           />
-          
+
           {/* Modal */}
           <div className="relative bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl mx-auto shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-700">
-              <h2 className="text-xl font-semibold text-white">Search</h2>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/30 flex items-center justify-center">
+                  <Search className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-white">Load Mind Map</h2>
+                  <p className="text-sm text-gray-400">Choose from your saved mind maps</p>
+                </div>
+              </div>
               <button
                 onClick={() => setIsSearchModalOpen(false)}
                 className="p-2 rounded-lg hover:bg-gray-800 transition-colors"
@@ -1309,7 +1429,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
             {/* Search Results */}
             <div className="px-6 pb-6">
-              <MinddumpSearchBar 
+              <MinddumpSearchBar
                 query={searchQuery}
                 onSelectMinddump={(minddump) => {
                   console.log('🎯 CombinedView direct callback triggered:', minddump.title);
@@ -1317,7 +1437,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   handleMinddumpSelect(minddump);
                   setIsSearchModalOpen(false);
                 }}
-                onNeedsRefresh={() => {}} // No-op for now
+                onNeedsRefresh={() => { }} // No-op for now
                 className="border-0 bg-transparent"
               />
             </div>

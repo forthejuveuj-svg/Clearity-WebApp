@@ -62,7 +62,7 @@ export class MessageModeHandler {
       const sanitizedName = this.state.projectFocus.name.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
       return `Let's work on ${sanitizedName}...`;
     }
-    return "Let's overthink about...";
+    return "Share your thoughts or load a saved mind map...";
   }
 
   /**
