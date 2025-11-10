@@ -241,44 +241,36 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Function to reload mind map nodes from database (after minddump or other operations)
   const reloadNodes = async (options: any = {}) => {
     try {
-      const { clearNodes, startFresh, ...restOptions } = options;
+      const { startFresh } = options;
 
-      // If clearNodes is true, clear the current nodes first
-      if (clearNodes) {
-        setMindMapNodes([]);
-        setParentNodeTitle(null);
-        console.log('Mind map cleared for new session');
-        return;
-      }
-
-      // If startFresh is true, clear current minddump tracking and load fresh data
       if (startFresh) {
+        // Clear current minddump and show empty canvas
         const { clearCurrentMinddump } = await import('@/utils/supabaseClient.js');
         clearCurrentMinddump();
         setMindMapNodes([]);
         setParentNodeTitle(null);
-        console.log('Starting fresh - cleared current minddump tracking');
-        
-        // Load fresh data without any minddump context
-        const finalOptions = { forceRefresh: true, skipMinddumpLoad: true, ...restOptions };
-        const data = await generateMindMapJson(finalOptions);
+        console.log('Started fresh - showing empty canvas');
+        return;
+      }
+
+      // Regular reload - check current minddump and load it
+      const { getCurrentMinddumpId } = await import('@/utils/supabaseClient.js');
+      const currentMinddumpId = getCurrentMinddumpId();
+      
+      if (currentMinddumpId) {
+        // Load the current minddump
+        const data = await generateMindMapFromMinddump(currentMinddumpId);
         if (data) {
           setMindMapNodes(data.nodes || []);
           setParentNodeTitle(data.parentNode || null);
           saveCurrentSession(data.nodes || []);
-          console.log('Fresh mind map loaded:', data.nodes?.length || 0, 'nodes');
+          console.log('Reloaded current minddump:', currentMinddumpId, 'with', data.nodes?.length || 0, 'nodes');
         }
-        return;
-      }
-
-      // Use cache unless forceRefresh is specified
-      const finalOptions = { forceRefresh: false, ...restOptions };
-      const data = await generateMindMapJson(finalOptions);
-      if (data) {
-        setMindMapNodes(data.nodes || []);
-        setParentNodeTitle(data.parentNode || null);
-        saveCurrentSession(data.nodes || []);
-        console.log('Mind map nodes reloaded:', data.nodes?.length || 0, 'nodes', finalOptions.forceRefresh ? '(forced refresh)' : '(from cache)');
+      } else {
+        // No current minddump - show empty canvas
+        setMindMapNodes([]);
+        setParentNodeTitle(null);
+        console.log('No current minddump - showing empty canvas');
       }
     } catch (error) {
       console.error('Error reloading nodes:', error);
@@ -405,31 +397,53 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     const initializeData = async () => {
       try {
         // Initialize minddumps cache
-        const { initializeMinddumpsCache } = await import('@/utils/supabaseClient.js');
+        const { initializeMinddumpsCache, getCurrentMinddumpId } = await import('@/utils/supabaseClient.js');
         await initializeMinddumpsCache();
 
-        // Check if there's a current minddump to avoid loading stale data
-        const { getCurrentMinddumpId } = await import('@/utils/supabaseClient.js');
+        // Check current minddump state
         const currentMinddumpId = getCurrentMinddumpId();
+        console.log('Initializing with current minddump:', currentMinddumpId);
         
-        // Use cached data for faster loading, but skip minddump load if none is set
-        const dbData = await generateMindMapJson({
-          forceRefresh: false, // Use cache first - no need to hit database on initialization
-          skipMinddumpLoad: !currentMinddumpId, // Skip loading minddumps if no current one is set
-          onJWTError: (message: string) => {
-            console.warn('JWT error during data initialization:', message);
+        if (currentMinddumpId) {
+          // Load the specific current minddump
+          try {
+            const data = await generateMindMapFromMinddump(currentMinddumpId);
+            if (data && data.nodes) {
+              setMindMapNodes(data.nodes);
+              setParentNodeTitle(data.parentNode || null);
+              saveCurrentSession(data.nodes, null);
+              console.log('Loaded current minddump:', currentMinddumpId, 'with', data.nodes.length, 'nodes');
+              return;
+            }
+          } catch (error) {
+            console.warn('Failed to load current minddump:', currentMinddumpId, error);
+            // Fall through to load latest or show empty
           }
-        });
-        const dbNodes = dbData?.nodes || [];
-
-        // Show all projects
-        setMindMapNodes(dbNodes);
-        setParentNodeTitle(dbData.parentNode || null);
-
-        // Save this as a new session (for navigation history)
-        if (dbNodes.length > 0) {
-          saveCurrentSession(dbNodes, null);
         }
+        
+        // No current minddump or failed to load - try to load latest from database
+        try {
+          const { getLatestMinddump } = await import('@/utils/supabaseClient.js');
+          const latestMinddump = await getLatestMinddump();
+          
+          if (latestMinddump) {
+            console.log('Loading latest minddump as fallback:', latestMinddump.id);
+            const data = await generateMindMapFromMinddump(latestMinddump.id);
+            if (data && data.nodes) {
+              setMindMapNodes(data.nodes);
+              setParentNodeTitle(data.parentNode || null);
+              saveCurrentSession(data.nodes, null);
+              return;
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to load latest minddump:', error);
+        }
+        
+        // No minddumps available - show empty canvas
+        console.log('No minddumps available - showing empty canvas');
+        setMindMapNodes([]);
+        setParentNodeTitle(null);
 
       } catch (error) {
         console.error('Error initializing data:', error);
@@ -739,10 +753,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       onClearCache(async () => {
         // Clear session cache
         clearAllSessionsAndCache();
+        // Clear current minddump and show empty canvas
+        await reloadNodes({ startFresh: true });
         // Refresh global data from database
         await globalData.refresh();
-        // Start fresh - clear current minddump and load fresh data
-        await reloadNodes({ startFresh: true });
       });
     }
     if (onReloadNodes) {

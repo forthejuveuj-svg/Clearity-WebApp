@@ -437,12 +437,24 @@ export async function convertProblemToProject(problem, options = {}) {
   }
 }
 
+// Global current minddump tracking
+let currentMinddumpId = null;
+
+// Load current minddump from localStorage on module load
+try {
+  const stored = localStorage.getItem('clearity_current_minddump');
+  if (stored && stored !== 'null') {
+    currentMinddumpId = stored;
+  }
+} catch (error) {
+  console.warn('Failed to load current minddump from localStorage:', error);
+}
+
 // Minddump cache
 let minddumpCache = {
   data: [],
   lastUpdated: null,
-  isLoading: false,
-  currentMinddumpId: null // Track the currently loaded minddump
+  isLoading: false
 };
 
 // Minddump cache subscribers
@@ -473,7 +485,7 @@ export function getMinddumpsFromCache() {
     data: [...minddumpCache.data],
     lastUpdated: minddumpCache.lastUpdated,
     isLoading: minddumpCache.isLoading,
-    currentMinddumpId: minddumpCache.currentMinddumpId
+    currentMinddumpId: getCurrentMinddumpId()
   };
 }
 
@@ -516,27 +528,54 @@ export function clearMinddumpsCache() {
   minddumpCache = {
     data: [],
     lastUpdated: null,
-    isLoading: false,
-    currentMinddumpId: null
+    isLoading: false
   };
   notifyMinddumpSubscribers();
 }
 
 // Set current minddump (for tracking what's currently loaded)
 export function setCurrentMinddump(minddumpId) {
-  minddumpCache.currentMinddumpId = minddumpId;
+  currentMinddumpId = minddumpId;
+  try {
+    if (minddumpId) {
+      localStorage.setItem('clearity_current_minddump', minddumpId);
+    } else {
+      localStorage.removeItem('clearity_current_minddump');
+    }
+  } catch (error) {
+    console.warn('Failed to save current minddump to localStorage:', error);
+  }
   notifyMinddumpSubscribers();
+  console.log('Current minddump set to:', minddumpId);
 }
 
 // Clear current minddump (for starting fresh)
 export function clearCurrentMinddump() {
-  minddumpCache.currentMinddumpId = null;
+  currentMinddumpId = null;
+  try {
+    localStorage.removeItem('clearity_current_minddump');
+  } catch (error) {
+    console.warn('Failed to clear current minddump from localStorage:', error);
+  }
   notifyMinddumpSubscribers();
+  console.log('Current minddump cleared - will show empty canvas');
 }
 
 // Get current minddump ID
 export function getCurrentMinddumpId() {
-  return minddumpCache.currentMinddumpId;
+  return currentMinddumpId;
+}
+
+// Debug function to check current state
+export function debugCurrentMinddumpState() {
+  console.log('=== Current Minddump State ===');
+  console.log('Current minddump ID:', currentMinddumpId);
+  console.log('LocalStorage value:', localStorage.getItem('clearity_current_minddump'));
+  console.log('==============================');
+  return {
+    currentMinddumpId,
+    localStorage: localStorage.getItem('clearity_current_minddump')
+  };
 }
 
 // Minddump functions

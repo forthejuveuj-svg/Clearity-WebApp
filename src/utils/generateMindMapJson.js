@@ -385,16 +385,9 @@ export async function getLatestMinddump(userId) {
 
 export async function generateMindMapJson(options = {}) {
   try {
-    const { showSubprojects = false, parentProjectId = null, onJWTError = null, forceRefresh = false, skipMinddumpLoad = false } = options;
+    const { showSubprojects = false, parentProjectId = null, onJWTError = null, forceRefresh = false } = options;
     
-    // Check if we should skip loading from existing minddumps and use fresh data
-    if (skipMinddumpLoad) {
-      // Import the clear function and clear current minddump tracking
-      const { clearCurrentMinddump } = await import('./supabaseClient.js');
-      clearCurrentMinddump();
-    }
-    
-    // Fallback to original database query
+    // Get fresh data from database
     const { projects, knowledgeNodes, problems } = await fetchSupabaseData(onJWTError, forceRefresh);
 
     // Apply filtering based on options
@@ -465,97 +458,8 @@ export async function generateMindMapJson(options = {}) {
       _timestamp: Date.now()
     };
 
-    // Save minddump to Supabase if we have nodes
-    if (nodes.length > 0) {
-      try {
-        console.log('💾 Saving minddump to Supabase with', nodes.length, 'nodes...');
-        
-        // Generate title based on context
-        let title = 'Mind Map';
-        if (parentNode) {
-          title = `${parentNode} - Subprojects`;
-        } else {
-          title = `Projects Overview - ${new Date().toLocaleDateString()}`;
-        }
-
-        // Generate prompt based on context
-        let prompt = 'Generated mind map from projects and problems';
-        if (parentProjectId) {
-          prompt = `Subprojects view for project: ${parentNode}`;
-        } else {
-          prompt = 'Overview of all active projects and problems';
-        }
-
-        // Prepare nodes data for storage
-        const nodesData = {
-          projects: filteredProjects.map(p => ({
-            id: p.id,
-            name: p.name,
-            description: p.description,
-            status: p.status,
-            created_at: p.created_at,
-            user_id: p.user_id
-          })),
-          problems: problems.filter(prob => 
-            filteredProjects.some(proj => 
-              prob.related_projects && prob.related_projects.includes(proj.id)
-            )
-          ).map(p => ({
-            id: p.id,
-            title: p.title,
-            description: p.description,
-            status: p.status,
-            created_at: p.created_at,
-            user_id: p.user_id
-          }))
-        };
-
-        // Metadata - use actual node count from layout, not total entity count
-        const metadata = {
-          entities_count: {
-            projects: nodes.length, // Use actual nodes displayed in layout
-            problems: problems.filter(prob => 
-              filteredProjects.some(proj => 
-                prob.related_projects && prob.related_projects.includes(proj.id)
-              )
-            ).length
-          },
-          processing_time_ms: Date.now() - result._timestamp,
-          version: '1.0',
-          view_type: parentProjectId ? 'subprojects' : 'overview',
-          parent_project_id: parentProjectId,
-          tags: [parentProjectId ? 'subprojects' : 'overview']
-        };
-
-        const minddumpData = {
-          prompt,
-          title,
-          nodes: nodesData,
-          layout_data: {}, // empty for now
-          metadata
-        };
-
-        const savedMinddump = await createMinddump(minddumpData, { onJWTError });
-
-        if (savedMinddump) {
-          console.log('✅ Minddump saved successfully:', savedMinddump.id);
-          result.minddumpId = savedMinddump.id;
-          
-          // Track this as the current minddump
-          const { setCurrentMinddump } = await import('./supabaseClient.js');
-          setCurrentMinddump(savedMinddump.id);
-          
-          // Cache is automatically updated by createMinddump function
-        } else {
-          console.warn('⚠️ Failed to save minddump');
-        }
-      } catch (error) {
-        console.error('❌ Error saving minddump:', error);
-        // Don't throw - continue with the result even if saving fails
-      }
-    } else {
-      console.log('🚫 No nodes to save - skipping minddump creation');
-    }
+    // Don't automatically create minddumps - let explicit actions handle that
+    console.log('Generated mind map with', nodes.length, 'nodes from database');
 
     return result;
   } catch (error) {
