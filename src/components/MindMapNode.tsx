@@ -69,9 +69,19 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   };
 
   const getProblemCount = (node: Node) => {
+    console.log(`🔍 getProblemCount for node "${node.label}":`, {
+      hasProblem: node.hasProblem,
+      problemData: node.problemData,
+      problemDataLength: node.problemData?.length,
+      nodeId: node.id,
+      projectId: node.projectId
+    });
+    
     if (!node.hasProblem) return 0;
     if (node.problemData) {
-      return node.problemData.filter(p => p.status === 'active').length;
+      const activeProblems = node.problemData.filter(p => p.status === 'active');
+      console.log(`   Active problems count: ${activeProblems.length}`);
+      return activeProblems.length;
     }
     const problemCounts = { anxiety: 3, blocker: 2, stress: 1 };
     return problemCounts[node.problemType || 'stress'] || 1;

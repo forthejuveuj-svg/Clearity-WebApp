@@ -317,6 +317,9 @@ export async function generateMindMapFromMinddump(minddumpId) {
     
     // Create project nodes
     if (minddump.nodes.projects) {
+      console.log('🔍 Processing projects from minddump:', minddump.nodes.projects.length);
+      console.log('🔍 Available problems:', minddump.nodes.problems?.length || 0);
+      
       minddump.nodes.projects.forEach(project => {
         const nodeId = projectToId(project.name);
         const storedPos = storedPositions.find(p => p.id === nodeId);
@@ -333,10 +336,24 @@ export async function generateMindMapFromMinddump(minddumpId) {
         
         // Check if there are related problems
         const relatedProblems = minddump.nodes.problems ? 
-          minddump.nodes.problems.filter(problem => 
-            problem.project_id === project.id || 
-            (problem.related_projects && problem.related_projects.includes(project.id))
-          ) : [];
+          minddump.nodes.problems.filter(problem => {
+            const isRelated = problem.project_id === project.id || 
+              (problem.related_projects && problem.related_projects.includes(project.id));
+            
+            if (isRelated) {
+              console.log(`✅ Found problem "${problem.title || problem.name}" for project "${project.name}"`);
+              console.log('   Problem data:', { 
+                problem_id: problem.id, 
+                project_id: problem.project_id, 
+                related_projects: problem.related_projects,
+                status: problem.status 
+              });
+            }
+            
+            return isRelated;
+          }) : [];
+        
+        console.log(`📊 Project "${project.name}" (ID: ${project.id}) has ${relatedProblems.length} problems`);
         
         const node = {
           id: nodeId,
@@ -351,6 +368,16 @@ export async function generateMindMapFromMinddump(minddumpId) {
           problemData: relatedProblems.length > 0 ? relatedProblems : undefined,
           thoughts: project.key_points || []
         };
+        
+        if (relatedProblems.length > 0) {
+          console.log(`🔴 Node created with hasProblem=true:`, {
+            nodeId: node.id,
+            projectId: node.projectId,
+            problemCount: relatedProblems.length,
+            problemData: node.problemData
+          });
+        }
+        
         nodes.push(node);
       });
     }
