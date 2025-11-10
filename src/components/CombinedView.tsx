@@ -659,7 +659,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     let bannerCount = 0;
 
     if (isProcessing && isInputExpanded) bannerCount++;
-    if (sessionId && isInputExpanded && !isProcessing) bannerCount++;
     if (replyingToTask && isInputExpanded && !isProcessing) bannerCount++;
 
     // Base padding + banner height (48px per banner + 8px margin)
@@ -971,13 +970,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 </div>
               )}
 
-              {/* Workflow indicator - show when chat workflow is active */}
-              {sessionId && isInputExpanded && !isProcessing && (
-                <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg backdrop-blur-sm">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                  <span className="text-sm text-blue-300 flex-1">Interactive chat active - answer the questions for better organization</span>
-                </div>
-              )}
+
 
               {/* Replying to indicator - only show when expanded and not processing */}
               {replyingToTask && isInputExpanded && !isProcessing && (
