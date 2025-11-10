@@ -16,9 +16,10 @@ interface NavigationProps {
   onCreateNewMinddump?: () => void;
   onShowAuth?: () => void;
   onProjectSelect?: (project: any) => void;
+  onMinddumpSelect?: (minddump: any) => void;
 }
 
-export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, currentView = 'mindmap', onOpenTaskManager, onShowAuth, onProjectSelect, onCreateNewMinddump }: NavigationProps = {}) => {
+export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, currentView = 'mindmap', onOpenTaskManager, onShowAuth, onProjectSelect, onCreateNewMinddump, onMinddumpSelect }: NavigationProps = {}) => {
   const navigate = useNavigate();
   const { user } = useAuthContext();
   const { signOut } = useAuth();
@@ -226,6 +227,7 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
       <SearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
+        onMinddumpSelect={onMinddumpSelect}
       />
 
 

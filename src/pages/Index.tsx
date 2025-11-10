@@ -119,6 +119,7 @@ const Index = () => {
   const toggleViewRef = React.useRef<(() => void) | null>(null);
   const navigateToChatRef = React.useRef<((task: any) => void) | null>(null);
   const reloadNodesRef = React.useRef<((options?: any) => void) | null>(null);
+  const minddumpSelectRef = React.useRef<((minddump: any) => void) | null>(null);
   const [combinedViewState, setCombinedViewState] = useState<'mindmap' | 'tasks'>('mindmap');
 
   const handleNavigateToChat = (task: any) => {
@@ -149,6 +150,16 @@ const Index = () => {
 
   const registerReloadNodes = (fn: (options?: any) => void) => {
     reloadNodesRef.current = fn;
+  };
+
+  const registerMinddumpSelect = (fn: (minddump: any) => void) => {
+    minddumpSelectRef.current = fn;
+  };
+
+  const handleMinddumpSelect = (minddump: any) => {
+    if (minddumpSelectRef.current) {
+      minddumpSelectRef.current(minddump);
+    }
   };
 
   const handleProjectSelect = (project: any) => {
@@ -269,6 +280,7 @@ const Index = () => {
         onShowAuth={currentView === 'onboarding' ? handleShowAuthFromOnboarding : undefined}
         onProjectSelect={handleProjectSelect}
         onCreateNewMinddump={currentView === 'combined' ? handleCreateNewMinddump : undefined}
+        onMinddumpSelect={currentView === 'combined' ? handleMinddumpSelect : undefined}
       />
       
       {currentView === "onboarding" && (
@@ -286,6 +298,7 @@ const Index = () => {
           onViewChange={setCombinedViewState}
           initialView={combinedViewState}
           onReloadNodes={registerReloadNodes}
+          onMinddumpSelect={registerMinddumpSelect}
         />
       )}
       
