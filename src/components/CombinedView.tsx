@@ -315,6 +315,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   useEffect(() => {
     const initializeData = async () => {
       try {
+        // Initialize minddumps cache
+        const { initializeMinddumpsCache } = await import('@/utils/supabaseClient.js');
+        await initializeMinddumpsCache();
+
         // Use cached data for faster loading
         const dbData = await generateMindMapJson({
           forceRefresh: false, // Use cache first - no need to hit database on initialization

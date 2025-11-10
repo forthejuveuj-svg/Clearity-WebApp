@@ -549,6 +549,8 @@ export async function generateMindMapJson(options = {}) {
         if (savedMinddump) {
           console.log('✅ Minddump saved successfully:', savedMinddump.id);
           result.minddumpId = savedMinddump.id;
+          
+          // Cache is automatically updated by createMinddump function
         } else {
           console.warn('⚠️ Failed to save minddump');
         }

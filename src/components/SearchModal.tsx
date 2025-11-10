@@ -11,6 +11,7 @@ interface SearchModalProps {
 
 export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalProps) => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [needsRefresh, setNeedsRefresh] = useState(false);
   
   console.log('SearchModal render:', { isOpen, searchQuery });
 
@@ -32,6 +33,24 @@ export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalPr
     if (onMinddumpSelect) {
       onMinddumpSelect(minddump);
     }
+    handleClose();
+  };
+
+  const handleClose = async () => {
+    // If there were changes, refresh the cache before closing
+    if (needsRefresh) {
+      console.log('Refreshing minddumps cache before closing modal');
+      try {
+        const { refreshMinddumpsCache } = await import('@/utils/supabaseClient.js');
+        await refreshMinddumpsCache();
+      } catch (error) {
+        console.error('Error refreshing cache on modal close:', error);
+      }
+    }
+    
+    // Reset state
+    setNeedsRefresh(false);
+    setSearchQuery("");
     onClose();
   };
 
@@ -42,7 +61,7 @@ export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalPr
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={handleClose}
       />
       
       {/* Modal */}
@@ -51,7 +70,7 @@ export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalPr
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <h2 className="text-xl font-semibold text-white">Search</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 rounded-lg hover:bg-gray-800 transition-colors"
           >
             <X className="w-5 h-5 text-gray-400" />
@@ -82,6 +101,7 @@ export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalPr
           <MinddumpSearchBar 
             query={searchQuery}
             onSelectMinddump={handleMinddumpSelect}
+            onNeedsRefresh={setNeedsRefresh}
             className="border-0 bg-transparent"
           />
         </div>

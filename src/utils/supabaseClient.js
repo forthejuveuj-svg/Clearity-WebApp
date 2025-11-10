@@ -438,6 +438,88 @@ export async function convertProblemToProject(problem, options = {}) {
   }
 }
 
+// Minddump cache
+let minddumpCache = {
+  data: [],
+  lastUpdated: null,
+  isLoading: false
+};
+
+// Minddump cache subscribers
+let minddumpSubscribers = [];
+
+// Subscribe to minddump cache updates
+export function subscribeToMinddumpUpdates(callback) {
+  minddumpSubscribers.push(callback);
+  return () => {
+    minddumpSubscribers = minddumpSubscribers.filter(cb => cb !== callback);
+  };
+}
+
+// Notify minddump subscribers
+function notifyMinddumpSubscribers() {
+  minddumpSubscribers.forEach(callback => {
+    try {
+      callback(minddumpCache);
+    } catch (error) {
+      console.error('Error in minddump subscriber:', error);
+    }
+  });
+}
+
+// Get minddumps from cache
+export function getMinddumpsFromCache() {
+  return {
+    data: [...minddumpCache.data],
+    lastUpdated: minddumpCache.lastUpdated,
+    isLoading: minddumpCache.isLoading
+  };
+}
+
+// Refresh minddumps cache
+export async function refreshMinddumpsCache(options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    minddumpCache.isLoading = true;
+    notifyMinddumpSubscribers();
+
+    const freshData = await searchMinddumps('', { onJWTError });
+    
+    minddumpCache.data = freshData || [];
+    minddumpCache.lastUpdated = new Date();
+    minddumpCache.isLoading = false;
+
+    notifyMinddumpSubscribers();
+    
+    console.log('📋 Minddumps cache refreshed:', minddumpCache.data.length, 'minddumps');
+    return getMinddumpsFromCache();
+
+  } catch (error) {
+    minddumpCache.isLoading = false;
+    notifyMinddumpSubscribers();
+    throw error;
+  }
+}
+
+// Initialize minddumps cache
+export async function initializeMinddumpsCache(options = {}) {
+  if (minddumpCache.lastUpdated === null) {
+    return await refreshMinddumpsCache(options);
+  }
+  return getMinddumpsFromCache();
+}
+
+// Clear minddumps cache
+export function clearMinddumpsCache() {
+  minddumpCache = {
+    data: [],
+    lastUpdated: null,
+    isLoading: false
+  };
+  notifyMinddumpSubscribers();
+}
+
 // Minddump functions
 
 // Create a new minddump
@@ -471,6 +553,10 @@ export async function createMinddump(minddumpData, options = {}) {
       }
       throw error;
     }
+
+    // Update cache
+    minddumpCache.data.unshift(minddump);
+    notifyMinddumpSubscribers();
 
     return minddump;
   } catch (error) {
@@ -603,6 +689,57 @@ export async function getMinddump(minddumpId, options = {}) {
   }
 }
 
+// Update minddump title
+export async function updateMinddumpTitle(minddumpId, newTitle, options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      if (isJWTError(sessionError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw sessionError;
+      }
+    }
+
+    if (!session?.user) {
+      throw new Error('No authenticated user');
+    }
+
+    const { data: minddump, error } = await supabase
+      .from('minddumps')
+      .update({ 
+        title: newTitle,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', minddumpId)
+      .eq('user_id', session.user.id)
+      .select()
+      .single();
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    // Update cache
+    const index = minddumpCache.data.findIndex(m => m.id === minddumpId);
+    if (index !== -1) {
+      minddumpCache.data[index] = { ...minddumpCache.data[index], title: newTitle };
+      notifyMinddumpSubscribers();
+    }
+
+    return minddump;
+  } catch (error) {
+    console.error('Error updating minddump title:', error);
+    throw error;
+  }
+}
+
 // Clear cache (useful for logout)
 export function clearDataCache() {
   globalDataStore = {
@@ -613,4 +750,5 @@ export function clearDataCache() {
     isLoading: false
   };
   notifyDataSubscribers();
+  clearMinddumpsCache();
 }

@@ -1,21 +1,32 @@
-import React from 'react';
-import { FileText, Calendar } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, Calendar, Edit2, Check, X } from 'lucide-react';
 import { useMinddumpSearch, MinddumpSearchResult } from '@/hooks/useMinddumpSearch';
 
 interface MinddumpSearchBarProps {
     query: string;
     onSelectMinddump: (minddump: MinddumpSearchResult) => void;
+    onNeedsRefresh?: (needsRefresh: boolean) => void;
     className?: string;
 }
 
 export const MinddumpSearchBar: React.FC<MinddumpSearchBarProps> = ({
     query,
     onSelectMinddump,
+    onNeedsRefresh,
     className = ""
 }) => {
-    const { results, isLoading, error } = useMinddumpSearch(query);
+    const { results, isLoading, error, needsRefresh, updateTitle } = useMinddumpSearch(query);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editingTitle, setEditingTitle] = useState('');
     
     console.log('MinddumpSearchBar render:', { query, results: results.length, isLoading, error });
+
+    // Notify parent about refresh needs
+    React.useEffect(() => {
+        if (onNeedsRefresh) {
+            onNeedsRefresh(needsRefresh);
+        }
+    }, [needsRefresh, onNeedsRefresh]);
 
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('en-US', {
@@ -27,6 +38,37 @@ export const MinddumpSearchBar: React.FC<MinddumpSearchBarProps> = ({
 
     const truncateText = (text: string, maxLength: number = 60) => {
         return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    };
+
+    const handleStartEdit = (minddump: MinddumpSearchResult, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingId(minddump.id);
+        setEditingTitle(minddump.title);
+    };
+
+    const handleSaveEdit = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (editingId && editingTitle.trim()) {
+            const success = await updateTitle(editingId, editingTitle.trim());
+            if (success) {
+                setEditingId(null);
+                setEditingTitle('');
+            }
+        }
+    };
+
+    const handleCancelEdit = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingId(null);
+        setEditingTitle('');
+    };
+
+    const handleKeyPress = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleSaveEdit(e as any);
+        } else if (e.key === 'Escape') {
+            handleCancelEdit(e as any);
+        }
     };
 
     if (isLoading) {
@@ -74,8 +116,47 @@ export const MinddumpSearchBar: React.FC<MinddumpSearchBarProps> = ({
                                 <FileText className="w-5 h-5 text-purple-400" />
                             </div>
                             <div className="flex-1 min-w-0">
-                                <div className="font-semibold text-white group-hover:text-purple-300 transition-colors text-base mb-1">
-                                    {minddump.title}
+                                <div className="flex items-center gap-2 mb-1">
+                                    {editingId === minddump.id ? (
+                                        <div className="flex items-center gap-2 flex-1">
+                                            <input
+                                                type="text"
+                                                value={editingTitle}
+                                                onChange={(e) => setEditingTitle(e.target.value)}
+                                                onKeyDown={handleKeyPress}
+                                                className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-purple-500"
+                                                autoFocus
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                            <button
+                                                onClick={handleSaveEdit}
+                                                className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                                                title="Save"
+                                            >
+                                                <Check className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={handleCancelEdit}
+                                                className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                                title="Cancel"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="font-semibold text-white group-hover:text-purple-300 transition-colors text-base flex-1">
+                                                {minddump.title}
+                                            </div>
+                                            <button
+                                                onClick={(e) => handleStartEdit(minddump, e)}
+                                                className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-purple-400 transition-all duration-200"
+                                                title="Rename"
+                                            >
+                                                <Edit2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                                 {minddump.prompt && (
                                     <div className="text-sm text-gray-400 mb-3 leading-relaxed">
