@@ -16,20 +16,16 @@ export const useMinddumpSearch = (query: string = '') => {
 
   useEffect(() => {
     const performSearch = async () => {
-      if (!query.trim()) {
-        setResults([]);
-        return;
-      }
-
       setIsLoading(true);
       setError(null);
 
       try {
+        // searchMinddumps now handles empty query to return all minddumps
         const searchResults = await searchMinddumps(query);
         setResults(searchResults || []);
       } catch (err) {
-        console.error('Error searching minddumps:', err);
-        setError('Failed to search minddumps');
+        console.error('Error loading minddumps:', err);
+        setError('Failed to load minddumps');
         setResults([]);
       } finally {
         setIsLoading(false);

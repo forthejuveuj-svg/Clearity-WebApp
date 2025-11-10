@@ -878,7 +878,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
             {/* Search Button */}
             <button
-              onClick={() => setIsSearchModalOpen(true)}
+              onClick={() => {
+                console.log('Search button clicked, opening modal');
+                setIsSearchModalOpen(true);
+              }}
               className="absolute top-4 right-4 z-30 p-3 bg-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-xl hover:bg-gray-800/80 hover:border-gray-600/50 transition-all duration-200 group"
               title="Search Mind Maps"
             >

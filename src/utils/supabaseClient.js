@@ -537,12 +537,17 @@ export async function searchMinddumps(query, options = {}) {
       return [];
     }
 
-    const { data: minddumps, error } = await supabase
+    let supabaseQuery = supabase
       .from('minddumps')
       .select('id, title, prompt, created_at, metadata')
-      .eq('user_id', session.user.id)
-      .or(`title.ilike.%${query}%,prompt.ilike.%${query}%`)
-      .order('created_at', { ascending: false });
+      .eq('user_id', session.user.id);
+
+    // If query is provided, add search filter
+    if (query && query.trim()) {
+      supabaseQuery = supabaseQuery.or(`title.ilike.%${query}%,prompt.ilike.%${query}%`);
+    }
+
+    const { data: minddumps, error } = await supabaseQuery.order('created_at', { ascending: false });
 
     if (error) {
       if (isJWTError(error)) {

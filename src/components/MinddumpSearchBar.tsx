@@ -14,6 +14,8 @@ export const MinddumpSearchBar: React.FC<MinddumpSearchBarProps> = ({
     className = ""
 }) => {
     const { results, isLoading, error } = useMinddumpSearch(query);
+    
+    console.log('MinddumpSearchBar render:', { query, results: results.length, isLoading, error });
 
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('en-US', {
@@ -27,14 +29,10 @@ export const MinddumpSearchBar: React.FC<MinddumpSearchBarProps> = ({
         return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
     };
 
-    if (!query.trim()) {
-        return null;
-    }
-
     if (isLoading) {
         return (
             <div className={`bg-gray-900 border border-gray-700 rounded-lg p-4 ${className}`}>
-                <div className="text-gray-400 text-sm">Searching minddumps...</div>
+                <div className="text-gray-400 text-sm">Loading minddumps...</div>
             </div>
         );
     }
@@ -50,48 +48,52 @@ export const MinddumpSearchBar: React.FC<MinddumpSearchBarProps> = ({
     if (results.length === 0) {
         return (
             <div className={`bg-gray-900 border border-gray-700 rounded-lg p-4 ${className}`}>
-                <div className="text-gray-400 text-sm">No minddumps found for "{query}"</div>
+                <div className="text-gray-400 text-sm">
+                    {query.trim() ? `No minddumps found for "${query}"` : "No minddumps found"}
+                </div>
             </div>
         );
     }
 
     return (
         <div className={className}>
-            <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Mind Maps ({results.length})
+            <h3 className="text-lg font-semibold text-white mb-5 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-purple-400" />
+                {query.trim() ? `Search Results (${results.length})` : `Your Mind Maps (${results.length})`}
             </h3>
 
-            <div className="grid gap-3 max-h-64 overflow-y-auto">
+            <div className="grid gap-4 max-h-96 overflow-y-auto">
                 {results.map((minddump) => (
                     <button
                         key={minddump.id}
                         onClick={() => onSelectMinddump(minddump)}
-                        className="p-4 bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 hover:border-gray-600 transition-all duration-200 text-left group"
+                        className="p-5 bg-gray-800/50 border border-gray-700/50 rounded-xl hover:bg-gray-700/50 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-300 text-left group"
                     >
-                        <div className="flex items-start justify-between">
-                            <div className="flex items-start gap-3 flex-1">
-                                <FileText className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-white group-hover:text-purple-300 transition-colors">
-                                        {minddump.title}
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/30 flex items-center justify-center flex-shrink-0">
+                                <FileText className="w-5 h-5 text-purple-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-white group-hover:text-purple-300 transition-colors text-base mb-1">
+                                    {minddump.title}
+                                </div>
+                                {minddump.prompt && (
+                                    <div className="text-sm text-gray-400 mb-3 leading-relaxed">
+                                        {truncateText(minddump.prompt, 80)}
                                     </div>
-                                    {minddump.prompt && (
-                                        <div className="text-sm text-gray-400 mt-1">
-                                            {truncateText(minddump.prompt)}
-                                        </div>
-                                    )}
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <Calendar className="w-3 h-3 text-gray-500" />
-                                        <span className="text-xs text-gray-500">
+                                )}
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-1.5">
+                                        <Calendar className="w-3.5 h-3.5 text-gray-500" />
+                                        <span className="text-xs text-gray-500 font-medium">
                                             {formatDate(minddump.created_at)}
                                         </span>
-                                        {minddump.metadata?.entities_count && (
-                                            <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">
-                                                {minddump.metadata.entities_count.projects || 0} projects
-                                            </span>
-                                        )}
                                     </div>
+                                    {minddump.metadata?.entities_count && (
+                                        <span className="text-xs px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-medium">
+                                            {minddump.metadata.entities_count.projects || 0} projects
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </div>

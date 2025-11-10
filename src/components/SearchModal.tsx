@@ -11,6 +11,8 @@ interface SearchModalProps {
 
 export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalProps) => {
   const [searchQuery, setSearchQuery] = useState("");
+  
+  console.log('SearchModal render:', { isOpen, searchQuery });
 
   const handleSearch = (query: string) => {
     if (query.trim()) {
