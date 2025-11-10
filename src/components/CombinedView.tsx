@@ -251,6 +251,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         clearCurrentMinddump();
         setMindMapNodes([]);
         setParentNodeTitle(null);
+        // Clear conversation when starting fresh
+        clearConversation();
+        setMessages([]);
         console.log('✅ Empty canvas shown');
         debugCurrentMinddumpState();
         return;
@@ -427,32 +430,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             }
           } catch (error) {
             console.warn('Failed to load current minddump:', currentMinddumpId, error);
-            // Fall through to load latest or show empty
+            // Clear invalid minddump ID and show empty canvas
+            const { clearCurrentMinddump } = await import('@/utils/supabaseClient.js');
+            clearCurrentMinddump();
           }
         }
 
-        // No current minddump - try to load latest from database (only on first load)
-        try {
-          const { getLatestMinddump } = await import('@/utils/supabaseClient.js');
-          const latestMinddump = await getLatestMinddump();
-
-          if (latestMinddump) {
-            console.log('Loading latest minddump as fallback:', latestMinddump.id);
-            const data = await generateMindMapFromMinddump(latestMinddump.id);
-            if (data && data.nodes) {
-              setMindMapNodes(data.nodes);
-              setParentNodeTitle(data.parentNode || null);
-              saveCurrentSession(data.nodes, null);
-              setHasInitializedOnce(true);
-              return;
-            }
-          }
-        } catch (error) {
-          console.warn('Failed to load latest minddump:', error);
-        }
-
-        // No minddumps available - show empty canvas
-        console.log('No minddumps available - showing empty canvas');
+        // No current minddump - show empty canvas (removed fallback to latest)
+        console.log('No current minddump - showing empty canvas');
         setMindMapNodes([]);
         setParentNodeTitle(null);
         setHasInitializedOnce(true);
