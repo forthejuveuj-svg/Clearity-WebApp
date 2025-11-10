@@ -103,9 +103,12 @@ export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalPr
 
         {/* Search Results */}
         <div className="px-6 pb-6">
-          <div className="text-gray-400 text-sm">
-            SearchModal is deprecated - using direct implementation in CombinedView
-          </div>
+          <MinddumpSearchBar 
+            query={searchQuery}
+            onSelectMinddump={handleMinddumpSelect}
+            onNeedsRefresh={setNeedsRefresh}
+            className="border-0 bg-transparent"
+          />
         </div>
       </div>
     </div>

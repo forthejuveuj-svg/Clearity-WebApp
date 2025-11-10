@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Mic, MicOff, ArrowUp, MessageSquare, X, Reply, Search } from "lucide-react";
+import { ArrowUp, MessageSquare, X, Reply, Search } from "lucide-react";
 import { TypingAnimation } from "./TypingAnimation";
 import { ProblemsModal, ProblemsModalProps } from "./ProblemsModal";
-import { TaskManagerModal } from "./TaskManagerModal";
-import { useAudioRecording } from "@/hooks/useAudioRecording";
 import { useAuth } from "@/hooks/useAuth";
 import { APIService } from "@/lib/api";
 import { generateMindMapJson } from "../utils/generateMindMapJson";
 import { handleJWTError, detectJWTError } from "@/utils/jwtErrorHandler";
 import { useGlobalData } from "@/hooks/useGlobalData";
 import { messageModeHandler } from "@/utils/messageModeHandler";
-// Removed EntityAutocomplete - using simple chat workflow instead
+
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { getCachedSessionsFromToday, validateCachedNodesAgainstDatabase, clearAllSessionsAndCache } from "@/utils/sessionUtils";
 import { processUserMessage, getDefaultErrorMessage } from "@/utils/messageProcessor";
@@ -23,7 +21,6 @@ import { generateMindMapFromMinddump } from "@/utils/generateMindMapJson";
 interface Message {
   role: "user" | "assistant";
   content: string;
-  audioSnippets?: any[];
   messageType?: "project_organization" | "project_chat" | "normal";
   autoRemove?: boolean; // Flag to mark messages for automatic removal
 }
@@ -86,9 +83,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
 
-  // Removed selectedEntities - using simple chat workflow instead
+
 
   // Ref for auto-scrolling chat messages
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -672,71 +668,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   };
 
-  // Audio recording integration
-  const {
-    isRecording,
-    recordingTime,
-    startRecording,
-    stopRecording,
-    playSnippet,
-    audioSnippets,
-    clearSnippets
-  } = useAudioRecording({
-    onTranscription: (text, snippetId) => {
-      console.log('New transcription:', text, 'for snippet:', snippetId);
-    },
-    whisperApiUrl: '',
-    whisperApiKey: '',
-    snippetDuration: 8000 // 8 seconds
-  });
 
-  const handleMicrophoneClick = async () => {
-    // Clear any pending blur timeout
-    if (blurTimeoutId) {
-      clearTimeout(blurTimeoutId);
-      setBlurTimeoutId(null);
-    }
 
-    if (isRecording) {
-      try {
-        await stopRecording();
 
-        // Add voice message with clip count
-        const clipCount = audioSnippets.length;
-        const voiceMessageContent = `🎤 Voice message recorded (${clipCount} clips of 8 seconds each)`;
-
-        setMessages(prev => [...prev, {
-          role: "user",
-          content: voiceMessageContent,
-          audioSnippets: audioSnippets // Store snippets for playback
-        }]);
-
-        // Add AI response after delay (don't remove org messages for simple acknowledgment)
-        setTimeout(() => {
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: "I received your voice message. You can play back the clips to verify the recording worked."
-          }]);
-        }, 1000);
-      } catch (error) {
-        console.error('Error stopping recording:', error);
-      }
-    } else {
-      try {
-        await startRecording();
-        setIsInputExpanded(true); // Expand input to show recording status
-      } catch (error) {
-        console.error('Error starting recording:', error);
-        console.error('Error starting recording:', error);
-        alert('Failed to start recording. Please check microphone permissions.');
-      }
-    }
-  };
 
   const handleInputBlur = () => {
     // Use a timeout to allow button clicks to process first
     const timeoutId = setTimeout(() => {
-      if (!input && !isRecording) {
+      if (!input) {
         setIsInputExpanded(false);
       }
       setBlurTimeoutId(null);
@@ -754,12 +693,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     setIsInputExpanded(true);
   };
 
-  const formatRecordingTime = (ms: number) => {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
+
 
   // Pass functions to parent component
   useEffect(() => {
@@ -835,10 +769,9 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const calculateChatPadding = () => {
     let bannerCount = 0;
 
-    if (isRecording && isInputExpanded) bannerCount++;
-    if (isProcessing && isInputExpanded && !isRecording) bannerCount++;
-    if (sessionId && isInputExpanded && !isRecording && !isProcessing) bannerCount++;
-    if (replyingToTask && isInputExpanded && !isRecording && !isProcessing) bannerCount++;
+    if (isProcessing && isInputExpanded) bannerCount++;
+    if (sessionId && isInputExpanded && !isProcessing) bannerCount++;
+    if (replyingToTask && isInputExpanded && !isProcessing) bannerCount++;
 
     // Base padding + banner height (48px per banner + 8px margin)
     const basePadding = isInputExpanded ? 80 : 60;
@@ -930,68 +863,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               ))}
             </div>
 
-            {/* Mind Map Controls */}
-            <div className="absolute top-4 right-4 z-30 flex gap-3">
-              {/* Quick Load Latest Button */}
-              <button
-                onClick={async () => {
-                  console.log('Quick load latest clicked');
-                  setMessages(prev => [...prev, {
-                    role: "assistant",
-                    content: "🔄 Loading your most recent mind map..."
-                  }]);
 
-                  try {
-                    // Import the function to get latest minddump
-                    const { getLatestMinddump } = await import('@/utils/supabaseClient.js');
-                    const latestMinddump = await getLatestMinddump();
-
-                    if (latestMinddump) {
-                      await handleMinddumpSelect(latestMinddump);
-                    } else {
-                      setMessages(prev => [...prev, {
-                        role: "assistant",
-                        content: "📭 No saved mind maps found. Create one by chatting with me!"
-                      }]);
-                    }
-                  } catch (error) {
-                    console.error('Error loading latest minddump:', error);
-                    setMessages(prev => [...prev, {
-                      role: "assistant",
-                      content: "❌ Failed to load latest mind map. Please try the search option."
-                    }]);
-                  }
-                }}
-                className="px-3 py-2 bg-gradient-to-r from-teal-600/20 to-green-600/20 backdrop-blur-sm border border-teal-500/50 rounded-lg hover:from-teal-600/30 hover:to-green-600/30 hover:border-teal-400/70 transition-all duration-200 group shadow-lg shadow-teal-500/10"
-                title="Load Latest Mind Map"
-              >
-                <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 rounded bg-teal-400/30 flex items-center justify-center">
-                    <div className="w-2 h-2 bg-teal-400 rounded-full"></div>
-                  </div>
-                  <span className="text-xs font-medium text-teal-300 group-hover:text-teal-200 transition-colors">
-                    Latest
-                  </span>
-                </div>
-              </button>
-
-              {/* Search/Browse Button */}
-              <button
-                onClick={() => {
-                  console.log('Search button clicked, opening modal');
-                  setIsSearchModalOpen(true);
-                }}
-                className="px-4 py-3 bg-gradient-to-r from-purple-600/20 to-blue-600/20 backdrop-blur-sm border border-purple-500/50 rounded-xl hover:from-purple-600/30 hover:to-blue-600/30 hover:border-purple-400/70 transition-all duration-200 group shadow-lg shadow-purple-500/10"
-                title="Browse & Search Mind Maps"
-              >
-                <div className="flex items-center gap-2">
-                  <Search className="w-5 h-5 text-purple-400 group-hover:text-purple-300 transition-colors" />
-                  <span className="text-sm font-medium text-purple-300 group-hover:text-purple-200 transition-colors">
-                    Browse
-                  </span>
-                </div>
-              </button>
-            </div>
 
             {/* Beautiful Neural Connection lines */}
             {allNodes && allNodes.length > 0 && connections.map((conn, idx) => {
@@ -1134,14 +1006,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         ) : (
           // Task Manager View
           <div className="h-full w-full bg-gray-900">
-            <TaskManagerModal
-              isOpen={true}
-              onClose={() => { }}
-              onNavigateToChat={handleNavigateToChat}
-              isFullScreen={true}
-              scale={1}
-              onReplyToTask={handleReplyToTask}
-            />
+            
           </div>
         )}
       </div>
@@ -1215,22 +1080,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                       }}
                     />
                   ) : (
-                    <div>
-                      <p className="whitespace-pre-line leading-relaxed">{message.content}</p>
-                      {message.audioSnippets && message.audioSnippets.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {message.audioSnippets.map((snippet, index) => (
-                            <button
-                              key={snippet.id}
-                              onClick={() => playSnippet(snippet.id)}
-                              className="px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs rounded border border-blue-500/40 hover:border-blue-400/60 transition-colors"
-                            >
-                              ▶ Clip {message.audioSnippets.length - index}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <p className="whitespace-pre-line leading-relaxed">{message.content}</p>
                   )}
                 </div>
               </div>
@@ -1243,23 +1093,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           <div className={`absolute left-0 right-0 px-4 pointer-events-none transition-all duration-300 ${mapHeight > 85 ? 'bottom-[-100px] opacity-0' : 'bottom-16 opacity-100'
             }`}>
             <div className="max-w-4xl mx-auto">
-              {/* Recording indicator - show when recording */}
-              {isRecording && isInputExpanded && (
-                <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/30 rounded-lg backdrop-blur-sm">
-                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  <span className="text-sm text-red-300 flex-1">Recording... {formatRecordingTime(recordingTime)}</span>
-                  <button
-                    type="button"
-                    onClick={handleMicrophoneClick}
-                    className="p-0.5 hover:bg-red-500/20 rounded transition-colors pointer-events-auto"
-                  >
-                    <MicOff className="w-3.5 h-3.5 text-red-400" />
-                  </button>
-                </div>
-              )}
+
 
               {/* Processing indicator - show when processing */}
-              {isProcessing && isInputExpanded && !isRecording && (
+              {isProcessing && isInputExpanded && (
                 <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg backdrop-blur-sm">
                   <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
                   <span className="text-sm text-purple-300 flex-1">Processing your message...</span>
@@ -1267,15 +1104,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               )}
 
               {/* Workflow indicator - show when chat workflow is active */}
-              {sessionId && isInputExpanded && !isRecording && !isProcessing && (
+              {sessionId && isInputExpanded && !isProcessing && (
                 <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg backdrop-blur-sm">
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                   <span className="text-sm text-blue-300 flex-1">Interactive chat active - answer the questions for better organization</span>
                 </div>
               )}
 
-              {/* Replying to indicator - only show when expanded and not recording and not processing */}
-              {replyingToTask && isInputExpanded && !isRecording && !isProcessing && (
+              {/* Replying to indicator - only show when expanded and not processing */}
+              {replyingToTask && isInputExpanded && !isProcessing && (
                 <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg backdrop-blur-sm">
                   <Reply className="w-4 h-4 text-blue-400 flex-shrink-0" />
                   <span className="text-sm text-blue-300 flex-1 truncate">Replying to: <strong>{replyingToTask.title}</strong></span>
@@ -1310,8 +1147,8 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
                 <textarea
                   ref={textareaRef}
-                  value={isRecording ? `Recording... ${formatRecordingTime(recordingTime)}` : input}
-                  onChange={(e) => !isRecording && !isProcessing && setInput(e.target.value)}
+                  value={input}
+                  onChange={(e) => !isProcessing && setInput(e.target.value)}
                   onFocus={handleInputFocus}
                   onBlur={handleInputBlur}
                   onKeyDown={(e) => {
@@ -1321,17 +1158,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                       handleSubmit(e as any);
                     }
                   }}
-                  placeholder={isInputExpanded && !isRecording && !isProcessing ? messageModeHandler.getPlaceholder() : ""}
-                  disabled={isRecording || isProcessing}
+                  placeholder={isInputExpanded && !isProcessing ? messageModeHandler.getPlaceholder() : ""}
+                  disabled={isProcessing}
                   rows={1}
                   className={`w-full px-5 py-3 bg-gray-900 border rounded-3xl 
                              text-sm text-white placeholder:text-white/50
                              focus:outline-none focus:ring-2 focus:border-blue-500/50
                              transition-all duration-300 hover:border-white/30
                              resize-none
-                             ${isRecording
-                      ? 'border-red-500/50 text-red-300 cursor-not-allowed'
-                      : isProcessing
+                             ${isProcessing
                         ? 'border-purple-500/50 text-purple-300 cursor-not-allowed'
                         : 'border-white/20 focus:ring-blue-500/50'
                     }
@@ -1339,27 +1174,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   style={{ paddingRight: isInputExpanded ? '80px' : '20px', minHeight: '48px' }}
                 />
 
-                {/* Removed EntityAutocomplete - using simple chat workflow instead */}
+
 
                 <div className={`absolute right-3 bottom-3 flex items-center gap-2 transition-opacity duration-300 ${isInputExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                   <button
-                    type="button"
-                    onClick={handleMicrophoneClick}
-                    className={`p-2 rounded-2xl transition-all duration-300 hover:scale-110 ${isRecording
-                      ? 'bg-red-500/20 border border-red-500/30 animate-pulse'
-                      : 'bg-white/5 hover:bg-white/10'
-                      }`}
-                  >
-                    {isRecording ? (
-                      <MicOff className="w-4 h-4 text-red-400" />
-                    ) : (
-                      <Mic className="w-4 h-4 text-white/60" />
-                    )}
-                  </button>
-
-                  <button
                     type="submit"
-                    disabled={!input.trim() || isRecording || isProcessing}
+                    disabled={!input.trim() || isProcessing}
                     className="p-2 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 
                                disabled:opacity-30 disabled:cursor-not-allowed
                                transition-all duration-300 hover:scale-110 shadow-lg shadow-blue-500/25"
@@ -1380,70 +1200,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
 
       {/* Search Modal */}
-      {isSearchModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setIsSearchModalOpen(false)}
-          />
-
-          {/* Modal */}
-          <div className="relative bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl mx-auto shadow-2xl">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-700">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/30 flex items-center justify-center">
-                  <Search className="w-5 h-5 text-purple-400" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold text-white">Load Mind Map</h2>
-                  <p className="text-sm text-gray-400">Choose from your saved mind maps</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsSearchModalOpen(false)}
-                className="p-2 rounded-lg hover:bg-gray-800 transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-
-            {/* Search Input */}
-            <div className="p-6 pb-4">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search your mind maps..."
-                  className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-600 rounded-xl 
-                             text-white placeholder:text-gray-400
-                             focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
-                             transition-all duration-300"
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            {/* Search Results */}
-            <div className="px-6 pb-6">
-              <MinddumpSearchBar
-                query={searchQuery}
-                onSelectMinddump={(minddump) => {
-                  console.log('🎯 CombinedView direct callback triggered:', minddump.title);
-                  console.log('🔍 handleMinddumpSelect exists?', typeof handleMinddumpSelect);
-                  handleMinddumpSelect(minddump);
-                  setIsSearchModalOpen(false);
-                }}
-                onNeedsRefresh={() => { }} // No-op for now
-                className="border-0 bg-transparent"
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <SearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        onMinddumpSelect={handleMinddumpSelect}
+      />
 
       {/* Problems Modal */}
       <ProblemsModal
