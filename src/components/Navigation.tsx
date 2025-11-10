@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Search, Star, User, CheckSquare, Network, LogOut } from "lucide-react";
+import { Search, Star, User, CheckSquare, Network, LogOut, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ClearityLogo from "@/assets/clearity-logo.svg";
 import { SearchModal } from "./SearchModal";
@@ -13,11 +13,12 @@ interface NavigationProps {
   onToggleView?: () => void;
   currentView?: 'mindmap' | 'tasks';
   onOpenTaskManager?: () => void;
+  onCreateNewMinddump?: () => void;
   onShowAuth?: () => void;
   onProjectSelect?: (project: any) => void;
 }
 
-export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, currentView = 'mindmap', onOpenTaskManager, onShowAuth, onProjectSelect }: NavigationProps = {}) => {
+export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, currentView = 'mindmap', onOpenTaskManager, onShowAuth, onProjectSelect, onCreateNewMinddump }: NavigationProps = {}) => {
   const navigate = useNavigate();
   const { user } = useAuthContext();
   const { signOut } = useAuth();
@@ -72,6 +73,18 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
         >
           <img src={ClearityLogo} alt="Clearity Logo" className="w-full h-full object-cover" />
         </button>
+        
+        {/* New Mind Dump Button */}
+        {user && onCreateNewMinddump && (
+          <button
+            onClick={onCreateNewMinddump}
+            className="p-2.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 backdrop-blur-sm border border-blue-500/30 hover:border-blue-500/50 transition-all duration-300 hover:scale-110 group"
+            title="Create New Mind Map"
+            aria-label="Create New Mind Map"
+          >
+            <Plus className="w-5 h-5 text-blue-400 group-hover:text-blue-300 transition-colors" />
+          </button>
+        )}
         
         {user && (
           <div className="relative" ref={userMenuRef}>

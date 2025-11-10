@@ -205,10 +205,20 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [currentSessionIndex, setCurrentSessionIndex] = useState(-1);
 
   // Function to reload mind map nodes from database (after minddump or other operations)
-  const reloadNodes = async (options = {}) => {
+  const reloadNodes = async (options: any = {}) => {
     try {
+      const { clearNodes, ...restOptions } = options;
+      
+      // If clearNodes is true, clear the current nodes first
+      if (clearNodes) {
+        setMindMapNodes([]);
+        setParentNodeTitle(null);
+        console.log('Mind map cleared for new session');
+        return;
+      }
+      
       // Use cache unless forceRefresh is specified
-      const finalOptions = { forceRefresh: false, ...options };
+      const finalOptions = { forceRefresh: false, ...restOptions };
       const data = await generateMindMapJson(finalOptions);
       if (data) {
         setMindMapNodes(data.nodes || []);

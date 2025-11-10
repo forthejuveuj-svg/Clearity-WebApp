@@ -179,6 +179,27 @@ const Index = () => {
     }
   };
 
+  const handleCreateNewMinddump = () => {
+    // Switch to combined view if not already there
+    if (currentView !== 'combined') {
+      setCurrentView('combined');
+    }
+    
+    // Switch to mindmap view
+    setCombinedViewState('mindmap');
+    
+    // Clear any existing mind map and start fresh
+    if (reloadNodesRef.current) {
+      reloadNodesRef.current({ 
+        forceRefresh: true,
+        clearNodes: true // This will be a new option to clear existing nodes
+      });
+    }
+    
+    // Set an initial message to start a new mind map
+    setInitialMessage("Let's create a new mind map! What would you like to organize or explore?");
+  };
+
   const handleAuthSuccess = () => {
     if (pendingMessage) {
       setInitialMessage(pendingMessage);
@@ -247,6 +268,7 @@ const Index = () => {
         onOpenTaskManager={currentView === 'onboarding' ? handleOpenTaskManagerFromOnboarding : undefined}
         onShowAuth={currentView === 'onboarding' ? handleShowAuthFromOnboarding : undefined}
         onProjectSelect={handleProjectSelect}
+        onCreateNewMinddump={currentView === 'combined' ? handleCreateNewMinddump : undefined}
       />
       
       {currentView === "onboarding" && (
