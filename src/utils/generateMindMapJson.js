@@ -307,7 +307,7 @@ export async function generateMindMapFromMinddump(minddumpId) {
     const { setCurrentMinddump } = await import('./supabaseClient.js');
     setCurrentMinddump(minddumpId);
 
-    console.log('Minddump loaded:', minddump.title, 'with', minddump.nodes);
+    console.log('Loaded:', minddump.title);
 
     // Generate nodes from stored data
     const nodes = [];
@@ -318,8 +318,10 @@ export async function generateMindMapFromMinddump(minddumpId) {
 
     // Create project nodes
     if (minddump.nodes.projects) {
-      console.log('🔍 Processing projects from minddump:', minddump.nodes.projects.length);
-      console.log('🔍 Available problems:', minddump.nodes.problems?.length || 0);
+      console.log('📊 Objects:', {
+        projects: minddump.nodes.projects.length,
+        problems: minddump.nodes.problems?.length || 0
+      });
 
       minddump.nodes.projects.forEach(project => {
         const nodeId = projectToId(project.name);

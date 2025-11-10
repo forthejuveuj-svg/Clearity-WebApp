@@ -54,24 +54,38 @@ export class APIService {
   }
 
   private static async makeRPCCall<T = any>(method: string, params: any): Promise<RPCResponse<T>> {
+    console.log(`📡 [RPC] Making call to ${method}`, { params });
+    
     try {
+      const requestBody = {
+        method,
+        params
+      };
+      
+      console.log(`📤 [RPC] Request URL: ${BACKEND_URL}/rpc`);
+      console.log(`📤 [RPC] Request body:`, JSON.stringify(requestBody, null, 2));
+      
       const response = await fetch(`${BACKEND_URL}/rpc`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          method,
-          params
-        })
+        body: JSON.stringify(requestBody)
       });
 
+      console.log(`📥 [RPC] Response status: ${response.status} ${response.statusText}`);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ [RPC] HTTP error response:`, errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      return await response.json();
+      const result = await response.json();
+      console.log(`✅ [RPC] Response data:`, result);
+      return result;
     } catch (error) {
+      console.error(`❌ [RPC] Error in ${method}:`, error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred',
@@ -139,7 +153,15 @@ export class APIService {
 
   // Merge and simplify nodes after minddump creation
   static async mergeAndSimplifyNodes(params: { user_id: string; session_id: string; data_json: any }): Promise<RPCResponse> {
+    console.log('🔵 [API] mergeAndSimplifyNodes called with params:', {
+      user_id: params.user_id,
+      session_id: params.session_id,
+      project_count: params.data_json?.projects?.length || 0,
+      problem_count: params.data_json?.problems?.length || 0
+    });
+    
     if (this.useMockAPI) {
+      console.log('⚠️ [API] Using mock API - skipping real backend call');
       // Mock implementation - just return the data as-is
       return {
         success: true,
@@ -150,7 +172,11 @@ export class APIService {
         all_data: params.data_json
       };
     }
-    return this.makeRPCCall('merge_and_simplify_nodes', params);
+    
+    console.log('🚀 [API] Sending RPC request to backend:', `${BACKEND_URL}/rpc`);
+    const result = await this.makeRPCCall('merge_and_simplify_nodes', params);
+    console.log('✅ [API] Received response from backend:', result);
+    return result;
   }
 
   static async healthCheck(): Promise<RPCResponse> {

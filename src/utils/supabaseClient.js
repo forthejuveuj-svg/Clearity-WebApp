@@ -107,11 +107,9 @@ async function fetchFreshDataFromSupabase(options = {}) {
       problems: problemsResult.data || []
     };
 
-    console.log('📊 Fresh data loaded:', {
+    console.log('📊 Data:', {
       projects: freshData.projects.length,
-      knowledgeNodes: freshData.knowledgeNodes.length,
-      problems: freshData.problems.length,
-      user: session.user.id
+      problems: freshData.problems.length
     });
 
     return freshData;
@@ -505,7 +503,7 @@ export async function refreshMinddumpsCache(options = {}) {
 
     notifyMinddumpSubscribers();
     
-    console.log('📋 Minddumps cache refreshed:', minddumpCache.data.length, 'minddumps');
+    console.log('📋 Minddumps:', minddumpCache.data.length);
     return getMinddumpsFromCache();
 
   } catch (error) {

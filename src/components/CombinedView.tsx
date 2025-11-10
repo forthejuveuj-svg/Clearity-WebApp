@@ -157,11 +157,23 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
             // Check if we should merge nodes (more than 2 projects)
             const projectCount = workflowData.projects?.length || 0;
+            console.log(`🔍 [CombinedView] Checking merge condition:`, {
+              projectCount,
+              hasSessionId: !!sessionId,
+              sessionId,
+              shouldMerge: projectCount > 2 && !!sessionId
+            });
+
             if (projectCount > 2 && sessionId) {
-              console.log(`🔄 Starting node merge for ${projectCount} projects`);
+              console.log(`🔄 [CombinedView] Starting node merge for ${projectCount} projects`);
+              console.log(`📊 [CombinedView] Merge data:`, {
+                projects: workflowData.projects?.map(p => ({ id: p.id, name: p.name })),
+                problems: workflowData.problems?.map(p => ({ id: p.id, name: p.name }))
+              });
               setIsMergingNodes(true);
 
               try {
+                console.log(`🚀 [CombinedView] Calling APIService.mergeAndSimplifyNodes...`);
                 // Call merge RPC with the minddump data
                 const mergeResult: any = await APIService.mergeAndSimplifyNodes({
                   user_id: userId,
@@ -171,6 +183,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                     problems: workflowData.problems || []
                   }
                 });
+                console.log(`📥 [CombinedView] Received merge result:`, mergeResult);
 
                 if (mergeResult.success) {
                   const originalCount = projectCount;
@@ -181,7 +194,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   // Only update if nodes were actually merged (fewer nodes)
                   if (mergedCount < originalCount) {
                     console.log('📊 Updating minddump with merged nodes');
-                    
+
                     // Update the minddump with merged data
                     const { updateMinddumpNodes } = await import('../utils/supabaseClient.js');
                     await updateMinddumpNodes(minddump.id, {
@@ -316,17 +329,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
       if (currentMinddumpId) {
         // Load the current minddump
-        console.log('🔄 Reloading current minddump:', currentMinddumpId);
         const data = await generateMindMapFromMinddump(currentMinddumpId);
         if (data) {
           setMindMapNodes(data.nodes || []);
           setParentNodeTitle(data.parentNode || null);
           saveCurrentSession(data.nodes || []);
-          console.log('✅ Reloaded current minddump with', data.nodes?.length || 0, 'nodes');
         }
       } else {
         // No current minddump - show empty canvas
-        console.log('📭 No current minddump - showing empty canvas');
         setMindMapNodes([]);
         setParentNodeTitle(null);
       }
@@ -400,11 +410,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   };
 
   const handleMinddumpSelect = React.useCallback(async (minddump: any) => {
-    console.log('🎯 CombinedView handleMinddumpSelect called:', minddump.title);
-
-
     try {
-      console.log('🔄 Loading minddump:', minddump.title, 'ID:', minddump.id);
       const data = await generateMindMapFromMinddump(minddump.id);
 
       if (data && data.nodes) {
@@ -460,7 +466,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
         // Check current minddump state
         const currentMinddumpId = getCurrentMinddumpId();
-        console.log('Initializing with current minddump:', currentMinddumpId);
 
         if (currentMinddumpId) {
           // Load the specific current minddump
@@ -470,7 +475,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               setMindMapNodes(data.nodes);
               setParentNodeTitle(data.parentNode || null);
               saveCurrentSession(data.nodes, null);
-              console.log('Loaded current minddump:', currentMinddumpId, 'with', data.nodes.length, 'nodes');
               setHasInitializedOnce(true);
               return;
             }
