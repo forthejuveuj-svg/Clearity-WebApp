@@ -78,7 +78,7 @@ export class APIService {
     if (this.useMockAPI) {
       return APIServiceMock.chat(params);
     }
-    return this.makeRPCCall('chat', params);
+    return this.makeRPCCall('chat_workflow', params);
   }
 
   // Get all stored data as JSON

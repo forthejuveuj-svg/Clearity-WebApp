@@ -604,15 +604,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     if (userId) {
       setIsProcessing(true);
       try {
-        const response = await APIService.chat({
-          text: taskMessage,
-          user_id: userId
-        });
+        const result = await processUserMessage(taskMessage, userId);
 
-        if (response.success) {
+        if (result.success) {
           setMessages(prev => [...prev, {
             role: "assistant",
-            content: response.chat_response || "Task processed successfully."
+            content: result.output || "Task processed successfully."
           }]);
 
           // Reload nodes when processing is successful
@@ -620,14 +617,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         } else {
           setMessages(prev => [...prev, {
             role: "assistant",
-            content: "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
+            content: getDefaultErrorMessage(result.error)
           }]);
         }
       } catch (error) {
         console.error('Error processing task message:', error);
         setMessages(prev => [...prev, {
           role: "assistant",
-          content: "I understand. Let me help you with that task. What specific aspect would you like to focus on first?"
+          content: getDefaultErrorMessage(error instanceof Error ? error.message : String(error))
         }]);
       } finally {
         setIsProcessing(false);

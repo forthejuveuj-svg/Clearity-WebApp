@@ -470,43 +470,12 @@ export async function generateMindMapJson(options = {}) {
 
 
 
-    // Check if we need to trigger project unifier (8+ nodes and not in subproject view)
-    if (nodes.length >= 8 && !parentProjectId && !showSubprojects) {
-      console.log(`🔄 Detected ${nodes.length} projects - triggering Project Unifier`);
-
-      // Call project unifier in background
-      callProjectUnifier(filteredProjects).then(async (unifierResult) => {
-        if (unifierResult && unifierResult.success) {
-          console.log('✅ Project Unifier completed, refreshing cache...');
-
-          // Refresh cache to get updated project structure
-          try {
-            await refreshAllData({ onJWTError });
-            console.log('✅ Cache refreshed after project unification');
-
-            // Optionally trigger a UI refresh here
-            // You could dispatch a custom event that the UI listens to
-            window.dispatchEvent(new CustomEvent('projectsReorganized', {
-              detail: {
-                message: 'Projects have been reorganized. Refresh to see changes.',
-                parentProjects: unifierResult.parent_projects || []
-              }
-            }));
-
-          } catch (refreshError) {
-            console.error('❌ Error refreshing cache after unification:', refreshError);
-          }
-        }
-      }).catch(error => {
-        console.error('❌ Project Unifier error:', error);
-      });
-    }
+    // Project Unifier removed - no longer needed
 
     const result = {
       nodes,
       parentNode,
-      _timestamp: Date.now(),
-      unifierTriggered: nodes.length >= 8 && !parentProjectId && !showSubprojects
+      _timestamp: Date.now()
     };
 
     // Save minddump to Supabase if we have nodes
@@ -598,49 +567,7 @@ export async function generateMindMapJson(options = {}) {
   }
 }
 
-async function callProjectUnifier(projects) {
-  try {
-    console.log(`🔄 Triggering Project Unifier for ${projects.length} projects`);
 
-    // Get user_id from the first project since that will be correct
-    const userId = projects.length > 0 ? projects[0].user_id : null;
-
-    const response = await fetch('https://clearity.space/rpc', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        method: 'project_unifier',
-        params: {
-          projects_data: projects,
-          ...(userId && { user_id: userId })
-          // No session_id = direct analysis mode
-        }
-      })
-    });
-
-    const result = await response.json();
-
-    if (result.success) {
-      console.log('✅ Project Unifier completed successfully');
-      console.log('Reorganization plan:', result.reorganization_plan);
-
-      // If there are parent projects suggested, log them
-      if (result.parent_projects && result.parent_projects.length > 0) {
-        console.log(`📊 Suggested ${result.parent_projects.length} parent projects:`, result.parent_projects);
-      }
-
-      return result;
-    } else {
-      console.warn('⚠️ Project Unifier failed:', result.error);
-      return null;
-    }
-  } catch (error) {
-    console.error('❌ Error calling Project Unifier:', error);
-    return null;
-  }
-}
 
 function getFallbackJson() {
   return {
