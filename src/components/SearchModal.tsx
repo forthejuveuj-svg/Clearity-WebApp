@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { Search, X } from "lucide-react";
-import { ProjectSearchBar } from "./ProjectSearchBar";
-import { ProjectNavigationResult } from "@/hooks/useProjectSearch";
+import { MinddumpSearchBar } from "./MinddumpSearchBar";
+import { MinddumpSearchResult } from "@/hooks/useMinddumpSearch";
 
 interface SearchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onProjectSelect?: (project: ProjectNavigationResult) => void;
+  onMinddumpSelect?: (minddump: MinddumpSearchResult) => void;
 }
 
-export const SearchModal = ({ isOpen, onClose, onProjectSelect }: SearchModalProps) => {
+export const SearchModal = ({ isOpen, onClose, onMinddumpSelect }: SearchModalProps) => {
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleSearch = (query: string) => {
@@ -25,10 +25,10 @@ export const SearchModal = ({ isOpen, onClose, onProjectSelect }: SearchModalPro
     }
   };
 
-  const handleProjectSelect = (project: ProjectNavigationResult) => {
+  const handleMinddumpSelect = (minddump: MinddumpSearchResult) => {
     // Call the callback if provided
-    if (onProjectSelect) {
-      onProjectSelect(project);
+    if (onMinddumpSelect) {
+      onMinddumpSelect(minddump);
     }
     onClose();
   };
@@ -65,7 +65,7 @@ export const SearchModal = ({ isOpen, onClose, onProjectSelect }: SearchModalPro
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="How brain works for my startup"
+              placeholder="Search your mind maps..."
               className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-600 rounded-xl 
                          text-white placeholder:text-gray-400
                          focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
@@ -75,10 +75,11 @@ export const SearchModal = ({ isOpen, onClose, onProjectSelect }: SearchModalPro
           </div>
         </div>
 
-        {/* Project Navigation Cards */}
+        {/* Search Results */}
         <div className="px-6 pb-6">
-          <ProjectSearchBar 
-            onSelectProject={handleProjectSelect}
+          <MinddumpSearchBar 
+            query={searchQuery}
+            onSelectMinddump={handleMinddumpSelect}
             className="border-0 bg-transparent"
           />
         </div>

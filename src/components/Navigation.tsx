@@ -216,7 +216,6 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
       <SearchModal 
         isOpen={isSearchOpen} 
         onClose={() => setIsSearchOpen(false)}
-        onProjectSelect={onProjectSelect}
       />
       
       {/* Task Manager Modal */}

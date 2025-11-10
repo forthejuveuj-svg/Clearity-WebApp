@@ -285,8 +285,8 @@ export async function createMinddumpFromData(results, userId) {
   }
 }
 
-// New function to load minddump and generate nodes
-export async function generateMindMapFromMinddump(minddumpId, userId) {
+// Function to load minddump and generate nodes
+export async function generateMindMapFromMinddump(minddumpId) {
   try {
     console.log('Loading minddump:', minddumpId);
     
@@ -302,15 +302,12 @@ export async function generateMindMapFromMinddump(minddumpId, userId) {
     
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Get minddump from database
-    const { data: minddump, error } = await supabase
-      .table('minddumps')
-      .select('*')
-      .eq('id', minddumpId)
-      .eq('user_id', userId)
-      .single();
+    // Get minddump from database using supabaseClient function
+    const minddump = await import('./supabaseClient.js').then(module => 
+      module.getMinddump(minddumpId)
+    );
     
-    if (error || !minddump) {
+    if (!minddump) {
       throw new Error('Minddump not found');
     }
     

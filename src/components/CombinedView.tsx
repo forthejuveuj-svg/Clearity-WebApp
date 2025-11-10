@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Mic, MicOff, ArrowUp, MessageSquare, X, Reply } from "lucide-react";
+import { Mic, MicOff, ArrowUp, MessageSquare, X, Reply, Search } from "lucide-react";
 import { TypingAnimation } from "./TypingAnimation";
 import { ProblemsModal, ProblemsModalProps } from "./ProblemsModal";
 import { TaskManagerModal } from "./TaskManagerModal";
@@ -16,6 +16,8 @@ import { getCachedSessionsFromToday, validateCachedNodesAgainstDatabase, clearAl
 import { processUserMessage, getDefaultErrorMessage } from "@/utils/messageProcessor";
 import { MindMapNode } from "./MindMapNode";
 import { SessionManager, SessionData } from "@/utils/sessionManager";
+import { SearchModal } from "./SearchModal";
+import { generateMindMapFromMinddump } from "@/utils/generateMindMapJson";
 
 interface Message {
   role: "user" | "assistant";
@@ -82,6 +84,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
   // Removed selectedEntities - using simple chat workflow instead
 
@@ -282,7 +285,21 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   };
 
-
+  const handleMinddumpSelect = async (minddump: any) => {
+    try {
+      console.log('Loading minddump:', minddump.title);
+      const data = await generateMindMapFromMinddump(minddump.id);
+      
+      if (data && data.nodes) {
+        setMindMapNodes(data.nodes);
+        setParentNodeTitle(data.parentNode || minddump.title);
+        saveCurrentSession(data.nodes, minddump.title);
+        console.log('Minddump loaded:', data.nodes.length, 'nodes');
+      }
+    } catch (error) {
+      console.error('Error loading minddump:', error);
+    }
+  };
 
   // Initialize data on component mount
   useEffect(() => {
@@ -889,6 +906,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               ))}
             </div>
 
+            {/* Search Button */}
+            <button
+              onClick={() => setIsSearchModalOpen(true)}
+              className="absolute top-4 right-4 z-30 p-3 bg-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-xl hover:bg-gray-800/80 hover:border-gray-600/50 transition-all duration-200 group"
+              title="Search Mind Maps"
+            >
+              <Search className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
+            </button>
+
             {/* Beautiful Neural Connection lines */}
             {allNodes && allNodes.length > 0 && connections.map((conn, idx) => {
               const fromNode = allNodes.find(n => n.id === conn.from);
@@ -1251,6 +1277,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       </div>
 
 
+
+      {/* Search Modal */}
+      <SearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        onMinddumpSelect={handleMinddumpSelect}
+      />
 
       {/* Problems Modal */}
       <ProblemsModal
