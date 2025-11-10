@@ -297,17 +297,26 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   const handleMinddumpSelect = async (minddump: any) => {
     try {
-      console.log('Loading minddump:', minddump.title);
+      console.log('🔄 Loading minddump:', minddump.title, 'ID:', minddump.id);
       const data = await generateMindMapFromMinddump(minddump.id);
 
+      console.log('📊 Minddump data received:', data);
+
       if (data && data.nodes) {
+        console.log('✅ Setting mind map nodes:', data.nodes.length, 'nodes');
         setMindMapNodes(data.nodes);
         setParentNodeTitle(data.parentNode || minddump.title);
         saveCurrentSession(data.nodes, minddump.title);
-        console.log('Minddump loaded:', data.nodes.length, 'nodes');
+        console.log('✅ Minddump loaded successfully');
+      } else {
+        console.warn('⚠️ No nodes found in minddump data');
+        setMindMapNodes([]);
+        setParentNodeTitle(minddump.title);
       }
     } catch (error) {
-      console.error('Error loading minddump:', error);
+      console.error('❌ Error loading minddump:', error);
+      setMindMapNodes([]);
+      setParentNodeTitle(null);
     }
   };
 

@@ -311,6 +311,8 @@ export async function generateMindMapFromMinddump(minddumpId) {
       throw new Error('Minddump not found');
     }
     
+    console.log('Minddump loaded:', minddump.title, 'with', minddump.nodes);
+    
     // Generate nodes from stored data
     const nodes = [];
     const storedPositions = minddump.layout_data?.node_positions || [];
@@ -344,7 +346,7 @@ export async function generateMindMapFromMinddump(minddumpId) {
         const node = {
           id: `problem-${problem.id}`,
           problemId: problem.id,
-          label: problem.name.length > 12 ? problem.name.replace(/\s+/g, '\n') : problem.name,
+          label: (problem.title || problem.name || 'Problem').length > 12 ? (problem.title || problem.name || 'Problem').replace(/\s+/g, '\n') : (problem.title || problem.name || 'Problem'),
           x: position.x,
           y: position.y,
           color: storedPos?.color || 'red',

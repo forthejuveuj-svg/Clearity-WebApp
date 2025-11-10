@@ -66,8 +66,6 @@ export const MinddumpSearchBar: React.FC<MinddumpSearchBarProps> = ({
     const handleKeyPress = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
             handleSaveEdit(e as any);
-        } else if (e.key === 'Escape') {
-            handleCancelEdit(e as any);
         }
     };
 
