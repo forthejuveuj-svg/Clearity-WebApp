@@ -56,7 +56,7 @@ export const useWebSocket = (
         // Wait for connection
         const timeout = setTimeout(() => {
           reject(new Error('Connection timeout'));
-        }, 10000);
+        }, 30000); // 30 seconds for initial connection
 
         socket.once('connect', () => {
           clearTimeout(timeout);
@@ -71,7 +71,7 @@ export const useWebSocket = (
       socket = io(BACKEND_URL, {
         transports: ['websocket', 'polling'],
         autoConnect: true,
-        timeout: 10000,
+        timeout: 7200000, // 2 hours in milliseconds
         forceNew: false,
         reconnection: true,
         reconnectionDelay: 1000,
@@ -158,7 +158,7 @@ export const useWebSocket = (
       // Connect and wait for connection
       const timeout = setTimeout(() => {
         reject(new Error('Connection timeout'));
-      }, 10000);
+      }, 30000); // 30 seconds for initial connection
 
       socket.once('connect', () => {
         clearTimeout(timeout);
