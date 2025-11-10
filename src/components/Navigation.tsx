@@ -3,7 +3,6 @@ import { Search, Star, User, CheckSquare, Network, LogOut, Plus } from "lucide-r
 import { useNavigate } from "react-router-dom";
 import ClearityLogo from "@/assets/clearity-logo.svg";
 import { SearchModal } from "./SearchModal";
-import { TaskManagerModal } from "./TaskManagerModal";
 import { useAuthContext } from "./AuthProvider";
 import { useAuth } from "@/hooks/useAuth";
 
