@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { X, AlertTriangle, CheckCircle, Clock, Target, ArrowRight, Loader2 } from "lucide-react";
 import { convertProblemToProject, getActiveProblems } from "../utils/projectManager";
-import { createProject, updateProblem } from "../utils/supabaseClient";
+import { createProject, updateProblem, updateMinddumpProblems, getMinddump } from "../utils/supabaseClient";
 // Define Node interface locally to avoid circular imports
 interface Node {
   id: string;
@@ -55,9 +55,10 @@ export interface ProblemsModalProps {
   selectedProject?: Node | null;
   onSolutionsCompleted?: (count: number) => void;
   onProblemConverted?: (problemId: string, projectId: string) => void;
+  currentMinddumpId?: string | null;
 }
 
-export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, selectedProject, onSolutionsCompleted, onProblemConverted }) => {
+export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, selectedProject, onSolutionsCompleted, onProblemConverted, currentMinddumpId }) => {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [loading, setLoading] = useState(false);
   const [convertingProblem, setConvertingProblem] = useState<string | null>(null);
@@ -137,14 +138,37 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
 
     setConvertingProblem(problem.id);
     try {
-      // Update the problem status to 'resolved'
+      // Update the problem status to 'resolved' in database
       await updateProblem(problem.id, {
         status: 'resolved'
       });
       console.log('Updated problem status to resolved');
 
-      // Remove the problem from the list
-      setProblems(prev => prev.filter(p => p.id !== problem.id));
+      // Remove the problem from the local list
+      const updatedProblems = problems.filter(p => p.id !== problem.id);
+      setProblems(updatedProblems);
+
+      // If we have a current minddump, update its problems
+      if (currentMinddumpId) {
+        try {
+          // Get the current minddump to access all its problems
+          const minddump = await getMinddump(currentMinddumpId);
+          
+          if (minddump && minddump.nodes && minddump.nodes.problems) {
+            // Filter out the resolved problem from minddump's problems
+            const updatedMinddumpProblems = minddump.nodes.problems.filter(
+              (p: Problem) => p.id !== problem.id
+            );
+            
+            // Update only the problems in the minddump (preserves projects)
+            await updateMinddumpProblems(currentMinddumpId, updatedMinddumpProblems);
+            console.log('Updated minddump problems, removed resolved problem');
+          }
+        } catch (minddumpError) {
+          console.error('Error updating minddump:', minddumpError);
+          // Continue anyway - the problem is still marked as resolved in DB
+        }
+      }
 
       // Notify parent component to refresh the mind map
       onProblemConverted?.(problem.id, '');
@@ -337,14 +361,6 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
                         <CheckCircle className="w-3 h-3" />
                       )}
                       Solved
-                    </button>
-
-                    <button
-                      onClick={() => toggleRemindLater(problem.id)}
-                      className="flex items-center gap-2 px-3 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 text-xs rounded-lg transition-all duration-200 hover:shadow-md"
-                    >
-                      <Clock className="w-3 h-3" />
-                      Later
                     </button>
                   </div>
                 </div>

@@ -849,6 +849,95 @@ export async function updateMinddumpConversation(minddumpId, conversation, optio
   }
 }
 
+// Update only problems in minddump (preserves projects and their positions)
+export async function updateMinddumpProblems(minddumpId, problems, options = {}) {
+  const { onJWTError = null } = options;
+  
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      if (isJWTError(sessionError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw sessionError;
+      }
+    }
+
+    if (!session?.user) {
+      throw new Error('No authenticated user');
+    }
+
+    // Get current minddump to preserve projects and other data
+    const { data: currentMinddump, error: fetchError } = await supabase
+      .from('minddumps')
+      .select('*')
+      .eq('id', minddumpId)
+      .eq('user_id', session.user.id)
+      .single();
+
+    if (fetchError) {
+      if (isJWTError(fetchError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw fetchError;
+      }
+      throw fetchError;
+    }
+
+    // Update only problems, keep projects unchanged
+    const updatedNodes = {
+      ...currentMinddump.nodes,
+      problems: problems
+    };
+
+    // Update metadata
+    const updatedMetadata = {
+      ...currentMinddump.metadata,
+      entities_count: {
+        ...currentMinddump.metadata?.entities_count,
+        problems: problems?.length || 0
+      },
+      last_updated: new Date().toISOString()
+    };
+
+    const { data: minddump, error } = await supabase
+      .from('minddumps')
+      .update({ 
+        nodes: updatedNodes,
+        metadata: updatedMetadata,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', minddumpId)
+      .eq('user_id', session.user.id)
+      .select()
+      .single();
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    // Update cache
+    const index = minddumpCache.data.findIndex(m => m.id === minddumpId);
+    if (index !== -1) {
+      minddumpCache.data[index] = minddump;
+      notifyMinddumpSubscribers();
+    }
+
+    console.log('✅ Minddump problems updated:', {
+      minddumpId,
+      problems: problems?.length || 0
+    });
+
+    return minddump;
+  } catch (error) {
+    console.error('Error updating minddump problems:', error);
+    throw error;
+  }
+}
+
 // Update minddump nodes (projects and problems)
 export async function updateMinddumpNodes(minddumpId, nodesData, options = {}) {
   const { onJWTError = null } = options;

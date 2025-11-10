@@ -1291,6 +1291,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           setSelectedProjectForProblems(null);
         }}
         selectedProject={selectedProjectForProblems}
+        currentMinddumpId={(() => {
+          const { getCurrentMinddumpId } = require('../utils/supabaseClient');
+          return getCurrentMinddumpId();
+        })()}
         onProblemConverted={(problemId, projectId) => {
           console.log(`Problem ${problemId} converted to project ${projectId}`);
           // Refresh the mind map to show new subproject
