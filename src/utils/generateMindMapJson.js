@@ -65,10 +65,10 @@ function getRandomColor() {
 const usedPositions = [];
 
 // Calculate minimum distance based on 250px spacing
-// Assuming average viewport width of 1920px, 250px = ~13% of width
-// For height (1080px), 250px = ~23% of height
-// Use the larger value to ensure 250px spacing in both dimensions
-const MIN_DISTANCE_PERCENT = 23; // 250px spacing constraint
+// For 250px radius (500px diameter between node centers):
+// On 1920x1080 screen: 250px = ~13% width, ~23% height
+// Using Euclidean distance, we need ~25-30% to ensure 250px in all directions
+const MIN_DISTANCE_PERCENT = 30; // 250px spacing constraint (radius around each node)
 
 function getRandomPosition() {
   const minDistance = MIN_DISTANCE_PERCENT; // 250px spacing between nodes
@@ -100,6 +100,7 @@ function getRandomPosition() {
 
     if (!isTooClose) {
       usedPositions.push(position);
+      console.log(`✓ Node position found: (${position.x}%, ${position.y}%) after ${attempts + 1} attempts`);
       return position;
     }
 
@@ -107,6 +108,7 @@ function getRandomPosition() {
   }
 
   // If we can't find a non-overlapping position, return a random one within bounds
+  console.warn(`⚠️ Could not find non-overlapping position after ${maxAttempts} attempts, using fallback`);
   const fallbackPosition = {
     x: Math.floor(Math.random() * availableWidth) + leftMargin,
     y: Math.floor(Math.random() * availableHeight) + topMargin
