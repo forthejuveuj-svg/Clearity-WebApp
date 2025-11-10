@@ -22,6 +22,13 @@ interface RPCResponse<T = any> {
   message?: string;
   error?: string;
   method?: string;
+  // Merge response fields
+  merged_counts?: { projects: number; problems: number };
+  original_counts?: { projects: number; problems: number };
+  projects?: any[];
+  problems?: any[];
+  all_data?: any;
+  simplified_nodes?: any[];
 }
 
 interface ChatParams {
@@ -128,6 +135,22 @@ export class APIService {
 
   static async projectChatWorkflow(params: { project_id?: string; user_id?: string; session_id?: string }): Promise<RPCResponse> {
     return this.chat({ text: "Continue our conversation about this project", user_id: params.user_id });
+  }
+
+  // Merge and simplify nodes after minddump creation
+  static async mergeAndSimplifyNodes(params: { user_id: string; session_id: string; data_json: any }): Promise<RPCResponse> {
+    if (this.useMockAPI) {
+      // Mock implementation - just return the data as-is
+      return {
+        success: true,
+        message: 'Mock merge completed',
+        merged_counts: { projects: params.data_json.projects?.length || 0, problems: params.data_json.problems?.length || 0 },
+        projects: params.data_json.projects || [],
+        problems: params.data_json.problems || [],
+        all_data: params.data_json
+      };
+    }
+    return this.makeRPCCall('merge_and_simplify_nodes', params);
   }
 
   static async healthCheck(): Promise<RPCResponse> {

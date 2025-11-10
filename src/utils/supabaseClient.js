@@ -849,6 +849,97 @@ export async function updateMinddumpConversation(minddumpId, conversation, optio
   }
 }
 
+// Update minddump nodes (projects and problems)
+export async function updateMinddumpNodes(minddumpId, nodesData, options = {}) {
+  const { onJWTError = null } = options;
+  
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      if (isJWTError(sessionError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw sessionError;
+      }
+    }
+
+    if (!session?.user) {
+      throw new Error('No authenticated user');
+    }
+
+    // Get current minddump to preserve other data
+    const { data: currentMinddump, error: fetchError } = await supabase
+      .from('minddumps')
+      .select('*')
+      .eq('id', minddumpId)
+      .eq('user_id', session.user.id)
+      .single();
+
+    if (fetchError) {
+      if (isJWTError(fetchError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw fetchError;
+      }
+      throw fetchError;
+    }
+
+    // Update nodes while preserving other data
+    const updatedNodes = {
+      ...currentMinddump.nodes,
+      projects: nodesData.projects || currentMinddump.nodes?.projects || [],
+      problems: nodesData.problems || currentMinddump.nodes?.problems || []
+    };
+
+    // Update metadata
+    const updatedMetadata = {
+      ...currentMinddump.metadata,
+      entities_count: {
+        projects: nodesData.projects?.length || 0,
+        problems: nodesData.problems?.length || 0
+      },
+      last_merged: new Date().toISOString()
+    };
+
+    const { data: minddump, error } = await supabase
+      .from('minddumps')
+      .update({ 
+        nodes: updatedNodes,
+        metadata: updatedMetadata,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', minddumpId)
+      .eq('user_id', session.user.id)
+      .select()
+      .single();
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    // Update cache
+    const index = minddumpCache.data.findIndex(m => m.id === minddumpId);
+    if (index !== -1) {
+      minddumpCache.data[index] = minddump;
+      notifyMinddumpSubscribers();
+    }
+
+    console.log('✅ Minddump nodes updated:', {
+      minddumpId,
+      projects: nodesData.projects?.length || 0,
+      problems: nodesData.problems?.length || 0
+    });
+
+    return minddump;
+  } catch (error) {
+    console.error('Error updating minddump nodes:', error);
+    throw error;
+  }
+}
+
 // Clear cache (useful for logout)
 export function clearDataCache() {
   globalDataStore = {

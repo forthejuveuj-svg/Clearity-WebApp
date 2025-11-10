@@ -79,7 +79,10 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
     
     if (!node.hasProblem) return 0;
     if (node.problemData) {
-      const activeProblems = node.problemData.filter(p => p.status === 'active');
+      // Count problems with status 'active' or 'identified' (both are active problems)
+      const activeProblems = node.problemData.filter(p => 
+        p.status === 'active' || p.status === 'identified'
+      );
       console.log(`   Active problems count: ${activeProblems.length}`);
       return activeProblems.length;
     }

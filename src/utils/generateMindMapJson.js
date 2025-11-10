@@ -68,7 +68,7 @@ const usedPositions = [];
 // For 250px radius (500px diameter between node centers):
 // On 1920x1080 screen: 250px = ~13% width, ~23% height
 // Using Euclidean distance, we need ~25-30% to ensure 250px in all directions
-const MIN_DISTANCE_PERCENT = 30; // 250px spacing constraint (radius around each node)
+const MIN_DISTANCE_PERCENT = 15; // 250px spacing constraint (radius around each node)
 
 function getRandomPosition() {
   const minDistance = MIN_DISTANCE_PERCENT; // 250px spacing between nodes
@@ -152,8 +152,9 @@ function createProjectNode(project, knowledgeNodes = [], problems = []) {
     .slice(0, 4); // Limit to 4 total thoughts
 
   // Get problems related to this project by project_id
+  // Include both 'active' and 'identified' status as active problems
   const projectProblems = problems.filter(p =>
-    p.project_id === project.id && p.status === 'active'
+    p.project_id === project.id && (p.status === 'active' || p.status === 'identified')
   );
 
 
@@ -182,21 +183,21 @@ function getDateKey(date) {
 export async function createMinddumpFromData(results, userId) {
   try {
     console.log('Creating minddump from chat results:', results);
-    
+
     // Use the existing createMinddump function from supabaseClient
     const { createMinddump } = await import('./supabaseClient.js');
-    
+
     // Generate nodes from projects and problems with 250px spacing
     const nodes = [];
     usedPositions.length = 0; // Clear positions
-    
+
     // Create project nodes with proper spacing
     if (results.projects) {
       results.projects.forEach(project => {
         const position = getRandomPosition(); // Uses 250px spacing constraint
         const color = getRandomColor();
         const nodeId = projectToId(project.name);
-        
+
         const node = {
           id: nodeId,
           projectId: project.id,
@@ -209,10 +210,10 @@ export async function createMinddumpFromData(results, userId) {
         nodes.push(node);
       });
     }
-    
+
     // Don't create separate problem nodes - let problems be handled through the problems array in the data structure
     // The AI can work with the problems directly from results.problems
-    
+
     // Generate title from first project or problem, or use chat response
     let title = 'Chat Workflow Result';
     const firstEntity = results.projects?.[0] || results.problems?.[0];
@@ -220,7 +221,7 @@ export async function createMinddumpFromData(results, userId) {
       const entityName = firstEntity.name || firstEntity.title || 'Untitled';
       title = entityName.length > 50 ? entityName.substring(0, 50) + '...' : entityName;
     }
-    
+
     // Create minddump data using the expected format
     const minddumpData = {
       prompt: results.chat_response || 'Chat workflow result',
@@ -251,25 +252,25 @@ export async function createMinddumpFromData(results, userId) {
       },
       conversation: results.conversation_history || []
     };
-    
+
     // Use the existing createMinddump function which handles user_id automatically
-    const savedMinddump = await createMinddump(minddumpData, { 
+    const savedMinddump = await createMinddump(minddumpData, {
       onJWTError: (message) => {
         console.warn('JWT error while creating minddump:', message);
       }
     });
-    
+
     if (!savedMinddump) {
       throw new Error('Failed to save minddump');
     }
-    
+
     // Track this as the current minddump
     const { setCurrentMinddump } = await import('./supabaseClient.js');
     setCurrentMinddump(savedMinddump.id);
-    
+
     console.log('Minddump created successfully:', savedMinddump.id);
     return savedMinddump;
-    
+
   } catch (error) {
     console.error('Error creating minddump:', error);
     throw error;
@@ -280,50 +281,50 @@ export async function createMinddumpFromData(results, userId) {
 export async function generateMindMapFromMinddump(minddumpId) {
   try {
     console.log('Loading minddump:', minddumpId);
-    
+
     // Import supabase client
     const { createClient } = await import('@supabase/supabase-js');
-    
+
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    
+
     if (!supabaseUrl || !supabaseKey) {
       throw new Error('Supabase configuration missing');
     }
-    
+
     const supabase = createClient(supabaseUrl, supabaseKey);
-    
+
     // Get minddump from database using supabaseClient function
-    const minddump = await import('./supabaseClient.js').then(module => 
+    const minddump = await import('./supabaseClient.js').then(module =>
       module.getMinddump(minddumpId)
     );
-    
+
     if (!minddump) {
       throw new Error('Minddump not found');
     }
-    
+
     // Track this as the current minddump
     const { setCurrentMinddump } = await import('./supabaseClient.js');
     setCurrentMinddump(minddumpId);
-    
+
     console.log('Minddump loaded:', minddump.title, 'with', minddump.nodes);
-    
+
     // Generate nodes from stored data
     const nodes = [];
     const storedPositions = minddump.layout_data?.node_positions || [];
-    
+
     // Clear used positions and restore from saved positions
     usedPositions.length = 0;
-    
+
     // Create project nodes
     if (minddump.nodes.projects) {
       console.log('🔍 Processing projects from minddump:', minddump.nodes.projects.length);
       console.log('🔍 Available problems:', minddump.nodes.problems?.length || 0);
-      
+
       minddump.nodes.projects.forEach(project => {
         const nodeId = projectToId(project.name);
         const storedPos = storedPositions.find(p => p.id === nodeId);
-        
+
         // Always use stored position if available, otherwise generate new one
         let position;
         if (storedPos && storedPos.x !== undefined && storedPos.y !== undefined) {
@@ -333,28 +334,28 @@ export async function generateMindMapFromMinddump(minddumpId) {
         } else {
           position = getRandomPosition();
         }
-        
+
         // Check if there are related problems
-        const relatedProblems = minddump.nodes.problems ? 
+        const relatedProblems = minddump.nodes.problems ?
           minddump.nodes.problems.filter(problem => {
-            const isRelated = problem.project_id === project.id || 
+            const isRelated = problem.project_id === project.id ||
               (problem.related_projects && problem.related_projects.includes(project.id));
-            
+
             if (isRelated) {
               console.log(`✅ Found problem "${problem.title || problem.name}" for project "${project.name}"`);
-              console.log('   Problem data:', { 
-                problem_id: problem.id, 
-                project_id: problem.project_id, 
+              console.log('   Problem data:', {
+                problem_id: problem.id,
+                project_id: problem.project_id,
                 related_projects: problem.related_projects,
-                status: problem.status 
+                status: problem.status
               });
             }
-            
+
             return isRelated;
           }) : [];
-        
+
         console.log(`📊 Project "${project.name}" (ID: ${project.id}) has ${relatedProblems.length} problems`);
-        
+
         const node = {
           id: nodeId,
           projectId: project.id,
@@ -368,7 +369,7 @@ export async function generateMindMapFromMinddump(minddumpId) {
           problemData: relatedProblems.length > 0 ? relatedProblems : undefined,
           thoughts: project.key_points || []
         };
-        
+
         if (relatedProblems.length > 0) {
           console.log(`🔴 Node created with hasProblem=true:`, {
             nodeId: node.id,
@@ -377,21 +378,21 @@ export async function generateMindMapFromMinddump(minddumpId) {
             problemData: node.problemData
           });
         }
-        
+
         nodes.push(node);
       });
     }
-    
+
     // Don't create separate problem nodes - problems are handled through the data structure
     // The AI merger can work with problems directly from the minddump.nodes.problems array
-    
+
     return {
       nodes,
       parentNode: minddump.title,
       _timestamp: Date.now(),
       minddumpId: minddump.id
     };
-    
+
   } catch (error) {
     console.error('Error loading minddump:', error);
     return getFallbackJson();
@@ -402,16 +403,16 @@ export async function generateMindMapFromMinddump(minddumpId) {
 export async function getLatestMinddump(userId) {
   try {
     const { createClient } = await import('@supabase/supabase-js');
-    
+
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    
+
     if (!supabaseUrl || !supabaseKey) {
       return null;
     }
-    
+
     const supabase = createClient(supabaseUrl, supabaseKey);
-    
+
     const { data, error } = await supabase
       .table('minddumps')
       .select('*')
@@ -419,13 +420,13 @@ export async function getLatestMinddump(userId) {
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
-    
+
     if (error || !data) {
       return null;
     }
-    
+
     return await generateMindMapFromMinddump(data.id, userId);
-    
+
   } catch (error) {
     console.error('Error getting latest minddump:', error);
     return null;
@@ -435,7 +436,7 @@ export async function getLatestMinddump(userId) {
 export async function generateMindMapJson(options = {}) {
   try {
     const { showSubprojects = false, parentProjectId = null, onJWTError = null, forceRefresh = false } = options;
-    
+
     // Get fresh data from database
     const { projects, knowledgeNodes, problems } = await fetchSupabaseData(onJWTError, forceRefresh);
 

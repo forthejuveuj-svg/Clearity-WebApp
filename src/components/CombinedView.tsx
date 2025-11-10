@@ -87,6 +87,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [isMergingNodes, setIsMergingNodes] = useState(false);
 
 
 
@@ -152,6 +153,55 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
             // Load the new minddump into the mind map
             await handleMinddumpSelect(minddump);
+
+            // Check if we should merge nodes (more than 2 projects)
+            const projectCount = workflowData.projects?.length || 0;
+            if (projectCount > 2 && sessionId) {
+              console.log(`🔄 Starting node merge for ${projectCount} projects`);
+              setIsMergingNodes(true);
+
+              try {
+                // Call merge RPC with the minddump data
+                const mergeResult: any = await APIService.mergeAndSimplifyNodes({
+                  user_id: userId,
+                  session_id: sessionId,
+                  data_json: {
+                    projects: workflowData.projects || [],
+                    problems: workflowData.problems || []
+                  }
+                });
+
+                if (mergeResult.success) {
+                  const originalCount = projectCount;
+                  const mergedCount = mergeResult.merged_counts?.projects || 0;
+
+                  console.log(`✅ Node merge completed: ${originalCount} -> ${mergedCount} projects`);
+
+                  // Only update if nodes were actually merged (fewer nodes)
+                  if (mergedCount < originalCount) {
+                    console.log('📊 Updating minddump with merged nodes');
+                    
+                    // Update the minddump with merged data
+                    const { updateMinddumpNodes } = await import('../utils/supabaseClient.js');
+                    await updateMinddumpNodes(minddump.id, {
+                      projects: mergeResult.projects || [],
+                      problems: mergeResult.problems || []
+                    });
+
+                    // Reload the minddump to show merged nodes
+                    await handleMinddumpSelect(minddump);
+                  } else {
+                    console.log('ℹ️ No nodes were merged, keeping original layout');
+                  }
+                } else {
+                  console.warn('⚠️ Node merge failed:', mergeResult.error);
+                }
+              } catch (error) {
+                console.error('❌ Error during node merge:', error);
+              } finally {
+                setIsMergingNodes(false);
+              }
+            }
           } else {
             console.warn('Failed to create minddump from AI results');
             // Fallback to regular reload
@@ -881,6 +931,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   return (
     <div className="h-screen w-screen flex flex-col relative overflow-hidden bg-gradient-to-br from-black via-slate-900 to-black fixed inset-0">
+      {/* Merging Nodes Indicator - Fixed at top */}
+      {isMergingNodes && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
+          <div className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-purple-600/90 to-blue-600/90 backdrop-blur-md rounded-full shadow-lg border border-purple-400/30">
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <span className="text-white font-medium text-sm">Merging nodes...</span>
+          </div>
+        </div>
+      )}
+
       {/* Mind Map or Task Manager Section */}
       <div
         className="relative overflow-hidden"
