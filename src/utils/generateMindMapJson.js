@@ -175,18 +175,8 @@ export async function createMinddumpFromData(results, userId) {
   try {
     console.log('Creating minddump from chat results:', results);
     
-    // Import supabase client
-    const { createClient } = await import('@supabase/supabase-js');
-    
-    // Get supabase config (you'll need to add this)
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Supabase configuration missing');
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Use the existing createMinddump function from supabaseClient
+    const { createMinddump } = await import('./supabaseClient.js');
     
     // Generate nodes from projects and problems
     const nodes = [];
@@ -220,7 +210,9 @@ export async function createMinddumpFromData(results, userId) {
         const node = {
           id: `problem-${problem.id}`,
           problemId: problem.id,
-          label: problem.name.length > 12 ? problem.name.replace(/\s+/g, '\n') : problem.name,
+          label: (problem.name || problem.title || 'Problem').length > 12 ? 
+            (problem.name || problem.title || 'Problem').replace(/\s+/g, '\n') : 
+            (problem.name || problem.title || 'Problem'),
           x: position.x,
           y: position.y,
           color: 'red',
@@ -232,16 +224,17 @@ export async function createMinddumpFromData(results, userId) {
       });
     }
     
-    // Generate title from first project or problem
+    // Generate title from first project or problem, or use chat response
+    let title = 'Chat Workflow Result';
     const firstEntity = results.projects?.[0] || results.problems?.[0];
-    const title = firstEntity ? 
-      (firstEntity.name.length > 50 ? firstEntity.name.substring(0, 50) + '...' : firstEntity.name) :
-      'New Minddump';
+    if (firstEntity) {
+      const entityName = firstEntity.name || firstEntity.title || 'Untitled';
+      title = entityName.length > 50 ? entityName.substring(0, 50) + '...' : entityName;
+    }
     
-    // Create minddump data
+    // Create minddump data using the expected format
     const minddumpData = {
-      user_id: userId,
-      prompt: results.original_prompt || 'Chat workflow result',
+      prompt: results.chat_response || 'Chat workflow result',
       title: title,
       nodes: {
         projects: results.projects || [],
@@ -258,26 +251,27 @@ export async function createMinddumpFromData(results, userId) {
         }))
       },
       metadata: {
-        entities_count: results.entities_created || { projects: 0, problems: 0 },
+        entities_count: results.entities_created || results.entities_stored || { projects: 0, problems: 0 },
         ai_model: 'gpt-4o-mini',
         version: '1.0',
-        created_from: 'chat_workflow'
+        created_from: 'chat_workflow',
+        workflow_insights: results.insights || null
       }
     };
     
-    // Save to supabase
-    const { data, error } = await supabase
-      .table('minddumps')
-      .insert(minddumpData)
-      .select()
-      .single();
+    // Use the existing createMinddump function which handles user_id automatically
+    const savedMinddump = await createMinddump(minddumpData, { 
+      onJWTError: (message) => {
+        console.warn('JWT error while creating minddump:', message);
+      }
+    });
     
-    if (error) {
-      throw error;
+    if (!savedMinddump) {
+      throw new Error('Failed to save minddump');
     }
     
-    console.log('Minddump created successfully:', data.id);
-    return data;
+    console.log('Minddump created successfully:', savedMinddump.id);
+    return savedMinddump;
     
   } catch (error) {
     console.error('Error creating minddump:', error);
@@ -323,6 +317,13 @@ export async function generateMindMapFromMinddump(minddumpId) {
         const storedPos = storedPositions.find(p => p.id === projectToId(project.name));
         const position = storedPos || getRandomPosition();
         
+        // Check if there are related problems
+        const relatedProblems = minddump.nodes.problems ? 
+          minddump.nodes.problems.filter(problem => 
+            problem.project_id === project.id || 
+            (problem.related_projects && problem.related_projects.includes(project.id))
+          ) : [];
+        
         const node = {
           id: projectToId(project.name),
           projectId: project.id,
@@ -331,7 +332,10 @@ export async function generateMindMapFromMinddump(minddumpId) {
           y: position.y,
           color: storedPos?.color || getRandomColor(),
           type: 'project',
-          data: project
+          data: project,
+          hasProblem: relatedProblems.length > 0,
+          problemData: relatedProblems.length > 0 ? relatedProblems : undefined,
+          thoughts: project.key_points || []
         };
         nodes.push(node);
       });
@@ -352,7 +356,9 @@ export async function generateMindMapFromMinddump(minddumpId) {
           color: storedPos?.color || 'red',
           type: 'problem',
           data: problem,
-          hasProblem: true
+          hasProblem: true,
+          problemType: problem.type || 'general',
+          problemData: [problem] // Wrap in array for compatibility
         };
         nodes.push(node);
       });

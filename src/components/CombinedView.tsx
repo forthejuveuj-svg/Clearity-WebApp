@@ -101,12 +101,70 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     startWorkflow,
     disconnect,
   } = useWebSocket(
-    (results) => {
+    async (results) => {
       // Workflow completed - show summary in chat
       console.log('Chat workflow completed with results:', results);
 
-      // Force reload nodes to show new data
-      reloadNodes({ forceRefresh: true });
+      // Process the AI results to create a minddump and generate mind map
+      try {
+        // Extract the actual data - handle nested structure
+        let workflowData = null;
+        
+        if (results && results.data) {
+          // Try different possible data locations based on the output structure
+          if (results.data.all_data_json && (results.data.all_data_json.projects || results.data.all_data_json.problems)) {
+            workflowData = results.data.all_data_json;
+          } else if (results.data.data && (results.data.data.projects || results.data.data.problems)) {
+            workflowData = results.data.data;
+          } else if (results.data.projects || results.data.problems) {
+            workflowData = results.data;
+          }
+        }
+        
+        if (workflowData && (workflowData.projects || workflowData.problems)) {
+          console.log('Processing AI workflow results:', {
+            projects: workflowData.projects?.length || 0,
+            problems: workflowData.problems?.length || 0,
+            chat_response: results.data?.chat_response || 'No response',
+            insights: results.data?.insights || null
+          });
+
+          // Import the createMinddumpFromData function
+          const { createMinddumpFromData } = await import('../utils/generateMindMapJson');
+          
+          // Prepare data with additional context
+          const dataToProcess = {
+            ...workflowData,
+            chat_response: results.data?.chat_response || results.data?.message || 'Chat workflow result',
+            insights: results.data?.insights || null,
+            entities_created: results.data?.entities_created || results.data?.entities_stored || null
+          };
+          
+          // Create minddump from the AI results
+          const minddump = await createMinddumpFromData(dataToProcess, userId);
+          
+          if (minddump) {
+            console.log('Minddump created from AI results:', minddump.id);
+            
+            // Load the new minddump into the mind map
+            await handleMinddumpSelect(minddump);
+          } else {
+            console.warn('Failed to create minddump from AI results');
+            // Fallback to regular reload
+            reloadNodes({ forceRefresh: true });
+          }
+        } else {
+          console.log('No projects or problems found in AI results, doing regular reload');
+          console.log('Results structure:', JSON.stringify(results, null, 2));
+          // Force reload nodes to show new data
+          reloadNodes({ forceRefresh: true });
+        }
+      } catch (error) {
+        console.error('Error processing AI workflow results:', error);
+        console.error('Results that caused error:', JSON.stringify(results, null, 2));
+        // Fallback to regular reload
+        reloadNodes({ forceRefresh: true });
+      }
     },
     (error) => {
       // Workflow error - show in chat
