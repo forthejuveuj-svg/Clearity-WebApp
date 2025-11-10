@@ -82,10 +82,10 @@ async function fetchFreshDataFromSupabase(options = {}) {
       return { projects: [], knowledgeNodes: [], problems: [] };
     }
 
-    // Fetch only projects and problems (include both 'active' and 'identified' status)
+    // Fetch only projects and problems (exclude 'resolved' status)
     const [projectsResult, problemsResult] = await Promise.all([
       supabase.from('projects').select(selectFields).order('created_at', { ascending: false }),
-      supabase.from('problems').select('*').in('status', ['active', 'identified']).order('created_at', { ascending: false })
+      supabase.from('problems').select('*').neq('status', 'resolved').order('created_at', { ascending: false })
     ]);
 
     // Check for errors

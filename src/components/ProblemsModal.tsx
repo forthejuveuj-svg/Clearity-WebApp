@@ -91,8 +91,9 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
           console.log('Problem keys:', Object.keys(projectProblems[0]));
         }
 
-        // Show all problems (including 'active' and 'identified' status)
-        setProblems(projectProblems);
+        // Filter out resolved problems
+        const activeProblems = projectProblems.filter(p => p.status !== 'resolved');
+        setProblems(activeProblems);
       } else {
         // Show all active problems when no specific project is selected
         const activeProblems = await getActiveProblems();
@@ -131,70 +132,27 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
     });
   };
 
-  const handleConvertToProject = async (problem: Problem) => {
-    console.log('Converting problem:', problem.name);
-    console.log('Selected project:', selectedProject?.label);
-    console.log('Problem fields:', Object.keys(problem));
+  const handleMarkAsSolved = async (problem: Problem) => {
+    console.log('Marking problem as solved:', problem.name);
 
     setConvertingProblem(problem.id);
     try {
-      if (selectedProject) {
-        // Convert problem to subproject of the selected project
-        const problemTitle = problem.name;
-        const parentProjectId = selectedProject.projectId || selectedProject.id;
+      // Update the problem status to 'resolved'
+      await updateProblem(problem.id, {
+        status: 'resolved'
+      });
+      console.log('Updated problem status to resolved');
 
-        console.log('Selected project object:', selectedProject);
-        console.log('selectedProject.projectId:', selectedProject.projectId);
-        console.log('selectedProject.id:', selectedProject.id);
-        console.log('Parent project ID to use:', parentProjectId);
+      // Remove the problem from the list
+      setProblems(prev => prev.filter(p => p.id !== problem.id));
 
-        // Ensure we have a valid parent project ID
-        if (!parentProjectId) {
-          throw new Error('No valid parent project ID found');
-        }
+      // Notify parent component to refresh the mind map
+      onProblemConverted?.(problem.id, '');
 
-        const subprojectData = {
-          name: problemTitle,
-          description: problem.description || `Subproject created from problem: ${problemTitle}`,
-          subproject_from: [parentProjectId], // Use the project ID in the subproject_from array
-          status: 'not_started'
-        };
-
-        console.log('Creating subproject with data:', subprojectData);
-        // createProject() saves the subproject to the Supabase database and updates cache
-        const subproject = await createProject(subprojectData);
-        console.log('Created subproject in database:', subproject);
-        console.log('Subproject subproject_from field:', subproject.subproject_from);
-
-        // Update the problem status to 'resolved' and link it to the new subproject
-        await updateProblem(problem.id, {
-          status: 'resolved',
-          project_id: subproject.id
-        });
-        console.log('Updated problem status to resolved and linked to subproject');
-
-        // Remove the converted problem from the list
-        setProblems(prev => prev.filter(p => p.id !== problem.id));
-
-        // Notify parent component to refresh the mind map
-        onProblemConverted?.(problem.id, subproject.id);
-
-        console.log(`Successfully converted "${problemTitle}" to subproject under "${selectedProject.label}"`);
-      } else {
-        // Convert to standalone project
-        const project = await convertProblemToProject(problem);
-
-        // Remove the converted problem from the list
-        setProblems(prev => prev.filter(p => p.id !== problem.id));
-
-        // Notify parent component
-        onProblemConverted?.(problem.id, project.id);
-
-        console.log(`Successfully converted "${problem.name}" to standalone project`);
-      }
+      console.log(`Successfully marked "${problem.name}" as solved`);
     } catch (error) {
-      console.error('Error converting problem:', error);
-      alert(`Failed to convert problem: ${error.message || 'Unknown error'}`);
+      console.error('Error marking problem as solved:', error);
+      alert(`Failed to mark problem as solved: ${error.message || 'Unknown error'}`);
     } finally {
       setConvertingProblem(null);
     }
@@ -369,16 +327,16 @@ export const ProblemsModal: React.FC<ProblemsModalProps> = ({ isOpen, onClose, s
                   {/* Action Buttons */}
                   <div className="flex items-center gap-2 pt-3 border-t border-gray-700/30 ml-5">
                     <button
-                      onClick={() => handleConvertToProject(problem)}
+                      onClick={() => handleMarkAsSolved(problem)}
                       disabled={convertingProblem === problem.id}
-                      className="flex items-center gap-2 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs rounded-lg border border-blue-500/40 hover:border-blue-400/60 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md"
+                      className="flex items-center gap-2 px-3 py-2 bg-green-600/20 hover:bg-green-600/30 text-green-300 text-xs rounded-lg border border-green-500/40 hover:border-green-400/60 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md"
                     >
                       {convertingProblem === problem.id ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
                       ) : (
-                        <ArrowRight className="w-3 h-3" />
+                        <CheckCircle className="w-3 h-3" />
                       )}
-                      {selectedProject ? 'Convert to Subproject' : 'Convert to Project'}
+                      Solved
                     </button>
 
                     <button
