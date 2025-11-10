@@ -64,8 +64,14 @@ function getRandomColor() {
 // Track used positions to avoid overlap
 const usedPositions = [];
 
+// Calculate minimum distance based on 250px spacing
+// Assuming average viewport width of 1920px, 250px = ~13% of width
+// For height (1080px), 250px = ~23% of height
+// Use the larger value to ensure 250px spacing in both dimensions
+const MIN_DISTANCE_PERCENT = 23; // 250px spacing constraint
+
 function getRandomPosition() {
-  const minDistance = 15; // Minimum distance between nodes (in percentage)
+  const minDistance = MIN_DISTANCE_PERCENT; // 250px spacing between nodes
   let attempts = 0;
   const maxAttempts = 50;
 
@@ -84,7 +90,7 @@ function getRandomPosition() {
       y: Math.floor(Math.random() * availableHeight) + topMargin      // 15-85% range
     };
 
-    // Check if this position is far enough from existing positions
+    // Check if this position is far enough from existing positions (250px radius)
     const isTooClose = usedPositions.some(used => {
       const distance = Math.sqrt(
         Math.pow(position.x - used.x, 2) + Math.pow(position.y - used.y, 2)
@@ -178,18 +184,19 @@ export async function createMinddumpFromData(results, userId) {
     // Use the existing createMinddump function from supabaseClient
     const { createMinddump } = await import('./supabaseClient.js');
     
-    // Generate nodes from projects and problems
+    // Generate nodes from projects and problems with 250px spacing
     const nodes = [];
     usedPositions.length = 0; // Clear positions
     
-    // Create project nodes
+    // Create project nodes with proper spacing
     if (results.projects) {
       results.projects.forEach(project => {
-        const position = getRandomPosition();
+        const position = getRandomPosition(); // Uses 250px spacing constraint
         const color = getRandomColor();
+        const nodeId = projectToId(project.name);
         
         const node = {
-          id: projectToId(project.name),
+          id: nodeId,
           projectId: project.id,
           label: project.name.length > 12 ? project.name.replace(/\s+/g, '\n') : project.name,
           x: position.x,
@@ -303,11 +310,24 @@ export async function generateMindMapFromMinddump(minddumpId) {
     const nodes = [];
     const storedPositions = minddump.layout_data?.node_positions || [];
     
+    // Clear used positions and restore from saved positions
+    usedPositions.length = 0;
+    
     // Create project nodes
     if (minddump.nodes.projects) {
       minddump.nodes.projects.forEach(project => {
-        const storedPos = storedPositions.find(p => p.id === projectToId(project.name));
-        const position = storedPos || getRandomPosition();
+        const nodeId = projectToId(project.name);
+        const storedPos = storedPositions.find(p => p.id === nodeId);
+        
+        // Always use stored position if available, otherwise generate new one
+        let position;
+        if (storedPos && storedPos.x !== undefined && storedPos.y !== undefined) {
+          position = { x: storedPos.x, y: storedPos.y };
+          // Add to used positions to maintain spacing
+          usedPositions.push(position);
+        } else {
+          position = getRandomPosition();
+        }
         
         // Check if there are related problems
         const relatedProblems = minddump.nodes.problems ? 
@@ -317,7 +337,7 @@ export async function generateMindMapFromMinddump(minddumpId) {
           ) : [];
         
         const node = {
-          id: projectToId(project.name),
+          id: nodeId,
           projectId: project.id,
           label: project.name.length > 12 ? project.name.replace(/\s+/g, '\n') : project.name,
           x: position.x,
@@ -409,7 +429,7 @@ export async function generateMindMapJson(options = {}) {
       filteredProjects = projects;
     }
 
-    // Clear used positions
+    // Clear used positions to enforce 250px spacing
     usedPositions.length = 0;
 
     // Determine parent node name if filtering by parent project
@@ -421,7 +441,7 @@ export async function generateMindMapJson(options = {}) {
       }
     }
 
-    // Create nodes from filtered projects
+    // Create nodes from filtered projects with 250px spacing
     const nodes = [];
     filteredProjects.forEach(project => {
       const node = createProjectNode(project, knowledgeNodes, problems);
