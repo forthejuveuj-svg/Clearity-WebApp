@@ -18,6 +18,7 @@ import { SearchModal } from "./SearchModal";
 import { MinddumpSearchBar } from "./MinddumpSearchBar";
 import { generateMindMapFromMinddump } from "@/utils/generateMindMapJson";
 import { useConversation } from "@/contexts/ConversationContext";
+import { getCurrentMinddumpId } from "@/utils/supabaseClient";
 
 interface Message {
   role: "user" | "assistant";
@@ -1291,10 +1292,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           setSelectedProjectForProblems(null);
         }}
         selectedProject={selectedProjectForProblems}
-        currentMinddumpId={(() => {
-          const { getCurrentMinddumpId } = require('../utils/supabaseClient');
-          return getCurrentMinddumpId();
-        })()}
+        currentMinddumpId={getCurrentMinddumpId()}
         onProblemConverted={(problemId, projectId) => {
           console.log(`Problem ${problemId} converted to project ${projectId}`);
           // Refresh the mind map to show new subproject
