@@ -112,7 +112,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       try {
         // Extract the actual data - handle nested structure
         let workflowData = null;
-        
+
         if (results && results.data) {
           // Try different possible data locations based on the output structure
           if (results.data.all_data_json && (results.data.all_data_json.projects || results.data.all_data_json.problems)) {
@@ -123,7 +123,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             workflowData = results.data;
           }
         }
-        
+
         if (workflowData && (workflowData.projects || workflowData.problems)) {
           console.log('Processing AI workflow results:', {
             projects: workflowData.projects?.length || 0,
@@ -134,7 +134,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
           // Import the createMinddumpFromData function
           const { createMinddumpFromData } = await import('../utils/generateMindMapJson');
-          
+
           // Prepare data with additional context
           const dataToProcess = {
             ...workflowData,
@@ -142,14 +142,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             insights: results.data?.insights || null,
             entities_created: results.data?.entities_created || results.data?.entities_stored || null
           };
-          
+
           // Create minddump from the AI results with conversation history
           dataToProcess.conversation_history = currentConversation;
           const minddump = await createMinddumpFromData(dataToProcess, userId);
-          
+
           if (minddump) {
             console.log('Minddump created from AI results:', minddump.id);
-            
+
             // Load the new minddump into the mind map
             await handleMinddumpSelect(minddump);
           } else {
@@ -229,6 +229,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Single mind map state - data comes directly from database
   const [mindMapNodes, setMindMapNodes] = useState<Node[]>([]);
   const [parentNodeTitle, setParentNodeTitle] = useState<string | null>(null);
+  const [hasInitializedOnce, setHasInitializedOnce] = useState(false);
   const [clickedProjectNode, setClickedProjectNode] = useState<Node | null>(null);
   const [showSubprojects, setShowSubprojects] = useState(false); // Track if we should show subprojects
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null); // Track focused project for workflow
@@ -245,35 +246,38 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
       if (startFresh) {
         // Clear current minddump and show empty canvas
-        const { clearCurrentMinddump } = await import('@/utils/supabaseClient.js');
+        console.log('🆕 Starting fresh - clearing current minddump');
+        const { clearCurrentMinddump, debugCurrentMinddumpState } = await import('@/utils/supabaseClient.js');
         clearCurrentMinddump();
         setMindMapNodes([]);
         setParentNodeTitle(null);
-        console.log('Started fresh - showing empty canvas');
+        console.log('✅ Empty canvas shown');
+        debugCurrentMinddumpState();
         return;
       }
 
       // Regular reload - check current minddump and load it
       const { getCurrentMinddumpId } = await import('@/utils/supabaseClient.js');
       const currentMinddumpId = getCurrentMinddumpId();
-      
+
       if (currentMinddumpId) {
         // Load the current minddump
+        console.log('🔄 Reloading current minddump:', currentMinddumpId);
         const data = await generateMindMapFromMinddump(currentMinddumpId);
         if (data) {
           setMindMapNodes(data.nodes || []);
           setParentNodeTitle(data.parentNode || null);
           saveCurrentSession(data.nodes || []);
-          console.log('Reloaded current minddump:', currentMinddumpId, 'with', data.nodes?.length || 0, 'nodes');
+          console.log('✅ Reloaded current minddump with', data.nodes?.length || 0, 'nodes');
         }
       } else {
         // No current minddump - show empty canvas
+        console.log('📭 No current minddump - showing empty canvas');
         setMindMapNodes([]);
         setParentNodeTitle(null);
-        console.log('No current minddump - showing empty canvas');
       }
     } catch (error) {
-      console.error('Error reloading nodes:', error);
+      console.error('❌ Error reloading nodes:', error);
     }
   };
 
@@ -361,7 +365,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         if (minddump.conversation && minddump.conversation.length > 0) {
           console.log('💬 Loading conversation history:', minddump.conversation.length, 'messages');
           loadConversation(minddump.id, minddump.conversation);
-          
+
           // Convert conversation to messages format for display
           const conversationMessages: Message[] = minddump.conversation.map((msg: any) => ({
             role: msg.role,
@@ -394,6 +398,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   // Initialize data on component mount
   useEffect(() => {
+    // Only run initialization once on mount
+    if (hasInitializedOnce) {
+      return;
+    }
+
     const initializeData = async () => {
       try {
         // Initialize minddumps cache
@@ -403,7 +412,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         // Check current minddump state
         const currentMinddumpId = getCurrentMinddumpId();
         console.log('Initializing with current minddump:', currentMinddumpId);
-        
+
         if (currentMinddumpId) {
           // Load the specific current minddump
           try {
@@ -413,6 +422,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               setParentNodeTitle(data.parentNode || null);
               saveCurrentSession(data.nodes, null);
               console.log('Loaded current minddump:', currentMinddumpId, 'with', data.nodes.length, 'nodes');
+              setHasInitializedOnce(true);
               return;
             }
           } catch (error) {
@@ -420,12 +430,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             // Fall through to load latest or show empty
           }
         }
-        
-        // No current minddump or failed to load - try to load latest from database
+
+        // No current minddump - try to load latest from database (only on first load)
         try {
           const { getLatestMinddump } = await import('@/utils/supabaseClient.js');
           const latestMinddump = await getLatestMinddump();
-          
+
           if (latestMinddump) {
             console.log('Loading latest minddump as fallback:', latestMinddump.id);
             const data = await generateMindMapFromMinddump(latestMinddump.id);
@@ -433,17 +443,19 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               setMindMapNodes(data.nodes);
               setParentNodeTitle(data.parentNode || null);
               saveCurrentSession(data.nodes, null);
+              setHasInitializedOnce(true);
               return;
             }
           }
         } catch (error) {
           console.warn('Failed to load latest minddump:', error);
         }
-        
+
         // No minddumps available - show empty canvas
         console.log('No minddumps available - showing empty canvas');
         setMindMapNodes([]);
         setParentNodeTitle(null);
+        setHasInitializedOnce(true);
 
       } catch (error) {
         console.error('Error initializing data:', error);
@@ -458,11 +470,12 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
         setMindMapNodes([]);
         setParentNodeTitle(null);
+        setHasInitializedOnce(true);
       }
     };
 
     initializeData();
-  }, [signOut]);
+  }, [signOut, hasInitializedOnce]);
 
 
 
@@ -952,6 +965,17 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                 </svg>
               );
             })}
+
+            {/* Empty state message */}
+            {allNodes && allNodes.length === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center text-gray-400 space-y-4">
+                  <div className="text-6xl">🧠</div>
+                  <div className="text-xl font-medium">Empty Canvas</div>
+                  <div className="text-sm">Start a conversation below to create your mind map</div>
+                </div>
+              </div>
+            )}
 
             {/* Render regular nodes */}
             {allNodes && allNodes
