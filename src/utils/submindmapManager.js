@@ -39,10 +39,10 @@ export async function processSubmindmaps(projects, problems, parentMinddumpId, l
 
     // Create submindmaps for each parent project that has subprojects
     const submindmapPromises = Object.entries(projectsByParent).map(async ([parentProjectId, subprojects]) => {
-      const parentProject = projects.find(p => p.id === parentProjectId);
+      const parentProject = topLevelProjects.find(p => p.id === parentProjectId);
       
       if (!parentProject) {
-        console.warn('[SubmindmapManager] Parent project not found:', parentProjectId);
+        console.warn('[SubmindmapManager] Parent project not found in top-level projects:', parentProjectId);
         return null;
       }
 
@@ -59,7 +59,7 @@ export async function processSubmindmaps(projects, problems, parentMinddumpId, l
       // Create submindmap
       const submindmapData = {
         prompt: `Subprojects of ${parentProject.name}`,
-        title: `${parentProject.name} - Subprojects`,
+        title: parentProject.name, // Use parent project name as title
         parent_project_id: parentProjectId,
         nodes: {
           projects: subprojects,
@@ -86,10 +86,10 @@ export async function processSubmindmaps(projects, problems, parentMinddumpId, l
 
       try {
         const submindmap = await createMinddump(submindmapData);
-        console.log('[SubmindmapManager] Created submindmap:', submindmap.id, 'for', parentProject.name);
-        return submindmap;
+        console.log('[SubmindmapManager] ✅ Created submindmap:', submindmap.id, 'for', parentProject.name);
+        return { submindmap, parentProjectId };
       } catch (error) {
-        console.error('[SubmindmapManager] Error creating submindmap for', parentProject.name, ':', error);
+        console.error('[SubmindmapManager] ❌ Error creating submindmap for', parentProject.name, ':', error);
         return null;
       }
     });
@@ -100,13 +100,30 @@ export async function processSubmindmaps(projects, problems, parentMinddumpId, l
 
     console.log('[SubmindmapManager] Created', successfulSubmindmaps.length, 'submindmaps');
 
+    // Add subNodes info to top-level projects that have subprojects
+    const enrichedTopLevelProjects = topLevelProjects.map(project => {
+      const subprojects = projectsByParent[project.id];
+      if (subprojects && subprojects.length > 0) {
+        const submindmapInfo = successfulSubmindmaps.find(sm => sm.parentProjectId === project.id);
+        return {
+          ...project,
+          subNodes: subprojects.map(sp => ({
+            label: sp.name,
+            id: sp.id
+          })),
+          submindmapId: submindmapInfo?.submindmap?.id
+        };
+      }
+      return project;
+    });
+
     // Return only top-level projects (subprojects are now in submindmaps)
     return {
-      projects: topLevelProjects,
+      projects: enrichedTopLevelProjects,
       problems: problems.filter(problem => 
         topLevelProjects.some(p => p.id === problem.project_id)
       ),
-      submindmaps: successfulSubmindmaps
+      submindmaps: successfulSubmindmaps.map(sm => sm.submindmap)
     };
 
   } catch (error) {

@@ -726,6 +726,37 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   };
 
+  // Handle subproject indicator clicks - load submindmap
+  const handleSubprojectsClick = async (node: Node) => {
+    console.log('Subprojects clicked for node:', node.label, 'ID:', node.projectId);
+
+    try {
+      // Get the submindmap for this parent project
+      const { getSubmindmapByParentProject } = await import('@/utils/supabaseClient.js');
+      const submindmap = await getSubmindmapByParentProject(node.projectId || node.id);
+
+      if (submindmap) {
+        console.log('Loading submindmap:', submindmap.id, 'for', node.label);
+        // Load the submindmap
+        await handleMinddumpSelect(submindmap);
+      } else {
+        console.warn('No submindmap found for parent project:', node.projectId || node.id);
+        // Fallback to old behavior - load subprojects from database
+        const projectIdToUse = node.projectId || node.id;
+        const subprojects = await loadSubprojects(projectIdToUse);
+
+        if (subprojects.length > 0) {
+          saveCurrentSession(subprojects, projectIdToUse);
+          setMindMapNodes(subprojects);
+          setParentNodeTitle(node.label);
+          console.log(`Navigated to subprojects of ${node.label} (fallback)`);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading submindmap:', error);
+    }
+  };
+
   const handleNavigateToChat = async (task: any) => {
     // Switch to mindmap view
     setCurrentView('mindmap');
@@ -1038,6 +1069,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                     setSelectedProjectForProblems(node);
                     setIsProblemsOpen(true);
                   }}
+                  onSubprojectsClick={handleSubprojectsClick}
                   getScaleTransform={getScaleTransform}
                 />
               ))}

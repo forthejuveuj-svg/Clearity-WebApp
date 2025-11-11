@@ -746,6 +746,47 @@ export async function getMinddump(minddumpId, options = {}) {
   }
 }
 
+// Get submindmap by parent project ID
+export async function getSubmindmapByParentProject(parentProjectId, options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      if (isJWTError(sessionError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw sessionError;
+      }
+    }
+
+    if (!session?.user) {
+      return null;
+    }
+
+    const { data: minddumps, error } = await supabase
+      .from('minddumps')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .eq('parent_project_id', parentProjectId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    return minddumps && minddumps.length > 0 ? minddumps[0] : null;
+  } catch (error) {
+    console.error('Error getting submindmap:', error);
+    throw error;
+  }
+}
+
 // Update minddump title
 export async function updateMinddumpTitle(minddumpId, newTitle, options = {}) {
   const { onJWTError = null } = options;

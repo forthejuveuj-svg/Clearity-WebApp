@@ -5,6 +5,7 @@ interface MindMapNodeProps {
   node: Node;
   onNodeClick: (node: Node) => void;
   onProblemClick: () => void;
+  onSubprojectsClick?: (node: Node) => void;
   getScaleTransform: () => string;
 }
 
@@ -12,6 +13,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   node,
   onNodeClick,
   onProblemClick,
+  onSubprojectsClick,
   getScaleTransform
 }) => {
   const [isHovered, setIsHovered] = React.useState(false);
@@ -128,9 +130,18 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
 
         {/* Subprojects indicator */}
         {(node.subNodes && node.subNodes.length > 0) && (
-          <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-blue-500/80 rounded-full flex items-center justify-center border-2 border-gray-900 shadow-lg pointer-events-none">
-            <span className="text-white font-bold text-xs">{node.subNodes.length}</span>
-          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onSubprojectsClick) {
+                onSubprojectsClick(node);
+              }
+            }}
+            className="absolute -bottom-3 -right-3 w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center border-2 border-gray-900 shadow-lg hover:bg-blue-600 hover:scale-110 transition-all duration-200 cursor-pointer z-30"
+            title={`View ${node.subNodes.length} subproject${node.subNodes.length > 1 ? 's' : ''}`}
+          >
+            <span className="text-white font-bold text-sm">{node.subNodes.length}</span>
+          </button>
         )}
       </div>
 
