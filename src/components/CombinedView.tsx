@@ -746,6 +746,34 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               const newSubmindmap = await createMinddump(submindmapData);
               console.log('✅ Created submindmap on-the-fly:', newSubmindmap.id);
               
+              // Update the parent mindmap to add subNodes info to the parent project
+              try {
+                const { updateMinddumpNodes } = await import('@/utils/supabaseClient.js');
+                
+                // Update the parent project in the current mindmap to include subNodes
+                const updatedProjects = currentMinddump.nodes.projects.map(p => {
+                  if (p.id === projectIdToUse) {
+                    return {
+                      ...p,
+                      // Add metadata about submindmap
+                      submindmap_id: newSubmindmap.id,
+                      has_submindmap: true
+                    };
+                  }
+                  return p;
+                });
+                
+                await updateMinddumpNodes(currentMinddumpId, {
+                  projects: updatedProjects,
+                  problems: currentMinddump.nodes.problems || []
+                });
+                
+                console.log('✅ Updated parent mindmap with submindmap reference');
+              } catch (error) {
+                console.warn('Failed to update parent mindmap:', error);
+                // Non-critical, continue anyway
+              }
+              
               // Load the newly created submindmap
               await handleMinddumpSelect(newSubmindmap);
               return;
@@ -1159,7 +1187,29 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                     width: "400px",
                     height: "400px"
                   }}
-                  onClick={() => {
+                  onClick={async () => {
+                    // Check if we're in a submindmap
+                    const { getCurrentMinddumpId, getMinddump, getParentMinddumpForProject } = await import('@/utils/supabaseClient.js');
+                    const currentMinddumpId = getCurrentMinddumpId();
+                    
+                    if (currentMinddumpId) {
+                      const currentMinddump = await getMinddump(currentMinddumpId);
+                      
+                      // If this is a submindmap, find and load the parent mindmap
+                      if (currentMinddump?.parent_project_id) {
+                        console.log('🔙 Loading parent mindmap from submindmap');
+                        
+                        const parentMinddump = await getParentMinddumpForProject(currentMinddump.parent_project_id);
+                        
+                        if (parentMinddump) {
+                          console.log('✅ Found parent mindmap:', parentMinddump.title);
+                          await handleMinddumpSelect(parentMinddump);
+                          return;
+                        }
+                      }
+                    }
+                    
+                    // Fallback to history navigation
                     if (currentSessionIndex > 0) {
                       goBackInHistory();
                     }

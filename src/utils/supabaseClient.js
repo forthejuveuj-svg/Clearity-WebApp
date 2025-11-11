@@ -787,6 +787,52 @@ export async function getSubmindmapByParentProject(parentProjectId, options = {}
   }
 }
 
+// Get parent mindmap that contains a specific project
+export async function getParentMinddumpForProject(projectId, options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      if (isJWTError(sessionError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw sessionError;
+      }
+    }
+
+    if (!session?.user) {
+      return null;
+    }
+
+    // Get all top-level mindmaps (not submindmaps)
+    const { data: minddumps, error } = await supabase
+      .from('minddumps')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .is('parent_project_id', null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    // Find the mindmap that contains this project
+    const parentMinddump = minddumps?.find(mm => 
+      mm.nodes?.projects?.some(p => p.id === projectId)
+    );
+
+    return parentMinddump || null;
+  } catch (error) {
+    console.error('Error getting parent mindmap:', error);
+    throw error;
+  }
+}
+
 // Update minddump title
 export async function updateMinddumpTitle(minddumpId, newTitle, options = {}) {
   const { onJWTError = null } = options;
