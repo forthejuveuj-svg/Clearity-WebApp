@@ -327,18 +327,33 @@ export async function generateMindMapFromMinddump(minddumpId) {
     // Clear used positions and restore from saved positions
     usedPositions.length = 0;
 
-    // Create project nodes (filter out subprojects - they should be in submindmaps)
+    // Get the parent_project_id of this minddump (null for main mindmaps, ID for submindmaps)
+    const parentProjectId = minddump.parent_project_id;
+    const isSubmindmap = parentProjectId !== null && parentProjectId !== undefined;
+    
+    // Create project nodes
     if (minddump.nodes.projects) {
-      // Filter to only show top-level projects (no parent_project_id)
-      const topLevelProjects = minddump.nodes.projects.filter(project => !project.parent_project_id);
+      // Filter projects based on the minddump's parent_project_id:
+      // - If NULL: show projects with parent_project_id = NULL (top-level projects)
+      // - If some ID: show projects with parent_project_id = that ID (subprojects of that parent)
+      const projectsToShow = minddump.nodes.projects.filter(project => {
+        if (isSubmindmap) {
+          // Submindmap: show projects that belong to this parent
+          return project.parent_project_id === parentProjectId;
+        } else {
+          // Main mindmap: show only top-level projects (no parent)
+          return !project.parent_project_id;
+        }
+      });
       
       console.log('📊 Objects:', {
-        projects: topLevelProjects.length,
-        subprojects: minddump.nodes.projects.length - topLevelProjects.length,
+        isSubmindmap: isSubmindmap,
+        projects: projectsToShow.length,
+        filtered: minddump.nodes.projects.length - projectsToShow.length,
         problems: minddump.nodes.problems?.length || 0
       });
 
-      topLevelProjects.forEach(project => {
+      projectsToShow.forEach(project => {
         const nodeId = projectToId(project.name);
         const storedPos = storedPositions.find(p => p.id === nodeId);
 
@@ -360,8 +375,8 @@ export async function generateMindMapFromMinddump(minddumpId) {
             return isRelated;
           }) : [];
 
-        // Check if this project has subprojects in the original data
-        const subprojects = minddump.nodes.projects.filter(p => p.parent_project_id === project.id);
+        // Check if this project has subprojects in the original data (only for main mindmaps)
+        const subprojects = isSubmindmap ? [] : minddump.nodes.projects.filter(p => p.parent_project_id === project.id);
         
         const node = {
           id: nodeId,
@@ -375,7 +390,7 @@ export async function generateMindMapFromMinddump(minddumpId) {
           hasProblem: relatedProblems.length > 0,
           problemData: relatedProblems.length > 0 ? relatedProblems : undefined,
           thoughts: project.key_points || [],
-          // Add subNodes if there are subprojects
+          // Add subNodes if there are subprojects (only for main mindmaps)
           subNodes: subprojects.length > 0 ? subprojects.map(sp => ({
             label: sp.name,
             id: sp.id
