@@ -19,7 +19,7 @@ interface UseWebSocketReturn {
   currentQuestion: WorkflowQuestion | null;
   progress: string | null;
   sendResponse: (response: any) => void;
-  startWorkflow: (userId: string, text?: string, minddumpId?: string) => Promise<void>;
+  startWorkflow: (userId: string, text?: string, minddumpId?: string, nodes?: any[]) => Promise<void>;
   disconnect: () => void;
 }
 
@@ -229,7 +229,7 @@ export const useWebSocket = (
   }, []);
 
   // Start workflow - intelligently routes to chat_workflow or clarity_workflow
-  const startWorkflow = useCallback(async (userId: string, text?: string, minddumpId?: string) => {
+  const startWorkflow = useCallback(async (userId: string, text?: string, minddumpId?: string, nodes?: any[]) => {
     try {
       // Initialize socket connection first
       await initializeSocket();
@@ -262,6 +262,11 @@ export const useWebSocket = (
         params.minddump_id = minddumpId;
         if (text) {
           params.message = text;
+        }
+        // Include nodes if provided
+        if (nodes && nodes.length > 0) {
+          params.nodes = nodes;
+          console.log('Including', nodes.length, 'nodes in clarity workflow');
         }
         console.log('Starting clarity workflow on mindmap:', minddumpId);
       } else {

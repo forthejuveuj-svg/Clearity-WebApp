@@ -548,12 +548,30 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       }
 
       try {
+        // Get current minddump ID and nodes to determine workflow type
+        const currentMinddumpId = getCurrentMinddumpId();
+
+        // Prepare nodes for clarity workflow (convert to backend format)
+        const currentNodes = currentMinddumpId && mindMapNodes.length > 0
+          ? mindMapNodes.map(node => ({
+            ...node.data,
+            type: node.data?.type || (node.hasProblem ? 'problem' : 'project'),
+            id: node.projectId || node.id
+          }))
+          : undefined;
+
         // Start interactive chat workflow with the user's message
         if (!sessionId || !connected) {
           console.log('Starting workflow with user message:', userMessage);
+          if (currentMinddumpId) {
+            console.log('→ Using clarity workflow on minddump:', currentMinddumpId);
+            console.log('→ Including', currentNodes?.length || 0, 'nodes as context');
+          } else {
+            console.log('→ Using chat workflow to create new minddump');
+          }
           // Clear conversation when starting new workflow
           clearConversation();
-          await startWorkflow(userId, userMessage);
+          await startWorkflow(userId, userMessage, currentMinddumpId, currentNodes);
           setIsProcessing(false);
           return;
         }
@@ -568,11 +586,17 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
         // If connected but no question, start new workflow with this message
         console.log('Starting new workflow with message:', userMessage);
+        if (currentMinddumpId) {
+          console.log('→ Using clarity workflow on minddump:', currentMinddumpId);
+          console.log('→ Including', currentNodes?.length || 0, 'nodes as context');
+        } else {
+          console.log('→ Using chat workflow to create new minddump');
+        }
         disconnect(); // Disconnect current session
         await new Promise(resolve => setTimeout(resolve, 100)); // Brief pause
         // Clear conversation when starting new workflow
         clearConversation();
-        await startWorkflow(userId, userMessage);
+        await startWorkflow(userId, userMessage, currentMinddumpId, currentNodes);
         setIsProcessing(false);
         return;
       } catch (error) {

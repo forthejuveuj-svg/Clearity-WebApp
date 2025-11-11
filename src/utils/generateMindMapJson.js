@@ -373,8 +373,9 @@ export async function generateMindMapFromMinddump(minddumpId) {
             return isRelated;
           }) : [];
 
-        // Check if this project has subprojects in the original data (only for main mindmaps)
-        const subprojects = isSubmindmap ? [] : minddump.nodes.projects.filter(p => p.parent_project_id === project.id);
+        // Check if this project has subprojects in the original data
+        // This works for BOTH main mindmaps AND submindmaps (recursive)
+        const subprojects = minddump.nodes.projects.filter(p => p.parent_project_id === project.id);
         
         if (subprojects.length > 0) {
           console.log(`🔵 Project "${project.name}" has ${subprojects.length} subprojects:`, subprojects.map(sp => sp.name));
@@ -392,7 +393,7 @@ export async function generateMindMapFromMinddump(minddumpId) {
           hasProblem: relatedProblems.length > 0,
           problemData: relatedProblems.length > 0 ? relatedProblems : undefined,
           thoughts: project.key_points || [],
-          // Add subNodes if there are subprojects (only for main mindmaps)
+          // Add subNodes if there are subprojects (works recursively)
           subNodes: subprojects.length > 0 ? subprojects.map(sp => ({
             label: sp.name,
             id: sp.id
