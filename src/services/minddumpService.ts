@@ -8,7 +8,7 @@ import { getLatestMinddump, searchMinddumps, getMinddump, createMinddump } from 
 export interface ConversationMessage {
   role: 'user' | 'assistant';
   content: string;
-  timestamp: string;
+  timestamp?: string; // Optional for backward compatibility, but not saved to DB
 }
 
 export interface Minddump {

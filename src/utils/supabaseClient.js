@@ -746,6 +746,55 @@ export async function getMinddump(minddumpId, options = {}) {
   }
 }
 
+// Update minddump conversation in DSPy format (only role and content)
+export async function updateMinddumpConversation(minddumpId, conversation, options = {}) {
+  const { onJWTError = null } = options;
+
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      if (isJWTError(sessionError)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw sessionError;
+      }
+    }
+
+    if (!session?.user) {
+      throw new Error('No authenticated user');
+    }
+
+    // Ensure conversation is in DSPy format (only role and content, no timestamp)
+    const dspyFormatConversation = conversation.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
+
+    const { error } = await supabase
+      .from('minddumps')
+      .update({ 
+        conversation: dspyFormatConversation,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', minddumpId)
+      .eq('user_id', session.user.id);
+
+    if (error) {
+      if (isJWTError(error)) {
+        if (onJWTError) onJWTError('Session expired. Please log in again.');
+        throw error;
+      }
+      throw error;
+    }
+
+    console.log(`✅ Updated conversation for minddump ${minddumpId} in DSPy format (${dspyFormatConversation.length} messages)`);
+    return true;
+  } catch (error) {
+    console.error('Error updating minddump conversation:', error);
+    return false;
+  }
+}
+
 // Get submindmap by parent project ID
 export async function getSubmindmapByParentProject(parentProjectId, options = {}) {
   const { onJWTError = null } = options;

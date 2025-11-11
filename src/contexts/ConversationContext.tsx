@@ -49,7 +49,12 @@ export const ConversationProvider: React.FC<ConversationProviderProps> = ({ chil
     }
 
     try {
-      return await minddumpService.updateMinddumpConversation(currentMinddumpId, currentConversation);
+      // Convert to DSPy format (only role and content) before saving
+      const dspyFormatConversation = currentConversation.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+      return await minddumpService.updateMinddumpConversation(currentMinddumpId, dspyFormatConversation);
     } catch (error) {
       console.error('Error saving conversation:', error);
       return false;
