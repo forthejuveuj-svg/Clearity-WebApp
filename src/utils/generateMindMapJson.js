@@ -78,7 +78,7 @@ function getFixedPosition() {
   // Get the next position from the fixed positions array
   const position = FIXED_POSITIONS[positionIndex % FIXED_POSITIONS.length];
   positionIndex++;
-  
+
   console.log(`✓ Using fixed position ${positionIndex}: (${position.x}%, ${position.y}%)`);
   return position;
 }
@@ -299,7 +299,7 @@ export async function generateMindMapFromMinddump(minddumpId) {
     // Get the parent_project_id of this minddump (null for main mindmaps, ID for submindmaps)
     const parentProjectId = minddump.parent_project_id;
     const isSubmindmap = parentProjectId !== null && parentProjectId !== undefined;
-    
+
     // Create project nodes
     if (minddump.nodes.projects) {
       // Filter projects based on the minddump's parent_project_id:
@@ -314,7 +314,7 @@ export async function generateMindMapFromMinddump(minddumpId) {
           return !project.parent_project_id;
         }
       });
-      
+
       console.log('📊 Objects:', {
         isSubmindmap: isSubmindmap,
         projects: projectsToShow.length,
@@ -345,11 +345,11 @@ export async function generateMindMapFromMinddump(minddumpId) {
         // Check if this project has subprojects in the original data
         // This works for BOTH main mindmaps AND submindmaps (recursive)
         const subprojects = minddump.nodes.projects.filter(p => p.parent_project_id === project.id);
-        
+
         if (subprojects.length > 0) {
           console.log(`🔵 Project "${project.name}" has ${subprojects.length} subprojects:`, subprojects.map(sp => sp.name));
         }
-        
+
         const node = {
           id: nodeId,
           projectId: project.id,
@@ -368,7 +368,7 @@ export async function generateMindMapFromMinddump(minddumpId) {
             id: sp.id
           })) : undefined
         };
-        
+
         if (node.subNodes) {
           console.log(`✅ Node "${node.label}" created with ${node.subNodes.length} subNodes`);
         }
@@ -384,7 +384,8 @@ export async function generateMindMapFromMinddump(minddumpId) {
       nodes,
       parentNode: minddump.title,
       _timestamp: Date.now(),
-      minddumpId: minddump.id
+      minddumpId: minddump.id,
+      conversation: minddump.conversation || []
     };
 
   } catch (error) {

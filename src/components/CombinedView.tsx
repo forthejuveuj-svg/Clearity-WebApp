@@ -357,13 +357,23 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         setParentNodeTitle(data.parentNode || minddump.title);
         saveCurrentSession(data.nodes, minddump.title);
 
-        // Load conversation history
-        if (minddump.conversation && minddump.conversation.length > 0) {
-          console.log('💬 Loading conversation history:', minddump.conversation.length, 'messages');
-          loadConversation(minddump.id, minddump.conversation);
+        // Load conversation history - use data.conversation if available, fallback to minddump.conversation
+        const conversation = data.conversation || minddump.conversation;
+        
+        if (conversation && conversation.length > 0) {
+          console.log('💬 Loading conversation history:', conversation.length, 'messages');
+          
+          // Sort conversation by timestamp to ensure chronological order
+          const sortedConversation = [...conversation].sort((a, b) => {
+            const timeA = new Date(a.timestamp || 0).getTime();
+            const timeB = new Date(b.timestamp || 0).getTime();
+            return timeA - timeB;
+          });
+          
+          loadConversation(minddump.id, sortedConversation);
 
           // Convert conversation to messages format for display
-          const conversationMessages: Message[] = minddump.conversation.map((msg: any) => ({
+          const conversationMessages: Message[] = sortedConversation.map((msg: any) => ({
             role: msg.role,
             content: msg.content,
             messageType: 'normal'
@@ -414,6 +424,32 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               setMindMapNodes(data.nodes);
               setParentNodeTitle(data.parentNode || null);
               saveCurrentSession(data.nodes, null);
+              
+              // Load conversation history if it exists
+              if (data.conversation && data.conversation.length > 0) {
+                console.log('💬 Loading conversation history on init:', data.conversation.length, 'messages');
+                
+                // Sort conversation by timestamp to ensure chronological order
+                const sortedConversation = [...data.conversation].sort((a, b) => {
+                  const timeA = new Date(a.timestamp || 0).getTime();
+                  const timeB = new Date(b.timestamp || 0).getTime();
+                  return timeA - timeB;
+                });
+                
+                loadConversation(currentMinddumpId, sortedConversation);
+                
+                // Convert conversation to messages format for display
+                const conversationMessages: Message[] = sortedConversation.map((msg: any) => ({
+                  role: msg.role,
+                  content: msg.content,
+                  messageType: 'normal'
+                }));
+                setMessages(conversationMessages);
+              } else {
+                clearConversation();
+                setMessages([]);
+              }
+              
               setHasInitializedOnce(true);
               return;
             }
