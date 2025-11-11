@@ -657,67 +657,128 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Handle node clicks for project focus and subproject navigation
   const handleNodeClick = async (node: Node) => {
     console.log('Node clicked:', node.label, 'ID:', node.id);
+    const projectIdToUse = node.projectId || node.id;
 
-    // Handle project nodes
-    // Check if node has subprojects (indicated by subNodes or specific keywords)
-    const hasSubprojects = node.subNodes && node.subNodes.length > 0;
-    const projectKeywords = ['project', 'course', 'learning', 'study', 'work', 'build', 'create'];
-    const isProject = node.projectId || projectKeywords.some(keyword =>
-      node.label.toLowerCase().includes(keyword)
-    );
+    try {
+      // First, check if a submindmap already exists for this project
+      const { getSubmindmapByParentProject } = await import('@/utils/supabaseClient.js');
+      const existingSubmindmap = await getSubmindmapByParentProject(projectIdToUse);
 
-    // Only navigate to subprojects if NOT in showSubprojects mode (i.e., in default parent-only view)
-    if ((hasSubprojects || isProject) && !showSubprojects) {
-      try {
-        // Load subprojects from database using the actual project ID
-        const projectIdToUse = node.projectId || node.id;
-        const subprojects = await loadSubprojects(projectIdToUse);
-
-        if (subprojects.length > 0) {
-          // Save current state and navigate to subprojects
-          saveCurrentSession(subprojects, projectIdToUse);
-          setMindMapNodes(subprojects);
-          setParentNodeTitle(node.label);
-          // Track project ID for project chat mode (projects with subprojects are considered started)
-          setCurrentProjectId(projectIdToUse);
-          setCurrentProjectStatus('started'); // Projects with subprojects should use project chat
-
-          // Trigger project chat initiator for projects with subprojects
-          messageModeHandler.setProjectFocus({
-            id: projectIdToUse,
-            name: node.label,
-            status: 'started' // Projects with subprojects should use project chat, not project manager
-          });
-
-          console.log(`Navigated to subprojects of ${node.label}`);
-        } else {
-          console.log(`No subprojects found for ${node.label}`);
-          // Still treat as regular project focus if no subprojects
-          setClickedProjectNode(node);
-          const projectIdToUse = node.projectId || node.id;
-          setCurrentProjectId(projectIdToUse);
-          const isStarted = node.color === 'blue' || node.color === 'teal';
-          setCurrentProjectStatus(isStarted ? 'started' : 'not_started');
-          messageModeHandler.setProjectFocus({
-            id: projectIdToUse,
-            name: node.label,
-            status: isStarted ? 'started' : 'not_started'
-          });
-        }
-      } catch (error) {
-        console.error('Failed to load subprojects:', error);
+      if (existingSubmindmap) {
+        console.log('📋 Found existing submindmap for', node.label);
+        // Load the existing submindmap
+        await handleMinddumpSelect(existingSubmindmap);
+        return;
       }
-    } else {
-      // Regular project focus behavior (in showSubprojects mode or when node has no subprojects)
+
+      // No existing submindmap - check if node has subprojects in current data
+      const hasSubprojects = node.subNodes && node.subNodes.length > 0;
+
+      if (hasSubprojects) {
+        console.log(`🔨 Creating submindmap for ${node.label} with ${node.subNodes.length} subprojects`);
+        
+        // Get the current minddump to access all project data
+        const { getCurrentMinddumpId, getMinddump } = await import('@/utils/supabaseClient.js');
+        const currentMinddumpId = getCurrentMinddumpId();
+        
+        if (currentMinddumpId) {
+          const currentMinddump = await getMinddump(currentMinddumpId);
+          
+          if (currentMinddump && currentMinddump.nodes?.projects) {
+            // Find subprojects in the current minddump data
+            const subprojects = currentMinddump.nodes.projects.filter(
+              p => p.parent_project_id === projectIdToUse
+            );
+            
+            if (subprojects.length > 0) {
+              // Create submindmap on-the-fly
+              const { createMinddump } = await import('@/utils/supabaseClient.js');
+              
+              // Filter problems related to these subprojects
+              const relatedProblems = (currentMinddump.nodes?.problems || []).filter(problem => 
+                subprojects.some(sp => sp.id === problem.project_id)
+              );
+
+              // Generate layout positions for subprojects
+              const nodePositions = subprojects.map((project, index) => {
+                const colors = ['blue', 'violet', 'red', 'teal', 'green', 'orange'];
+                const cols = Math.ceil(Math.sqrt(subprojects.length));
+                const row = Math.floor(index / cols);
+                const col = index % cols;
+                const spacing = 60 / cols;
+                
+                return {
+                  id: project.name.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-').substring(0, 20),
+                  x: 20 + (col * spacing),
+                  y: 20 + (row * 25),
+                  color: colors[index % colors.length]
+                };
+              });
+
+              // Create submindmap
+              const submindmapData = {
+                prompt: `Subprojects of ${node.label}`,
+                title: node.label, // Use parent project name as title
+                parent_project_id: projectIdToUse,
+                nodes: {
+                  projects: subprojects,
+                  problems: relatedProblems
+                },
+                layout_data: {
+                  viewport: { x: 0, y: 0, zoom: 1.0 },
+                  canvas_size: { width: 1200, height: 800 },
+                  node_positions: nodePositions
+                },
+                metadata: {
+                  entities_count: {
+                    projects: subprojects.length,
+                    problems: relatedProblems.length
+                  },
+                  parent_project_id: projectIdToUse,
+                  parent_project_name: node.label,
+                  is_submindmap: true,
+                  created_from: 'on_demand',
+                  version: '1.0'
+                },
+                conversation: []
+              };
+
+              const newSubmindmap = await createMinddump(submindmapData);
+              console.log('✅ Created submindmap on-the-fly:', newSubmindmap.id);
+              
+              // Load the newly created submindmap
+              await handleMinddumpSelect(newSubmindmap);
+              return;
+            }
+          }
+        }
+      }
+
+      // No submindmap and no subprojects - regular project focus behavior
+      console.log('💬 Regular project focus for', node.label);
       setClickedProjectNode(node);
-      const projectIdToUse = node.projectId || node.id;
       setCurrentProjectId(projectIdToUse);
 
-      // Determine if project is started (simple heuristic based on node color or other properties)
-      const isStarted = node.color === 'blue' || node.color === 'teal'; // Assume blue/teal = started
+      // Determine if project is started
+      const isStarted = hasSubprojects || node.color === 'blue' || node.color === 'teal';
       setCurrentProjectStatus(isStarted ? 'started' : 'not_started');
 
-      // Switch to project mode and show appropriate message based on project status
+      // Switch to project mode
+      messageModeHandler.setProjectFocus({
+        id: projectIdToUse,
+        name: node.label,
+        status: isStarted ? 'started' : 'not_started'
+      });
+
+    } catch (error) {
+      console.error('Error handling node click:', error);
+      
+      // Fallback to regular project focus
+      setClickedProjectNode(node);
+      setCurrentProjectId(projectIdToUse);
+      const isStarted = node.color === 'blue' || node.color === 'teal';
+      setCurrentProjectStatus(isStarted ? 'started' : 'not_started');
+      
       messageModeHandler.setProjectFocus({
         id: projectIdToUse,
         name: node.label,

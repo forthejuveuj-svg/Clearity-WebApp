@@ -360,6 +360,9 @@ export async function generateMindMapFromMinddump(minddumpId) {
             return isRelated;
           }) : [];
 
+        // Check if this project has subprojects in the original data
+        const subprojects = minddump.nodes.projects.filter(p => p.parent_project_id === project.id);
+        
         const node = {
           id: nodeId,
           projectId: project.id,
@@ -371,7 +374,12 @@ export async function generateMindMapFromMinddump(minddumpId) {
           data: project,
           hasProblem: relatedProblems.length > 0,
           problemData: relatedProblems.length > 0 ? relatedProblems : undefined,
-          thoughts: project.key_points || []
+          thoughts: project.key_points || [],
+          // Add subNodes if there are subprojects
+          subNodes: subprojects.length > 0 ? subprojects.map(sp => ({
+            label: sp.name,
+            id: sp.id
+          })) : undefined
         };
 
         nodes.push(node);
