@@ -11,8 +11,8 @@ const FIXED_POSITIONS = [
   { x: 50, y: 30 },  // Top center
   { x: 25, y: 50 },  // Left middle
   { x: 75, y: 50 },  // Right middle
-  { x: 35, y: 70 },  // Bottom left
-  { x: 65, y: 70 }   // Bottom right
+  { x: 38, y: 70 },  // Bottom left (more centered)
+  { x: 62, y: 70 }   // Bottom right (more centered)
 ];
 
 /**
