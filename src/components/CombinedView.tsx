@@ -746,16 +746,22 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               const newSubmindmap = await createMinddump(submindmapData);
               console.log('✅ Created submindmap on-the-fly:', newSubmindmap.id);
               
-              // Update the parent mindmap to add subNodes info to the parent project
+              // Update the parent mindmap to include subprojects in its nodes.projects array
               try {
                 const { updateMinddumpNodes } = await import('@/utils/supabaseClient.js');
                 
-                // Update the parent project in the current mindmap to include subNodes
-                const updatedProjects = currentMinddump.nodes.projects.map(p => {
+                // Merge subprojects into the parent mindmap's projects array if they're not already there
+                const existingProjectIds = new Set(currentMinddump.nodes.projects.map(p => p.id));
+                const newProjects = subprojects.filter(sp => !existingProjectIds.has(sp.id));
+                
+                // Combine existing projects with new subprojects
+                const allProjects = [...currentMinddump.nodes.projects, ...newProjects];
+                
+                // Update the parent project to add submindmap metadata
+                const updatedProjects = allProjects.map(p => {
                   if (p.id === projectIdToUse) {
                     return {
                       ...p,
-                      // Add metadata about submindmap
                       submindmap_id: newSubmindmap.id,
                       has_submindmap: true
                     };
@@ -768,7 +774,10 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                   problems: currentMinddump.nodes.problems || []
                 });
                 
-                console.log('✅ Updated parent mindmap with submindmap reference');
+                console.log('✅ Updated parent mindmap:', {
+                  addedSubprojects: newProjects.length,
+                  totalProjects: updatedProjects.length
+                });
               } catch (error) {
                 console.warn('Failed to update parent mindmap:', error);
                 // Non-critical, continue anyway
