@@ -188,7 +188,7 @@ export async function createMinddumpFromData(results, userId) {
     const { createMinddump } = await import('./supabaseClient.js');
     const { processSubmindmaps } = await import('./submindmapManager.js');
 
-    // Process submindmaps - this will separate subprojects and create submindmaps
+    // Process submindmaps - this will create submindmaps for subprojects
     const processed = await processSubmindmaps(
       results.projects || [],
       results.problems || [],
@@ -196,7 +196,7 @@ export async function createMinddumpFromData(results, userId) {
       null
     );
 
-    // Generate nodes from TOP-LEVEL projects only (subprojects are in submindmaps)
+    // Generate nodes from TOP-LEVEL projects only (for display)
     const nodes = [];
     usedPositions.length = 0; // Clear positions
 
@@ -220,24 +220,22 @@ export async function createMinddumpFromData(results, userId) {
       });
     }
 
-    // Don't create separate problem nodes - let problems be handled through the problems array in the data structure
-    // The AI can work with the problems directly from results.problems
-
     // Generate title from first project or problem, or use chat response
     let title = 'Chat Workflow Result';
-    const firstEntity = processed.projects?.[0] || processed.problems?.[0];
+    const firstEntity = processed.projects?.[0] || results.problems?.[0];
     if (firstEntity) {
       const entityName = firstEntity.name || firstEntity.title || 'Untitled';
       title = entityName.length > 50 ? entityName.substring(0, 50) + '...' : entityName;
     }
 
-    // Create minddump data using the expected format (with only top-level projects)
+    // Create minddump data - IMPORTANT: Store ALL projects (including subprojects) in nodes.projects
+    // The filtering happens when displaying, not when storing
     const minddumpData = {
       prompt: results.chat_response || 'Chat workflow result',
       title: title,
       nodes: {
-        projects: processed.projects, // Only top-level projects
-        problems: processed.problems  // Only problems related to top-level projects
+        projects: results.projects || [], // Store ALL projects (including subprojects)
+        problems: results.problems || []   // Store ALL problems
       },
       layout_data: {
         viewport: { x: 0, y: 0, zoom: 1.0 },
