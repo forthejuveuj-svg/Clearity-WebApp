@@ -11,8 +11,10 @@ CREATE TABLE projects (
     status TEXT NOT NULL CHECK (status IN ('not_started','planned', 'in_progress', 'on_hold', 'completed')),
     description TEXT,
     key_points JSONB DEFAULT '[]'::jsonb,
+    parent_project_id UUID,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    last_updated TIMESTAMPTZ DEFAULT NOW()
+    last_updated TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (parent_project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
 -- Create problems table
@@ -40,12 +42,15 @@ CREATE TABLE minddumps (
     layout_data JSONB,
     metadata JSONB DEFAULT '{}',
     conversation JSONB DEFAULT '[]',
+    parent_project_id UUID,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (parent_project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
 -- Indexes for performance
 CREATE INDEX idx_projects_user_id ON projects(user_id);
+CREATE INDEX idx_projects_parent_project_id ON projects(parent_project_id);
 
 CREATE INDEX idx_problems_user_id ON problems(user_id);
 CREATE INDEX idx_problems_project_id ON problems(project_id);
@@ -53,6 +58,7 @@ CREATE INDEX idx_problems_project_id ON problems(project_id);
 CREATE INDEX idx_minddumps_user_id ON minddumps(user_id);
 CREATE INDEX idx_minddumps_created_at ON minddumps(created_at DESC);
 CREATE INDEX idx_minddumps_user_created ON minddumps(user_id, created_at DESC);
+CREATE INDEX idx_minddumps_parent_project_id ON minddumps(parent_project_id);
 
 -- Enable Row Level Security
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;

@@ -186,14 +186,23 @@ export async function createMinddumpFromData(results, userId) {
 
     // Use the existing createMinddump function from supabaseClient
     const { createMinddump } = await import('./supabaseClient.js');
+    const { processSubmindmaps } = await import('./submindmapManager.js');
 
-    // Generate nodes from projects and problems with 250px spacing
+    // Process submindmaps - this will separate subprojects and create submindmaps
+    const processed = await processSubmindmaps(
+      results.projects || [],
+      results.problems || [],
+      null, // No parent minddump ID yet
+      null
+    );
+
+    // Generate nodes from TOP-LEVEL projects only (subprojects are in submindmaps)
     const nodes = [];
     usedPositions.length = 0; // Clear positions
 
-    // Create project nodes with proper spacing
-    if (results.projects) {
-      results.projects.forEach(project => {
+    // Create project nodes with proper spacing for top-level projects only
+    if (processed.projects) {
+      processed.projects.forEach(project => {
         const position = getRandomPosition(); // Uses 250px spacing constraint
         const color = getRandomColor();
         const nodeId = projectToId(project.name);
@@ -216,19 +225,19 @@ export async function createMinddumpFromData(results, userId) {
 
     // Generate title from first project or problem, or use chat response
     let title = 'Chat Workflow Result';
-    const firstEntity = results.projects?.[0] || results.problems?.[0];
+    const firstEntity = processed.projects?.[0] || processed.problems?.[0];
     if (firstEntity) {
       const entityName = firstEntity.name || firstEntity.title || 'Untitled';
       title = entityName.length > 50 ? entityName.substring(0, 50) + '...' : entityName;
     }
 
-    // Create minddump data using the expected format
+    // Create minddump data using the expected format (with only top-level projects)
     const minddumpData = {
       prompt: results.chat_response || 'Chat workflow result',
       title: title,
       nodes: {
-        projects: results.projects || [],
-        problems: results.problems || []
+        projects: processed.projects, // Only top-level projects
+        problems: processed.problems  // Only problems related to top-level projects
       },
       layout_data: {
         viewport: { x: 0, y: 0, zoom: 1.0 },
@@ -243,12 +252,13 @@ export async function createMinddumpFromData(results, userId) {
       metadata: {
         entities_count: {
           projects: nodes.length, // Use actual nodes displayed in layout
-          problems: results.problems?.length || 0
+          problems: processed.problems?.length || 0
         },
         ai_model: 'gpt-4o-mini',
         version: '1.0',
         created_from: 'chat_workflow',
-        workflow_insights: results.insights || null
+        workflow_insights: results.insights || null,
+        submindmaps_created: processed.submindmaps?.length || 0
       },
       conversation: results.conversation_history || []
     };
@@ -269,6 +279,7 @@ export async function createMinddumpFromData(results, userId) {
     setCurrentMinddump(savedMinddump.id);
 
     console.log('Minddump created successfully:', savedMinddump.id);
+    console.log('Submindmaps created:', processed.submindmaps?.length || 0);
     return savedMinddump;
 
   } catch (error) {
@@ -316,14 +327,18 @@ export async function generateMindMapFromMinddump(minddumpId) {
     // Clear used positions and restore from saved positions
     usedPositions.length = 0;
 
-    // Create project nodes
+    // Create project nodes (filter out subprojects - they should be in submindmaps)
     if (minddump.nodes.projects) {
+      // Filter to only show top-level projects (no parent_project_id)
+      const topLevelProjects = minddump.nodes.projects.filter(project => !project.parent_project_id);
+      
       console.log('📊 Objects:', {
-        projects: minddump.nodes.projects.length,
+        projects: topLevelProjects.length,
+        subprojects: minddump.nodes.projects.length - topLevelProjects.length,
         problems: minddump.nodes.problems?.length || 0
       });
 
-      minddump.nodes.projects.forEach(project => {
+      topLevelProjects.forEach(project => {
         const nodeId = projectToId(project.name);
         const storedPos = storedPositions.find(p => p.id === nodeId);
 

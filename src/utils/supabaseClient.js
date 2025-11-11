@@ -682,7 +682,8 @@ export async function searchMinddumps(query, options = {}) {
     let supabaseQuery = supabase
       .from('minddumps')
       .select('id, title, prompt, created_at, metadata, conversation')
-      .eq('user_id', session.user.id);
+      .eq('user_id', session.user.id)
+      .is('parent_project_id', null); // Only show mindmaps that are not submindmaps
 
     // If query is provided, add search filter
     if (query && query.trim()) {
