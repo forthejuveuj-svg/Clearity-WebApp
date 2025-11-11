@@ -147,8 +147,8 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
 
       {/* Thought labels */}
       {node.thoughts && node.thoughts.map((thought, idx) => {
-        // Adjusted angles to position key points higher up to reduce overlap
-        const angles = [30, 60, 90];
+        // Spread out angles more to reduce overlap between thought nodes
+        const angles = [15, 60, 105];
         const angle = angles[idx];
         const screenWidth = window.innerWidth;
         
