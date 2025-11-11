@@ -19,7 +19,7 @@ interface UseWebSocketReturn {
   currentQuestion: WorkflowQuestion | null;
   progress: string | null;
   sendResponse: (response: any) => void;
-  startWorkflow: (userId: string, text?: string) => Promise<void>;
+  startWorkflow: (userId: string, text?: string, minddumpId?: string) => Promise<void>;
   disconnect: () => void;
 }
 
@@ -155,6 +155,30 @@ export const useWebSocket = (
         console.error('Socket error:', data);
       });
 
+      // Clarity workflow events
+      socket.on('clarity_response', (data) => {
+        console.log('Clarity response:', data);
+        // Convert to question format for display
+        const questionData: WorkflowQuestion = {
+          session_id: data.session_id,
+          question: data.message
+        };
+        currentQuestionState = questionData;
+        setCurrentQuestion(questionData);
+      });
+
+      socket.on('clarity_mindmap_refresh', (data) => {
+        console.log('Clarity mindmap refresh:', data);
+        // Trigger mindmap refresh
+        if (onComplete) {
+          onComplete({
+            minddump_id: data.minddump_id,
+            updates: data.updates,
+            has_subprojects: data.has_subprojects
+          });
+        }
+      });
+
       // Connect and wait for connection
       const timeout = setTimeout(() => {
         reject(new Error('Connection timeout'));
@@ -204,8 +228,8 @@ export const useWebSocket = (
     });
   }, []);
 
-  // Start chat workflow - this is when we connect
-  const startWorkflow = useCallback(async (userId: string, text?: string) => {
+  // Start workflow - intelligently routes to chat_workflow or clarity_workflow
+  const startWorkflow = useCallback(async (userId: string, text?: string, minddumpId?: string) => {
     try {
       // Initialize socket connection first
       await initializeSocket();
@@ -215,7 +239,8 @@ export const useWebSocket = (
       }
 
       // Generate session ID
-      const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      const sessionPrefix = minddumpId ? 'clarity' : 'session';
+      const newSessionId = `${sessionPrefix}_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
       currentSessionId = newSessionId;
 
       console.log('Registering session:', newSessionId);
@@ -228,11 +253,23 @@ export const useWebSocket = (
       // Wait a bit for registration
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Call RPC to start chat workflow with initial text
-      console.log('Calling RPC:', `${BACKEND_URL}/rpc`);
+      // Determine which workflow to use
+      const method = minddumpId ? 'clarity_workflow' : 'chat_workflow';
       const params: any = { user_id: userId, session_id: newSessionId };
-      if (text) {
-        params.text = text;
+      
+      if (minddumpId) {
+        // Clarity workflow on existing mindmap
+        params.minddump_id = minddumpId;
+        if (text) {
+          params.message = text;
+        }
+        console.log('Starting clarity workflow on mindmap:', minddumpId);
+      } else {
+        // Chat workflow to create new mindmap
+        if (text) {
+          params.text = text;
+        }
+        console.log('Starting chat workflow to create mindmap');
       }
       
       const response = await fetch(`${BACKEND_URL}/rpc`, {
@@ -241,7 +278,7 @@ export const useWebSocket = (
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          method: 'chat_workflow',
+          method: method,
           params: params
         })
       });
@@ -262,7 +299,7 @@ export const useWebSocket = (
         throw new Error(result.error);
       }
 
-      console.log('Workflow started successfully:', result);
+      console.log(`${method} started successfully:`, result);
       setSessionId(newSessionId);
     } catch (error) {
       console.error('Error starting workflow:', error);

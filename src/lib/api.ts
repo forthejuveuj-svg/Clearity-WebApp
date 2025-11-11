@@ -153,6 +153,18 @@ export class APIService {
 
 
 
+  // Clarity workflow on existing mindmap
+  static async startClarityWorkflow(params: {
+    user_id: string;
+    session_id: string;
+    minddump_id: string;
+    nodes?: any[];
+    message?: string;
+  }): Promise<RPCResponse> {
+    console.log('🧘 [Clarity] Starting clarity workflow on mindmap:', params.minddump_id);
+    return this.makeRPCCall('clarity_workflow', params);
+  }
+
   static async healthCheck(): Promise<RPCResponse> {
     if (this.useMockAPI) {
       return APIServiceMock.healthCheck();
