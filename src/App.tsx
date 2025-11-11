@@ -12,6 +12,9 @@ import Pricing from "./pages/Pricing";
 import { Settings } from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
+// Import rearrange utility for console access
+import "@/utils/rearrangeMinddumpNodes";
+
 const queryClient = new QueryClient();
 
 const App = () => (

@@ -61,64 +61,35 @@ function getRandomColor() {
   return colors[Math.floor(Math.random() * colors.length)];
 }
 
-// Track used positions to avoid overlap
-const usedPositions = [];
+// Fixed positions for nodes in a mindmap layout
+// 5 positions arranged in a balanced layout
+const FIXED_POSITIONS = [
+  { x: 50, y: 30 },  // Top center
+  { x: 25, y: 50 },  // Left middle
+  { x: 75, y: 50 },  // Right middle
+  { x: 35, y: 70 },  // Bottom left
+  { x: 65, y: 70 }   // Bottom right
+];
 
-// Calculate minimum distance based on 250px spacing
-// For 250px radius (500px diameter between node centers):
-// On 1920x1080 screen: 250px = ~13% width, ~23% height
-// Using Euclidean distance, we need ~25-30% to ensure 250px in all directions
-const MIN_DISTANCE_PERCENT = 15; // 250px spacing constraint (radius around each node)
+// Track which positions have been used
+let positionIndex = 0;
 
-function getRandomPosition() {
-  const minDistance = MIN_DISTANCE_PERCENT; // 250px spacing between nodes
-  let attempts = 0;
-  const maxAttempts = 50;
+function getFixedPosition() {
+  // Get the next position from the fixed positions array
+  const position = FIXED_POSITIONS[positionIndex % FIXED_POSITIONS.length];
+  positionIndex++;
+  
+  console.log(`✓ Using fixed position ${positionIndex}: (${position.x}%, ${position.y}%)`);
+  return position;
+}
 
-  // Bounding box constraints: 20% left/right margins, 15% top/bottom margins
-  const leftMargin = 20;   // 20% from left
-  const rightMargin = 20;  // 20% from right  
-  const topMargin = 20;    // 15% from top
-  const bottomMargin = 15; // 15% from bottom
-
-  const availableWidth = 100 - leftMargin - rightMargin;   // 60% available width
-  const availableHeight = 100 - topMargin - bottomMargin; // 70% available height
-
-  while (attempts < maxAttempts) {
-    const position = {
-      x: Math.floor(Math.random() * availableWidth) + leftMargin,     // 20-80% range
-      y: Math.floor(Math.random() * availableHeight) + topMargin      // 15-85% range
-    };
-
-    // Check if this position is far enough from existing positions (250px radius)
-    const isTooClose = usedPositions.some(used => {
-      const distance = Math.sqrt(
-        Math.pow(position.x - used.x, 2) + Math.pow(position.y - used.y, 2)
-      );
-      return distance < minDistance;
-    });
-
-    if (!isTooClose) {
-      usedPositions.push(position);
-      console.log(`✓ Node position found: (${position.x}%, ${position.y}%) after ${attempts + 1} attempts`);
-      return position;
-    }
-
-    attempts++;
-  }
-
-  // If we can't find a non-overlapping position, return a random one within bounds
-  console.warn(`⚠️ Could not find non-overlapping position after ${maxAttempts} attempts, using fallback`);
-  const fallbackPosition = {
-    x: Math.floor(Math.random() * availableWidth) + leftMargin,
-    y: Math.floor(Math.random() * availableHeight) + topMargin
-  };
-  usedPositions.push(fallbackPosition);
-  return fallbackPosition;
+// Reset position index when generating new mindmap
+function resetPositions() {
+  positionIndex = 0;
 }
 
 function createProjectNode(project, knowledgeNodes = [], problems = []) {
-  const position = getRandomPosition();
+  const position = getFixedPosition();
   const color = getRandomColor();
 
   // Get knowledge nodes related to this project by project_id
@@ -198,12 +169,12 @@ export async function createMinddumpFromData(results, userId) {
 
     // Generate nodes from TOP-LEVEL projects only (for display)
     const nodes = [];
-    usedPositions.length = 0; // Clear positions
+    resetPositions(); // Reset position index
 
-    // Create project nodes with proper spacing for top-level projects only
+    // Create project nodes with fixed positions for top-level projects only
     if (processed.projects) {
       processed.projects.forEach(project => {
-        const position = getRandomPosition(); // Uses 250px spacing constraint
+        const position = getFixedPosition(); // Uses fixed positions
         const color = getRandomColor();
         const nodeId = projectToId(project.name);
 
@@ -322,8 +293,8 @@ export async function generateMindMapFromMinddump(minddumpId) {
     const nodes = [];
     const storedPositions = minddump.layout_data?.node_positions || [];
 
-    // Clear used positions and restore from saved positions
-    usedPositions.length = 0;
+    // Reset position index for fixed positions
+    resetPositions();
 
     // Get the parent_project_id of this minddump (null for main mindmaps, ID for submindmaps)
     const parentProjectId = minddump.parent_project_id;
@@ -355,14 +326,12 @@ export async function generateMindMapFromMinddump(minddumpId) {
         const nodeId = projectToId(project.name);
         const storedPos = storedPositions.find(p => p.id === nodeId);
 
-        // Always use stored position if available, otherwise generate new one
+        // Always use stored position if available, otherwise use fixed position
         let position;
         if (storedPos && storedPos.x !== undefined && storedPos.y !== undefined) {
           position = { x: storedPos.x, y: storedPos.y };
-          // Add to used positions to maintain spacing
-          usedPositions.push(position);
         } else {
-          position = getRandomPosition();
+          position = getFixedPosition();
         }
 
         // Check if there are related problems
@@ -484,8 +453,8 @@ export async function generateMindMapJson(options = {}) {
       filteredProjects = projects;
     }
 
-    // Clear used positions to enforce 250px spacing
-    usedPositions.length = 0;
+    // Reset position index for fixed positions
+    resetPositions();
 
     // Determine parent node name if filtering by parent project
     let parentNode = null;
