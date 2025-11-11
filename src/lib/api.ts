@@ -151,33 +151,7 @@ export class APIService {
     return this.chat({ text: "Continue our conversation about this project", user_id: params.user_id });
   }
 
-  // Merge and simplify nodes after minddump creation
-  static async mergeAndSimplifyNodes(params: { user_id: string; session_id: string; data_json: any }): Promise<RPCResponse> {
-    console.log('🔵 [API] mergeAndSimplifyNodes called with params:', {
-      user_id: params.user_id,
-      session_id: params.session_id,
-      project_count: params.data_json?.projects?.length || 0,
-      problem_count: params.data_json?.problems?.length || 0
-    });
-    
-    if (this.useMockAPI) {
-      console.log('⚠️ [API] Using mock API - skipping real backend call');
-      // Mock implementation - just return the data as-is
-      return {
-        success: true,
-        message: 'Mock merge completed',
-        merged_counts: { projects: params.data_json.projects?.length || 0, problems: params.data_json.problems?.length || 0 },
-        projects: params.data_json.projects || [],
-        problems: params.data_json.problems || [],
-        all_data: params.data_json
-      };
-    }
-    
-    console.log('🚀 [API] Sending RPC request to backend:', `${BACKEND_URL}/rpc`);
-    const result = await this.makeRPCCall('merge_and_simplify_nodes', params);
-    console.log('✅ [API] Received response from backend:', result);
-    return result;
-  }
+
 
   static async healthCheck(): Promise<RPCResponse> {
     if (this.useMockAPI) {

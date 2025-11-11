@@ -88,7 +88,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
-  const [isMergingNodes, setIsMergingNodes] = useState(false);
 
 
 
@@ -155,77 +154,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             // Load the new minddump into the mind map IMMEDIATELY (user sees results right away)
             await handleMinddumpSelect(minddump);
 
-            // PRESERVE sessionId before it gets cleared
-            const preservedSessionId = sessionId;
-            const preservedUserId = userId;
 
-            // Check if we should merge nodes (more than 2 projects)
-            const projectCount = workflowData.projects?.length || 0;
-            console.log(`🔍 [CombinedView] Checking merge condition:`, {
-              projectCount,
-              hasSessionId: !!preservedSessionId,
-              sessionId: preservedSessionId,
-              shouldMerge: projectCount > 2 && !!preservedSessionId
-            });
-
-            // Run unifier in background if needed (user already sees the minddump)
-            if (projectCount > 2 && preservedSessionId) {
-              console.log(`🔄 [CombinedView] Starting node merge for ${projectCount} projects (background process)`);
-              console.log(`📊 [CombinedView] Merge data:`, {
-                projects: workflowData.projects?.map(p => ({ id: p.id, name: p.name })),
-                problems: workflowData.problems?.map(p => ({ id: p.id, name: p.name }))
-              });
-              setIsMergingNodes(true);
-
-              // Run merge in background - don't block UI
-              (async () => {
-                try {
-                  console.log(`🚀 [CombinedView] Calling APIService.mergeAndSimplifyNodes with preserved sessionId...`);
-                  // Call merge RPC with PRESERVED sessionId
-                  const mergeResult: any = await APIService.mergeAndSimplifyNodes({
-                    user_id: preservedUserId,
-                    session_id: preservedSessionId,
-                    data_json: {
-                      projects: workflowData.projects || [],
-                      problems: workflowData.problems || []
-                    }
-                  });
-                  console.log(`📥 [CombinedView] Received merge result:`, mergeResult);
-
-                  if (mergeResult.success) {
-                    const originalCount = projectCount;
-                    const mergedCount = mergeResult.merged_counts?.projects || 0;
-
-                    console.log(`✅ Node merge completed: ${originalCount} -> ${mergedCount} projects`);
-
-                    // Only update if nodes were actually merged (fewer nodes)
-                    if (mergedCount < originalCount) {
-                      console.log('📊 Updating minddump with merged nodes');
-
-                      // Update the minddump with merged data
-                      const { updateMinddumpNodes } = await import('../utils/supabaseClient.js');
-                      await updateMinddumpNodes(minddump.id, {
-                        projects: mergeResult.projects || [],
-                        problems: mergeResult.problems || []
-                      });
-
-                      // Reload the minddump to show merged nodes
-                      console.log('🔄 Reloading minddump with merged data...');
-                      await handleMinddumpSelect(minddump);
-                      console.log('✅ Minddump reloaded with merged nodes');
-                    } else {
-                      console.log('ℹ️ No nodes were merged, keeping original layout');
-                    }
-                  } else {
-                    console.warn('⚠️ Node merge failed:', mergeResult.error);
-                  }
-                } catch (error) {
-                  console.error('❌ Error during node merge:', error);
-                } finally {
-                  setIsMergingNodes(false);
-                }
-              })();
-            }
           } else {
             console.warn('Failed to create minddump from AI results');
             // Fallback to regular reload
@@ -657,136 +586,157 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   // Handle node clicks for project focus and subproject navigation
   const handleNodeClick = async (node: Node) => {
     console.log('Node clicked:', node.label, 'ID:', node.id);
+    console.log('Node data:', {
+      projectId: node.projectId,
+      subNodes: node.subNodes,
+      hasSubNodes: !!(node.subNodes && node.subNodes.length > 0),
+      data: node.data
+    });
+
     const projectIdToUse = node.projectId || node.id;
 
     try {
       // First, check if a submindmap already exists for this project
       const { getSubmindmapByParentProject } = await import('@/utils/supabaseClient.js');
-      const existingSubmindmap = await getSubmindmapByParentProject(projectIdToUse);
+      console.log('🔍 Checking for existing submindmap');
 
-      if (existingSubmindmap) {
-        console.log('📋 Found existing submindmap for', node.label);
-        // Load the existing submindmap
-        await handleMinddumpSelect(existingSubmindmap);
-        return;
+      // No existing submindmap - check if node has subprojects in current data OR in database
+      let hasSubprojects = node.subNodes && node.subNodes.length > 0;
+      let subprojects = [];
+
+      // Get the current minddump to access all project data
+      const { getCurrentMinddumpId, getMinddump, supabase } = await import('@/utils/supabaseClient.js');
+      const currentMinddumpId = getCurrentMinddumpId();
+
+      if (currentMinddumpId) {
+        const currentMinddump = await getMinddump(currentMinddumpId);
+
+        if (currentMinddump && currentMinddump.nodes?.projects) {
+          // Find subprojects in the current minddump data
+          subprojects = currentMinddump.nodes.projects.filter(
+            p => p.parent_project_id === projectIdToUse
+          );
+
+          console.log(`Found ${subprojects.length} subprojects in minddump data`);
+        }
+
+        // If no subprojects in minddump, check database
+        if (subprojects.length === 0) {
+          const { data: dbSubprojects } = await supabase
+            .from('projects')
+            .select('*')
+            .eq('parent_project_id', projectIdToUse);
+
+          if (dbSubprojects && dbSubprojects.length > 0) {
+            subprojects = dbSubprojects;
+            hasSubprojects = true;
+            console.log(`Found ${dbSubprojects.length} subprojects in database`);
+          }
+        }
       }
 
-      // No existing submindmap - check if node has subprojects in current data
-      const hasSubprojects = node.subNodes && node.subNodes.length > 0;
+      if (hasSubprojects && subprojects.length > 0) {
+        console.log(`🔨 Creating submindmap for ${node.label} with ${subprojects.length} subprojects`);
 
-      if (hasSubprojects) {
-        console.log(`🔨 Creating submindmap for ${node.label} with ${node.subNodes.length} subprojects`);
-        
-        // Get the current minddump to access all project data
-        const { getCurrentMinddumpId, getMinddump } = await import('@/utils/supabaseClient.js');
-        const currentMinddumpId = getCurrentMinddumpId();
-        
         if (currentMinddumpId) {
           const currentMinddump = await getMinddump(currentMinddumpId);
-          
-          if (currentMinddump && currentMinddump.nodes?.projects) {
-            // Find subprojects in the current minddump data
-            const subprojects = currentMinddump.nodes.projects.filter(
-              p => p.parent_project_id === projectIdToUse
-            );
-            
-            if (subprojects.length > 0) {
-              // Create submindmap on-the-fly
-              const { createMinddump } = await import('@/utils/supabaseClient.js');
-              
-              // Filter problems related to these subprojects
-              const relatedProblems = (currentMinddump.nodes?.problems || []).filter(problem => 
-                subprojects.some(sp => sp.id === problem.project_id)
-              );
 
-              // Generate layout positions for subprojects
-              const nodePositions = subprojects.map((project, index) => {
-                const colors = ['blue', 'violet', 'red', 'teal', 'green', 'orange'];
-                const cols = Math.ceil(Math.sqrt(subprojects.length));
-                const row = Math.floor(index / cols);
-                const col = index % cols;
-                const spacing = 60 / cols;
-                
-                return {
-                  id: project.name.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-').substring(0, 20),
-                  x: 20 + (col * spacing),
-                  y: 20 + (row * 25),
-                  color: colors[index % colors.length]
-                };
+          if (currentMinddump) {
+            // Create submindmap on-the-fly
+            const { createMinddump } = await import('@/utils/supabaseClient.js');
+
+            // Filter problems related to these subprojects
+            const relatedProblems = (currentMinddump.nodes?.problems || []).filter(problem =>
+              subprojects.some(sp => sp.id === problem.project_id)
+            );
+
+            // Generate layout positions for subprojects
+            const nodePositions = subprojects.map((project, index) => {
+              const colors = ['blue', 'violet', 'red', 'teal', 'green', 'orange'];
+              const cols = Math.ceil(Math.sqrt(subprojects.length));
+              const row = Math.floor(index / cols);
+              const col = index % cols;
+              const spacing = 60 / cols;
+
+              return {
+                id: project.name.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-').substring(0, 20),
+                x: 20 + (col * spacing),
+                y: 20 + (row * 25),
+                color: colors[index % colors.length]
+              };
+            });
+
+            // Create submindmap
+            const submindmapData = {
+              prompt: `Subprojects of ${node.label}`,
+              title: node.label, // Use parent project name as title
+              parent_project_id: projectIdToUse,
+              nodes: {
+                projects: subprojects,
+                problems: relatedProblems
+              },
+              layout_data: {
+                viewport: { x: 0, y: 0, zoom: 1.0 },
+                canvas_size: { width: 1200, height: 800 },
+                node_positions: nodePositions
+              },
+              metadata: {
+                entities_count: {
+                  projects: subprojects.length,
+                  problems: relatedProblems.length
+                },
+                parent_project_id: projectIdToUse,
+                parent_project_name: node.label,
+                is_submindmap: true,
+                created_from: 'on_demand',
+                version: '1.0'
+              },
+              conversation: []
+            };
+
+            const newSubmindmap = await createMinddump(submindmapData);
+            console.log('✅ Created submindmap on-the-fly:', newSubmindmap.id);
+
+            // Update the parent mindmap to include subprojects in its nodes.projects array
+            try {
+              const { updateMinddumpNodes } = await import('@/utils/supabaseClient.js');
+
+              // Merge subprojects into the parent mindmap's projects array if they're not already there
+              const existingProjectIds = new Set(currentMinddump.nodes.projects.map(p => p.id));
+              const newProjects = subprojects.filter(sp => !existingProjectIds.has(sp.id));
+
+              // Combine existing projects with new subprojects
+              const allProjects = [...currentMinddump.nodes.projects, ...newProjects];
+
+              // Update the parent project to add submindmap metadata
+              const updatedProjects = allProjects.map(p => {
+                if (p.id === projectIdToUse) {
+                  return {
+                    ...p,
+                    submindmap_id: newSubmindmap.id,
+                    has_submindmap: true
+                  };
+                }
+                return p;
               });
 
-              // Create submindmap
-              const submindmapData = {
-                prompt: `Subprojects of ${node.label}`,
-                title: node.label, // Use parent project name as title
-                parent_project_id: projectIdToUse,
-                nodes: {
-                  projects: subprojects,
-                  problems: relatedProblems
-                },
-                layout_data: {
-                  viewport: { x: 0, y: 0, zoom: 1.0 },
-                  canvas_size: { width: 1200, height: 800 },
-                  node_positions: nodePositions
-                },
-                metadata: {
-                  entities_count: {
-                    projects: subprojects.length,
-                    problems: relatedProblems.length
-                  },
-                  parent_project_id: projectIdToUse,
-                  parent_project_name: node.label,
-                  is_submindmap: true,
-                  created_from: 'on_demand',
-                  version: '1.0'
-                },
-                conversation: []
-              };
+              await updateMinddumpNodes(currentMinddumpId, {
+                projects: updatedProjects,
+                problems: currentMinddump.nodes.problems || []
+              });
 
-              const newSubmindmap = await createMinddump(submindmapData);
-              console.log('✅ Created submindmap on-the-fly:', newSubmindmap.id);
-              
-              // Update the parent mindmap to include subprojects in its nodes.projects array
-              try {
-                const { updateMinddumpNodes } = await import('@/utils/supabaseClient.js');
-                
-                // Merge subprojects into the parent mindmap's projects array if they're not already there
-                const existingProjectIds = new Set(currentMinddump.nodes.projects.map(p => p.id));
-                const newProjects = subprojects.filter(sp => !existingProjectIds.has(sp.id));
-                
-                // Combine existing projects with new subprojects
-                const allProjects = [...currentMinddump.nodes.projects, ...newProjects];
-                
-                // Update the parent project to add submindmap metadata
-                const updatedProjects = allProjects.map(p => {
-                  if (p.id === projectIdToUse) {
-                    return {
-                      ...p,
-                      submindmap_id: newSubmindmap.id,
-                      has_submindmap: true
-                    };
-                  }
-                  return p;
-                });
-                
-                await updateMinddumpNodes(currentMinddumpId, {
-                  projects: updatedProjects,
-                  problems: currentMinddump.nodes.problems || []
-                });
-                
-                console.log('✅ Updated parent mindmap:', {
-                  addedSubprojects: newProjects.length,
-                  totalProjects: updatedProjects.length
-                });
-              } catch (error) {
-                console.warn('Failed to update parent mindmap:', error);
-                // Non-critical, continue anyway
-              }
-              
-              // Load the newly created submindmap
-              await handleMinddumpSelect(newSubmindmap);
-              return;
+              console.log('✅ Updated parent mindmap:', {
+                addedSubprojects: newProjects.length,
+                totalProjects: updatedProjects.length
+              });
+            } catch (error) {
+              console.warn('Failed to update parent mindmap:', error);
+              // Non-critical, continue anyway
             }
+
+            // Load the newly created submindmap
+            await handleMinddumpSelect(newSubmindmap);
+            return;
           }
         }
       }
@@ -809,13 +759,13 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
     } catch (error) {
       console.error('Error handling node click:', error);
-      
+
       // Fallback to regular project focus
       setClickedProjectNode(node);
       setCurrentProjectId(projectIdToUse);
       const isStarted = node.color === 'blue' || node.color === 'teal';
       setCurrentProjectStatus(isStarted ? 'started' : 'not_started');
-      
+
       messageModeHandler.setProjectFocus({
         id: projectIdToUse,
         name: node.label,
@@ -1070,15 +1020,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   return (
     <div className="h-screen w-screen flex flex-col relative overflow-hidden bg-gradient-to-br from-black via-slate-900 to-black fixed inset-0">
-      {/* Merging Nodes Indicator - Fixed at top */}
-      {isMergingNodes && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
-          <div className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-purple-600/90 to-blue-600/90 backdrop-blur-md rounded-full shadow-lg border border-purple-400/30">
-            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            <span className="text-white font-medium text-sm">Merging nodes...</span>
-          </div>
-        </div>
-      )}
+
 
       {/* Mind Map or Task Manager Section */}
       <div
@@ -1200,16 +1142,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                     // Check if we're in a submindmap
                     const { getCurrentMinddumpId, getMinddump, getParentMinddumpForProject } = await import('@/utils/supabaseClient.js');
                     const currentMinddumpId = getCurrentMinddumpId();
-                    
+
                     if (currentMinddumpId) {
                       const currentMinddump = await getMinddump(currentMinddumpId);
-                      
+
                       // If this is a submindmap, find and load the parent mindmap
                       if (currentMinddump?.parent_project_id) {
                         console.log('🔙 Loading parent mindmap from submindmap');
-                        
+
                         const parentMinddump = await getParentMinddumpForProject(currentMinddump.parent_project_id);
-                        
+
                         if (parentMinddump) {
                           console.log('✅ Found parent mindmap:', parentMinddump.title);
                           await handleMinddumpSelect(parentMinddump);
@@ -1217,7 +1159,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                         }
                       }
                     }
-                    
+
                     // Fallback to history navigation
                     if (currentSessionIndex > 0) {
                       goBackInHistory();
