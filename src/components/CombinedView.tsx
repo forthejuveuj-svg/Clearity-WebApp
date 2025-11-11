@@ -25,6 +25,7 @@ interface Message {
   content: string;
   messageType?: "project_organization" | "project_chat" | "normal";
   autoRemove?: boolean; // Flag to mark messages for automatic removal
+  skipAnimation?: boolean; // Flag to skip typing animation for loaded messages
 }
 
 export interface Node {
@@ -359,26 +360,42 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
         // Load conversation history - use data.conversation if available, fallback to minddump.conversation
         const conversation = data.conversation || minddump.conversation;
-        
+
         if (conversation && conversation.length > 0) {
-          console.log('💬 Loading conversation history:', conversation.length, 'messages');
-          
+          console.log('💬 Loading ALL conversation history:', conversation.length, 'messages');
+
           // Sort conversation by timestamp to ensure chronological order
           const sortedConversation = [...conversation].sort((a, b) => {
             const timeA = new Date(a.timestamp || 0).getTime();
             const timeB = new Date(b.timestamp || 0).getTime();
             return timeA - timeB;
           });
-          
-          loadConversation(minddump.id, sortedConversation);
 
-          // Convert conversation to messages format for display
-          const conversationMessages: Message[] = sortedConversation.map((msg: any) => ({
-            role: msg.role,
-            content: msg.content,
-            messageType: 'normal'
-          }));
-          setMessages(conversationMessages);
+          // Ensure conversation starts with user message (remove leading assistant messages)
+          let startIndex = 0;
+          while (startIndex < sortedConversation.length && sortedConversation[startIndex].role === 'assistant') {
+            console.log('⚠️ Skipping leading assistant message:', sortedConversation[startIndex].content.substring(0, 50));
+            startIndex++;
+          }
+
+          const validConversation = sortedConversation.slice(startIndex);
+
+          if (validConversation.length > 0) {
+            loadConversation(minddump.id, validConversation);
+
+            // Convert ALL conversation messages to display format with skipAnimation flag
+            const conversationMessages: Message[] = validConversation.map((msg: any) => ({
+              role: msg.role,
+              content: msg.content,
+              messageType: 'normal',
+              skipAnimation: true // Disable animation for loaded messages
+            }));
+            setMessages(conversationMessages);
+            console.log('✅ Loaded', conversationMessages.length, 'messages (no animation)');
+          } else {
+            clearConversation();
+            setMessages([]);
+          }
         } else {
           // Clear conversation if no history
           clearConversation();
@@ -424,32 +441,48 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               setMindMapNodes(data.nodes);
               setParentNodeTitle(data.parentNode || null);
               saveCurrentSession(data.nodes, null);
-              
+
               // Load conversation history if it exists
               if (data.conversation && data.conversation.length > 0) {
-                console.log('💬 Loading conversation history on init:', data.conversation.length, 'messages');
-                
+                console.log('💬 Loading ALL conversation history on init:', data.conversation.length, 'messages');
+
                 // Sort conversation by timestamp to ensure chronological order
                 const sortedConversation = [...data.conversation].sort((a, b) => {
                   const timeA = new Date(a.timestamp || 0).getTime();
                   const timeB = new Date(b.timestamp || 0).getTime();
                   return timeA - timeB;
                 });
-                
-                loadConversation(currentMinddumpId, sortedConversation);
-                
-                // Convert conversation to messages format for display
-                const conversationMessages: Message[] = sortedConversation.map((msg: any) => ({
-                  role: msg.role,
-                  content: msg.content,
-                  messageType: 'normal'
-                }));
-                setMessages(conversationMessages);
+
+                // Ensure conversation starts with user message (remove leading assistant messages)
+                let startIndex = 0;
+                while (startIndex < sortedConversation.length && sortedConversation[startIndex].role === 'assistant') {
+                  console.log('⚠️ Skipping leading assistant message on init:', sortedConversation[startIndex].content.substring(0, 50));
+                  startIndex++;
+                }
+
+                const validConversation = sortedConversation.slice(startIndex);
+
+                if (validConversation.length > 0) {
+                  loadConversation(currentMinddumpId, validConversation);
+
+                  // Convert ALL conversation messages to display format with skipAnimation flag
+                  const conversationMessages: Message[] = validConversation.map((msg: any) => ({
+                    role: msg.role,
+                    content: msg.content,
+                    messageType: 'normal',
+                    skipAnimation: true // Disable animation for loaded messages
+                  }));
+                  setMessages(conversationMessages);
+                  console.log('✅ Loaded', conversationMessages.length, 'messages on init (no animation)');
+                } else {
+                  clearConversation();
+                  setMessages([]);
+                }
               } else {
                 clearConversation();
                 setMessages([]);
               }
-              
+
               setHasInitializedOnce(true);
               return;
             }
@@ -1305,24 +1338,29 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                     }`}
                 >
                   {message.role === "assistant" ? (
-                    <TypingAnimation
-                      text={message.content}
-                      speed={20}
-                      className="whitespace-pre-line leading-relaxed text-sm"
-                      onComplete={() => {
-                        setTypingMessages(prev => {
-                          const newSet = new Set(prev);
-                          newSet.delete(idx);
-                          return newSet;
-                        });
-                        // Scroll to max bottom after typing animation completes
-                        setTimeout(() => {
-                          if (chatContainerRef.current) {
-                            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-                          }
-                        }, 50);
-                      }}
-                    />
+                    message.skipAnimation ? (
+                      // Skip animation for loaded messages
+                      <p className="whitespace-pre-line leading-relaxed text-sm">{message.content}</p>
+                    ) : (
+                      <TypingAnimation
+                        text={message.content}
+                        speed={20}
+                        className="whitespace-pre-line leading-relaxed text-sm"
+                        onComplete={() => {
+                          setTypingMessages(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(idx);
+                            return newSet;
+                          });
+                          // Scroll to max bottom after typing animation completes
+                          setTimeout(() => {
+                            if (chatContainerRef.current) {
+                              chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+                            }
+                          }, 50);
+                        }}
+                      />
+                    )
                   ) : (
                     <p className="whitespace-pre-line leading-relaxed">{message.content}</p>
                   )}
