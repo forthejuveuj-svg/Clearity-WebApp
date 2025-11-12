@@ -1,15 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import { useAuthDev } from './useAuthDev'
 
 export const useAuth = () => {
-  // Use mock auth in development when running on localhost
   const isDevelopment = import.meta.env.DEV && window.location.hostname === 'localhost'
-  
-  if (isDevelopment) {
-    return useAuthDev()
-  }
+  const devEmail = import.meta.env.VITE_DEV_EMAIL
+  const devPassword = import.meta.env.VITE_DEV_PASSWORD
 
   // Production auth implementation
   const [user, setUser] = useState<User | null>(null)
@@ -17,12 +13,37 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const initAuth = async () => {
+      setLoading(true)
+
+      try {
+        if (isDevelopment) {
+          if (devEmail && devPassword) {
+            const { data: initialSession } = await supabase.auth.getSession()
+            if (!initialSession.session) {
+              const { error } = await supabase.auth.signInWithPassword({
+                email: devEmail,
+                password: devPassword
+              })
+              if (error) {
+                console.error('Dev auto-login failed:', error)
+              }
+            }
+          } else {
+            console.warn('Dev auto-login skipped: VITE_DEV_EMAIL or VITE_DEV_PASSWORD is missing')
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error)
+      }
+
+      const { data: { session } } = await supabase.auth.getSession()
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
-    })
+    }
+
+    initAuth()
 
     // Listen for auth changes
     const {

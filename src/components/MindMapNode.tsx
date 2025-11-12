@@ -146,45 +146,55 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
       </div>
 
       {/* Thought labels */}
-      {node.thoughts && node.thoughts.map((thought, idx) => {
-        // Spread out angles more to reduce overlap between thought nodes
-        const angles = [10, 60, 125];
-        const angle = angles[idx];
-        const screenWidth = window.innerWidth;
-        
-        let radius;
-        if (screenWidth >= 1024) {
-          radius = 135;
-        } else if (screenWidth >= 768) {
-          const minRadius = 90;
-          const maxRadius = 135;
-          const scaleFactor = Math.max(0, Math.min(1, (screenWidth - 768) / (1024 - 768)));
-          radius = minRadius + (maxRadius - minRadius) * scaleFactor;
-        } else {
-          const phoneScale = screenWidth / 768;
-          const tabletRadius = 90;
-          radius = tabletRadius * phoneScale * 1.2;
-        }
-        
-        const angleRad = (angle * Math.PI) / 180;
-        const x = Math.cos(angleRad) * radius;
-        const y = Math.sin(angleRad) * radius;
+      {node.thoughts && node.thoughts.length > 0 && (
+        node.thoughts.slice(0, 4).map((thought, idx, arr) => {
+          const count = arr.length;
+          const startAngle = count === 1 ? 90 : 30;
+          const endAngle = count === 1 ? 90 : 150;
+          const angle =
+            count === 1
+              ? startAngle
+              : startAngle + ((endAngle - startAngle) * idx) / (count - 1);
 
-        return (
-          <div
-            key={idx}
-            className={`absolute font-semibold whitespace-nowrap px-3 py-1.5 lg:px-6 lg:py-3 rounded-full border backdrop-blur-sm transition-all duration-1000 ease-out hover:scale-125 hover:brightness-150 hover:shadow-lg hover:z-50 cursor-pointer z-20 ${getThoughtColor(node.color)}`}
-            style={{
-              left: `calc(50% + ${x}px)`,
-              top: `calc(50% + ${y}px)`,
-              transform: 'translate(-50%, -50%)',
-              fontSize: screenWidth >= 1024 ? '1.25rem' : screenWidth >= 768 ? '0.875rem' : '0.75rem'
-            }}
-          >
-            {thought}
-          </div>
-        );
-      })}
+          const screenWidth = window.innerWidth;
+          let radius;
+          if (screenWidth >= 1280) {
+            radius = 150;
+          } else if (screenWidth >= 1024) {
+            radius = 125;
+          } else if (screenWidth >= 768) {
+            radius = 90;
+          } else {
+            radius = 70;
+          }
+
+          const angleRad = (angle * Math.PI) / 180;
+          const x = Math.cos(angleRad) * radius;
+          const y = Math.sin(angleRad) * radius;
+
+          return (
+            <div
+              key={idx}
+              className={`absolute font-semibold whitespace-nowrap px-3 py-1.5 lg:px-6 lg:py-3 rounded-full border backdrop-blur-sm transition-transform duration-300 ease-out hover:scale-110 hover:brightness-150 hover:shadow-lg cursor-pointer ${getThoughtColor(node.color)}`}
+              style={{
+                left: `calc(50% + ${x}px)`,
+                top: `calc(50% + ${y}px)`,
+                transform: 'translate(-50%, -50%)',
+                fontSize:
+                  screenWidth >= 1280
+                    ? '1.1rem'
+                    : screenWidth >= 1024
+                    ? '1rem'
+                    : screenWidth >= 768
+                    ? '0.85rem'
+                    : '0.75rem',
+              }}
+            >
+              {thought}
+            </div>
+          );
+        })
+      )}
     </div>
   );
 };

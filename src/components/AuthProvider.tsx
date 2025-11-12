@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import { useAuthDev } from '@/hooks/useAuthDev'
 
 interface AuthContextType {
   user: User | null
@@ -28,18 +27,6 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  // Use mock auth in development when running on localhost
-  const isDevelopment = import.meta.env.DEV && window.location.hostname === 'localhost'
-  
-  if (isDevelopment) {
-    const { user, session, loading } = useAuthDev()
-    return (
-      <AuthContext.Provider value={{ user, session, loading }}>
-        {children}
-      </AuthContext.Provider>
-    )
-  }
-
   // Production auth implementation
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)

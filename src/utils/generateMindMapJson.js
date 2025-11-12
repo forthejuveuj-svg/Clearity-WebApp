@@ -61,6 +61,92 @@ function getRandomColor() {
   return colors[Math.floor(Math.random() * colors.length)];
 }
 
+function limitWords(text, maxWords) {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= maxWords) return text.trim();
+  return words.slice(0, maxWords).join(' ');
+}
+
+function toTitleCase(text) {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    .toLowerCase()
+    .split(/\s+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+    .replace(/\b(I|II|III|IV|V|VI|VII|VIII|IX|X)\b/gi, match => match.toUpperCase());
+}
+
+function formatNameList(names) {
+  const formatted = names
+    .filter(Boolean)
+    .map(name => toTitleCase(name.trim()))
+    .filter(Boolean);
+
+  if (formatted.length === 0) return '';
+  if (formatted.length === 1) return formatted[0];
+  if (formatted.length === 2) return `${formatted[0]} & ${formatted[1]}`;
+  return `${formatted.slice(0, -1).join(', ')} & ${formatted[formatted.length - 1]}`;
+}
+
+function generateMinddumpTitle(results, processed) {
+  const projects = results?.projects || [];
+  const problems = results?.problems || [];
+
+  const rootProjects = projects.filter(
+    project => !project.parent_project_id || project.parent_project_id === 'null'
+  );
+  const secondaryProjects = projects.filter(
+    project => project.parent_project_id && project.parent_project_id !== 'null'
+  );
+
+  const problemCandidates = [...problems].sort((a, b) => (b.severity || 0) - (a.severity || 0));
+  const topProblem = problemCandidates.find(problem => (problem.severity || 0) >= 6) || problemCandidates[0];
+
+  const focusSource = rootProjects.length > 0 ? rootProjects : projects;
+  const focusNames = focusSource.map(project => project.name).filter(Boolean).slice(0, 3);
+  const formattedFocus = formatNameList(focusNames);
+
+  const secondaryNames = secondaryProjects.map(project => project.name).filter(Boolean).slice(0, 2);
+  const formattedSecondary = formatNameList(secondaryNames);
+
+  const formattedProblem = toTitleCase(topProblem?.name);
+
+  if (formattedFocus) {
+    if (formattedProblem) {
+      const baseTitle = focusNames.length > 1
+        ? `Balancing ${formattedFocus}: Tackling ${formattedProblem}`
+        : `${formattedFocus}: Tackling ${formattedProblem}`;
+      return limitWords(baseTitle, 7);
+    }
+
+    if (formattedSecondary) {
+      return limitWords(`Organizing ${formattedFocus} with ${formattedSecondary}`, 7);
+    }
+
+    const baseTitle = focusNames.length > 1
+      ? `Balancing ${formattedFocus}`
+      : `Clarifying ${formattedFocus}`;
+    return limitWords(baseTitle, 7);
+  }
+
+  if (formattedProblem) {
+    return limitWords(`Untangling ${formattedProblem}`, 7);
+  }
+
+  const emotion =
+    results?.insights?.emotional_state ||
+    results?.insights?.dominant_emotion ||
+    processed?.projects?.[0]?.emotion ||
+    null;
+
+  if (emotion) {
+    return limitWords(`Finding Clarity in ${toTitleCase(emotion)}`, 7);
+  }
+
+  return 'Clarifying Your Focus';
+}
+
 // Fixed positions for nodes in a mindmap layout
 // 5 positions arranged in a balanced layout
 const FIXED_POSITIONS = [
@@ -171,9 +257,38 @@ export async function createMinddumpFromData(results, userId) {
     const nodes = [];
     resetPositions(); // Reset position index
 
+    const topLevelProjects = Array.isArray(processed.projects) ? [...processed.projects] : [];
+    let projectsForDisplay = topLevelProjects;
+
+    if (topLevelProjects.length > 5) {
+      console.log('[Minddump] Grouping projects to keep display ≤ 5');
+      const keep = topLevelProjects.slice(0, 4);
+      const overflow = topLevelProjects.slice(4);
+
+      const overflowProjectId = `supporting-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const overflowProject = {
+        id: overflowProjectId,
+        name: 'Supporting Focus Areas',
+        description: 'Grouped focus areas to keep the map focused.',
+        status: 'in_progress',
+        key_points: overflow.map(p => p.name).filter(Boolean).slice(0, 3),
+        parent_project_id: null,
+        grouped_projects: overflow.map(p => ({
+          id: p.id,
+          name: p.name
+        })),
+        subNodes: overflow.map(p => ({
+          label: p.name,
+          id: p.id
+        }))
+      };
+
+      projectsForDisplay = [...keep, overflowProject];
+    }
+
     // Create project nodes with fixed positions for top-level projects only
-    if (processed.projects) {
-      processed.projects.forEach(project => {
+    if (projectsForDisplay) {
+      projectsForDisplay.forEach(project => {
         const position = getFixedPosition(); // Uses fixed positions
         const color = getRandomColor();
         const nodeId = projectToId(project.name);
@@ -191,12 +306,11 @@ export async function createMinddumpFromData(results, userId) {
       });
     }
 
-    // Generate title from first project or problem, or use chat response
-    let title = 'Chat Workflow Result';
-    const firstEntity = processed.projects?.[0] || results.problems?.[0];
-    if (firstEntity) {
-      const entityName = firstEntity.name || firstEntity.title || 'Untitled';
-      title = entityName.length > 50 ? entityName.substring(0, 50) + '...' : entityName;
+    // Generate a meaningful title from the extracted structure
+    let title = generateMinddumpTitle(results, processed);
+    title = limitWords(title, 7);
+    if (title.length > 70) {
+      title = `${title.substring(0, 67)}...`;
     }
 
     // Create minddump data - IMPORTANT: Store ALL projects (including subprojects) in nodes.projects
@@ -380,12 +494,40 @@ export async function generateMindMapFromMinddump(minddumpId) {
     // Don't create separate problem nodes - problems are handled through the data structure
     // The AI merger can work with problems directly from the minddump.nodes.problems array
 
+    let conversation = minddump.conversation || [];
+    if (typeof conversation === 'string') {
+      try {
+        conversation = JSON.parse(conversation);
+      } catch (error) {
+        console.warn('[MindMapLoader] Failed to parse conversation JSON, returning empty array', error);
+        conversation = [];
+      }
+    }
+
+    // Ensure conversation items have at least role/content keys
+    const normalizedConversation = Array.isArray(conversation)
+      ? conversation
+          .filter(entry => entry && typeof entry.role === 'string' && typeof entry.content === 'string')
+          .map((entry, idx) => {
+            const baseTime = entry.timestamp
+              ? new Date(entry.timestamp).getTime()
+              : new Date(minddump.updated_at || minddump.created_at || Date.now()).getTime();
+            const syntheticTime = new Date(baseTime + idx).toISOString();
+
+            return {
+              role: entry.role,
+              content: entry.content,
+              timestamp: entry.timestamp || syntheticTime
+            };
+          })
+      : [];
+
     return {
       nodes,
       parentNode: minddump.title,
       _timestamp: Date.now(),
       minddumpId: minddump.id,
-      conversation: minddump.conversation || []
+      conversation: normalizedConversation
     };
 
   } catch (error) {

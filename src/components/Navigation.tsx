@@ -136,27 +136,31 @@ export const Navigation = ({ onLogoClick, onNavigateToChat, onToggleView, curren
           </button>
         )}
 
-        <button
-          onClick={() => {
-            if (onToggleView) {
-              onToggleView();
-            } else if (onOpenTaskManager) {
-              onOpenTaskManager();
-            }
-          }}
-          className="hidden p-2.5 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:scale-110"
-          aria-label={currentView === 'tasks' ? 'Mind Map' : 'Task Manager'}
-        >
-          {currentView === 'tasks' ? (
-            <Network className="w-5 h-5 text-white/60" />
-          ) : (
-            <CheckSquare className="w-5 h-5 text-white/60" />
-          )}
-        </button>
       </div>
 
       {/* Right actions */}
       <div className="flex items-center gap-4">
+        {user && (
+          <button
+            onClick={() => {
+              if (onToggleView) {
+                onToggleView();
+              } else if (onOpenTaskManager) {
+                onOpenTaskManager();
+              }
+            }}
+            className="flex-shrink-0 p-2.5 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:scale-110"
+            aria-label={currentView === 'tasks' ? 'Mind Map' : 'Task Manager'}
+            title={currentView === 'tasks' ? 'Back to Mind Map' : 'Open Task Manager'}
+          >
+            {currentView === 'tasks' ? (
+              <Network className="w-5 h-5 text-white/70" />
+            ) : (
+              <CheckSquare className="w-5 h-5 text-white/70" />
+            )}
+          </button>
+        )}
+
         <button
           onClick={() => setIsSearchOpen(true)}
           className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:scale-110"

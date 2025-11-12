@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { ArrowUp, MessageSquare, X, Reply, Search } from "lucide-react";
+import { ArrowUp, X, Reply, Search } from "lucide-react";
 import { TypingAnimation } from "./TypingAnimation";
 import { ProblemsModal, ProblemsModalProps } from "./ProblemsModal";
+import { TaskManager, TaskManagerTask } from "./TaskManager";
 import { useAuth } from "@/hooks/useAuth";
 import { APIService } from "@/lib/api";
 import { generateMindMapJson } from "../utils/generateMindMapJson";
@@ -58,6 +59,9 @@ interface CombinedViewProps {
   onMinddumpSelect?: (selectFn: (minddump: any) => void) => void; // Optional callback to expose minddump selection function
 }
 
+const TASK_STORAGE_KEY = 'clearity-task-manager-tasks-v1';
+const NAVBAR_HEIGHT = 50;
+
 export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateToChat: onNavigateToChatProp, onViewChange, initialView = 'mindmap', onClearCache, onReloadNodes, onMinddumpSelect }: CombinedViewProps) => {
   const { userId, signOut } = useAuth();
   const globalData = useGlobalData();
@@ -79,17 +83,79 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   const [visibleNodes, setVisibleNodes] = useState<string[]>([]);
   const [mapHeight, setMapHeight] = useState(60); // Percentage of screen height for mind map
   const [isDragging, setIsDragging] = useState(false);
-  const [isInputExpanded, setIsInputExpanded] = useState(false);
+  const [isInputExpanded, setIsInputExpanded] = useState(true);
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
   const [typingMessages, setTypingMessages] = useState<Set<number>>(new Set());
   const [isProblemsOpen, setIsProblemsOpen] = useState(false);
   const [selectedProjectForProblems, setSelectedProjectForProblems] = useState<Node | null>(null);
   const [currentView, setCurrentView] = useState<'mindmap' | 'tasks'>(initialView);
   const [replyingToTask, setReplyingToTask] = useState<{ title: string } | null>(null);
+  const [tasks, setTasks] = useState<TaskManagerTask[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
+
+  const mapSectionHeight = `calc((100vh - ${NAVBAR_HEIGHT}px) * ${mapHeight / 100})`;
+  const chatSectionHeight = `calc((100vh - ${NAVBAR_HEIGHT}px) * ${(100 - mapHeight) / 100})`;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(TASK_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setTasks(parsed);
+          if (parsed.length > 0) {
+            const latest = [...parsed].sort(
+              (a: TaskManagerTask, b: TaskManagerTask) =>
+                new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+            )[0];
+            setSelectedTaskId(latest.id);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load tasks from storage:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(tasks));
+    } catch (error) {
+      console.error('Failed to persist tasks to storage:', error);
+    }
+  }, [tasks]);
+
+  useEffect(() => {
+    if (tasks.length === 0) {
+      if (selectedTaskId !== null) {
+        setSelectedTaskId(null);
+      }
+      return;
+    }
+
+    const exists = selectedTaskId ? tasks.some(task => task.id === selectedTaskId) : false;
+
+    if (!exists) {
+      const latest = [...tasks].sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      )[0];
+      if (latest && latest.id !== selectedTaskId) {
+        setSelectedTaskId(latest.id);
+      }
+    }
+  }, [tasks, selectedTaskId]);
 
 
   // Ref for auto-scrolling chat messages
@@ -126,6 +192,32 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           }
         }
 
+        const summaryMessage =
+          results?.data?.chat_response ||
+          results?.data?.message ||
+          results?.message ||
+          '';
+
+        if (summaryMessage) {
+          setMessages(prev => {
+            const alreadyExists = prev.some(
+              msg => msg.role === 'assistant' && msg.content === summaryMessage
+            );
+            if (alreadyExists) {
+              return prev;
+            }
+            return [
+              ...prev,
+              { role: "assistant" as const, content: summaryMessage }
+            ];
+          });
+          addMessage({
+            role: 'assistant',
+            content: summaryMessage,
+            timestamp: new Date().toISOString()
+          });
+        }
+
         if (workflowData && (workflowData.projects || workflowData.problems)) {
           console.log('Processing AI workflow results:', {
             projects: workflowData.projects?.length || 0,
@@ -145,8 +237,57 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             entities_created: results.data?.entities_created || results.data?.entities_stored || null
           };
 
+          if (summaryMessage) {
+            const existingHistory = Array.isArray(dataToProcess.conversation_history)
+              ? dataToProcess.conversation_history
+              : Array.isArray(currentConversation)
+                ? currentConversation
+                : [];
+
+            const alreadyInHistory = existingHistory.some(
+              (entry: any) =>
+                entry?.role === 'assistant' && entry?.content === summaryMessage
+            );
+
+            if (!alreadyInHistory) {
+              dataToProcess.conversation_history = [
+                ...existingHistory,
+                {
+                  role: 'assistant',
+                  content: summaryMessage,
+                  timestamp: new Date().toISOString()
+                }
+              ];
+            } else {
+              dataToProcess.conversation_history = existingHistory;
+            }
+          }
+
           // Create minddump from the AI results with conversation history
-          dataToProcess.conversation_history = currentConversation;
+          const backendHistory = Array.isArray(results?.data?.conversation_history)
+            ? results.data.conversation_history
+            : Array.isArray(workflowData?.conversation_history)
+              ? workflowData.conversation_history
+              : null;
+
+          let conversationForStorage = backendHistory;
+
+          if (!conversationForStorage || conversationForStorage.length === 0) {
+            if (currentConversation && currentConversation.length > 0) {
+              conversationForStorage = currentConversation;
+            } else if (messages.length > 0) {
+              const now = Date.now();
+              conversationForStorage = messages.map((msg, idx) => ({
+                role: msg.role,
+                content: msg.content,
+                timestamp: new Date(now + idx).toISOString()
+              }));
+            } else {
+              conversationForStorage = [];
+            }
+          }
+
+          dataToProcess.conversation_history = conversationForStorage;
           const minddump = await createMinddumpFromData(dataToProcess, userId);
 
           if (minddump) {
@@ -154,6 +295,18 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
             // Load the new minddump into the mind map IMMEDIATELY (user sees results right away)
             await handleMinddumpSelect(minddump);
+
+            if (summaryMessage) {
+              setMessages(prev => [
+                ...prev,
+                { role: "assistant" as const, content: summaryMessage }
+              ]);
+              addMessage({
+                role: 'assistant',
+                content: summaryMessage,
+                timestamp: new Date().toISOString()
+              });
+            }
 
 
           } else {
@@ -172,11 +325,14 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         console.error('Results that caused error:', JSON.stringify(results, null, 2));
         // Fallback to regular reload
         reloadNodes({ forceRefresh: true });
+      } finally {
+        setIsProcessing(false);
       }
     },
     (error) => {
       // Workflow error - show in chat
       console.error('Chat workflow error:', error);
+      setIsProcessing(false);
 
     }
   );
@@ -253,11 +409,30 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         console.log('🆕 Starting fresh - clearing current minddump');
         const { clearCurrentMinddump, debugCurrentMinddumpState } = await import('@/utils/supabaseClient.js');
         clearCurrentMinddump();
+
+        // Reset mind map related state
         setMindMapNodes([]);
+        setVisibleNodes([]);
         setParentNodeTitle(null);
-        // Clear conversation when starting fresh
-        clearConversation();
+        setClickedProjectNode(null);
+        setCurrentProjectId(null);
+        setCurrentProjectStatus(null);
+        setShowSubprojects(false);
+        setSessionHistory([]);
+        setCurrentSessionIndex(-1);
+
+        // Reset problems modal state
+        setIsProblemsOpen(false);
+        setSelectedProjectForProblems(null);
+
+        // Reset chat state
         setMessages([]);
+        setTypingMessages(new Set());
+        setReplyingToTask(null);
+        setInput("");
+        messageModeHandler.reset();
+        clearConversation();
+
         console.log('✅ Empty canvas shown');
         debugCurrentMinddumpState();
         return;
@@ -359,9 +534,17 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
         saveCurrentSession(data.nodes, minddump.title);
 
         // Load conversation history - use data.conversation if available, fallback to minddump.conversation
-        const conversation = data.conversation || minddump.conversation;
+        let conversation: any = data.conversation ?? minddump.conversation ?? [];
+        if (typeof conversation === 'string') {
+          try {
+            conversation = JSON.parse(conversation);
+          } catch (error) {
+            console.warn('Failed to parse conversation JSON, defaulting to empty array', error);
+            conversation = [];
+          }
+        }
 
-        if (conversation && conversation.length > 0) {
+        if (Array.isArray(conversation) && conversation.length > 0) {
           console.log('💬 Loading ALL conversation history:', conversation.length, 'messages');
 
           // Sort conversation by timestamp to ensure chronological order
@@ -371,31 +554,17 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             return timeA - timeB;
           });
 
-          // Ensure conversation starts with user message (remove leading assistant messages)
-          let startIndex = 0;
-          while (startIndex < sortedConversation.length && sortedConversation[startIndex].role === 'assistant') {
-            console.log('⚠️ Skipping leading assistant message:', sortedConversation[startIndex].content.substring(0, 50));
-            startIndex++;
-          }
+          loadConversation(minddump.id, sortedConversation);
 
-          const validConversation = sortedConversation.slice(startIndex);
+          const conversationMessages: Message[] = sortedConversation.map((msg: any) => ({
+            role: msg.role,
+            content: msg.content,
+            messageType: 'normal',
+            skipAnimation: true // Disable animation for loaded messages
+          }));
 
-          if (validConversation.length > 0) {
-            loadConversation(minddump.id, validConversation);
-
-            // Convert ALL conversation messages to display format with skipAnimation flag
-            const conversationMessages: Message[] = validConversation.map((msg: any) => ({
-              role: msg.role,
-              content: msg.content,
-              messageType: 'normal',
-              skipAnimation: true // Disable animation for loaded messages
-            }));
-            setMessages(conversationMessages);
-            console.log('✅ Loaded', conversationMessages.length, 'messages (no animation)');
-          } else {
-            clearConversation();
-            setMessages([]);
-          }
+          setMessages(conversationMessages);
+          console.log('✅ Loaded', conversationMessages.length, 'messages (no animation)');
         } else {
           // Clear conversation if no history
           clearConversation();
@@ -589,32 +758,29 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       // Matches: "No", "no", "NO", "No.", "No!", "No?", "No thanks", etc.
       const isNoResponse = /^no\b/i.test(userMessage);
 
-      // ONLY remove project focus messages if user says "No"
-      // All other messages should remain as part of the conversation
       const filteredMessages = isNoResponse ? removeProjectFocusMessages(messages) : messages;
+      const isContinuingExistingFlow = Boolean(currentQuestion);
+      const baseMessages = isContinuingExistingFlow ? filteredMessages : [];
+      const updatedMessages: Message[] = [
+        ...baseMessages,
+        { role: "user", content: userMessage }
+      ];
 
       console.log('CombinedView: Adding user message:', userMessage);
-      setMessages(prev => {
-        console.log('CombinedView: Previous messages count (user):', prev.length);
-        const newMessages = [...filteredMessages, { role: "user" as const, content: userMessage }];
-        console.log('CombinedView: New messages count (user):', newMessages.length);
-        return newMessages;
-      });
-
-      // Add to conversation context
-      addMessage({
-        role: 'user',
-        content: userMessage,
-        timestamp: new Date().toISOString()
-      });
+      setMessages(updatedMessages);
       setInput("");
-      setIsProcessing(true);
 
       if (!userId) {
         console.warn('User not logged in');
         setIsProcessing(false);
         return;
       }
+
+      const userConversationEntry = {
+        role: 'user' as const,
+        content: userMessage,
+        timestamp: new Date().toISOString()
+      };
 
       try {
         // Get current minddump ID and nodes to determine workflow type
@@ -629,49 +795,41 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           }))
           : undefined;
 
-        // Start interactive chat workflow with the user's message
-        if (!sessionId || !connected) {
-          console.log('Starting workflow with user message:', userMessage);
-          if (currentMinddumpId) {
-            console.log('→ Using clarity workflow on minddump:', currentMinddumpId);
-            console.log('→ Including', currentNodes?.length || 0, 'nodes as context');
-          } else {
-            console.log('→ Using chat workflow to create new minddump');
-          }
-          // Clear conversation when starting new workflow
-          clearConversation();
-          await startWorkflow(userId, userMessage, currentMinddumpId, currentNodes);
-          setIsProcessing(false);
-          return;
-        }
-
-        // If already connected and there's a current question, send response via WebSocket
-        if (currentQuestion) {
+        if (isContinuingExistingFlow) {
+          // Continuing an active workflow - just send the response
+          addMessage(userConversationEntry);
           console.log('Responding to AI question via WebSocket:', userMessage);
           sendResponse(userMessage);
           setIsProcessing(false);
           return;
         }
 
-        // If connected but no question, start new workflow with this message
-        console.log('Starting new workflow with message:', userMessage);
+        // Starting a brand new workflow (or restarting without an active question)
+        console.log('Starting workflow with user message:', userMessage);
         if (currentMinddumpId) {
           console.log('→ Using clarity workflow on minddump:', currentMinddumpId);
           console.log('→ Including', currentNodes?.length || 0, 'nodes as context');
         } else {
           console.log('→ Using chat workflow to create new minddump');
         }
-        disconnect(); // Disconnect current session
-        await new Promise(resolve => setTimeout(resolve, 100)); // Brief pause
-        // Clear conversation when starting new workflow
+
+        if (sessionId && connected) {
+          // Restarting an existing session
+          disconnect();
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
         clearConversation();
+        addMessage(userConversationEntry);
         await startWorkflow(userId, userMessage, currentMinddumpId, currentNodes);
-        setIsProcessing(false);
+        setIsProcessing(true);
         return;
       } catch (error) {
         console.error('Error processing message:', error);
       } finally {
-        setIsProcessing(false);
+        if (!currentQuestion) {
+          setIsProcessing(false);
+        }
       }
     }
   };
@@ -762,7 +920,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
             // Create submindmap
             const submindmapData = {
               prompt: `Subprojects of ${node.label}`,
-              title: node.label, // Use parent project name as title
+              title: node.label ? `Deep Dive: ${node.label}` : 'Deep Dive',
               parent_project_id: projectIdToUse,
               nodes: {
                 projects: subprojects,
@@ -921,6 +1079,58 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
     }
   };
 
+  const generateTaskId = () => {
+    try {
+      if (typeof window !== 'undefined' && window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+      }
+    } catch (error) {
+      console.warn('Falling back to manual task id generation:', error);
+    }
+    return `task-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  };
+
+  const handleCreateTask = (taskInput: { title: string; subtask: string; kpi: string }): TaskManagerTask => {
+    const now = new Date().toISOString();
+    const newTask: TaskManagerTask = {
+      id: generateTaskId(),
+      title: taskInput.title,
+      subtask: taskInput.subtask,
+      kpi: taskInput.kpi,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setTasks(prev => [...prev, newTask]);
+    setSelectedTaskId(newTask.id);
+    return newTask;
+  };
+
+  const handleUpdateTask = (taskId: string, updates: { title: string; subtask: string; kpi: string }) => {
+    setTasks(prev =>
+      prev.map(task => {
+        if (task.id !== taskId) {
+          return task;
+        }
+        const updatedTask: TaskManagerTask = {
+          ...task,
+          title: updates.title,
+          subtask: updates.subtask,
+          kpi: updates.kpi,
+          updatedAt: new Date().toISOString(),
+        };
+        return updatedTask;
+      }),
+    );
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    setTasks(prev => prev.filter(task => task.id !== taskId));
+    if (selectedTaskId === taskId) {
+      setSelectedTaskId(null);
+    }
+  };
+
   const toggleView = () => {
     setCurrentView(prev => prev === 'mindmap' ? 'tasks' : 'mindmap');
   };
@@ -939,9 +1149,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
   const handleCancelReply = () => {
     setReplyingToTask(null);
-    if (!input) {
-      setIsInputExpanded(false);
-    }
   };
 
 
@@ -949,15 +1156,11 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
 
   const handleInputBlur = () => {
-    // Use a timeout to allow button clicks to process first
-    const timeoutId = setTimeout(() => {
-      if (!input) {
-        setIsInputExpanded(false);
-      }
+    // No collapse on blur
+    if (blurTimeoutId) {
+      clearTimeout(blurTimeoutId);
       setBlurTimeoutId(null);
-    }, 150); // 150ms delay to allow button clicks
-
-    setBlurTimeoutId(timeoutId);
+    }
   };
 
   const handleInputFocus = () => {
@@ -1112,13 +1315,16 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col relative overflow-hidden bg-gradient-to-br from-black via-slate-900 to-black fixed inset-0">
+    <div
+      className="w-screen flex flex-col relative overflow-hidden bg-gradient-to-br from-black via-slate-900 to-black fixed inset-0"
+      style={{ paddingTop: `${NAVBAR_HEIGHT}px` }}
+    >
 
 
       {/* Mind Map or Task Manager Section */}
       <div
         className="relative overflow-hidden"
-        style={{ height: `${mapHeight}vh` }}
+        style={{ height: mapSectionHeight }}
       >
         {currentView === 'mindmap' ? (
           // Mind Map View
@@ -1139,6 +1345,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               ))}
             </div>
 
+
+
+            {isProcessing && !currentQuestion && (
+              <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-gray-950/70 backdrop-blur-sm transition-opacity duration-300">
+                <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin mb-4" />
+                <p className="text-base md:text-lg text-blue-100">Creating your mind map…</p>
+                <p className="text-xs md:text-sm text-blue-200/70 mt-1">Hang tight while I organise everything for you.</p>
+              </div>
+            )}
 
 
             {/* Beautiful Neural Connection lines */}
@@ -1282,9 +1497,15 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
           </>
         ) : (
           // Task Manager View
-          <div className="h-full w-full bg-gray-900">
-
-          </div>
+          <TaskManager
+            tasks={tasks}
+            selectedTaskId={selectedTaskId}
+            onSelectTask={(taskId) => setSelectedTaskId(taskId)}
+            onCreateTask={handleCreateTask}
+            onUpdateTask={handleUpdateTask}
+            onDeleteTask={handleDeleteTask}
+            onNavigateToChat={handleNavigateToChat}
+          />
         )}
       </div>
 
@@ -1313,7 +1534,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
       {/* Chat Section - Takes remaining space */}
       <div
         className="relative bg-gradient-to-t from-gray-900/80 via-gray-900/60 to-transparent backdrop-blur-md"
-        style={{ height: `${100 - mapHeight}vh` }}
+        style={{ height: chatSectionHeight }}
       >
         {/* Chat messages */}
         <div className="h-full flex flex-col max-w-4xl mx-auto">
@@ -1344,7 +1565,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                     ) : (
                       <TypingAnimation
                         text={message.content}
-                        speed={20}
+                        speed={message.content.length > 300 ? 6 : 10}
                         className="whitespace-pre-line leading-relaxed text-sm"
                         onComplete={() => {
                           setTypingMessages(prev => {
@@ -1378,7 +1599,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
 
 
               {/* Processing indicator - show when processing */}
-              {isProcessing && isInputExpanded && (
+              {isProcessing && (
                 <div className="mb-2 flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg backdrop-blur-sm">
                   <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
                   <span className="text-sm text-purple-300 flex-1">Processing your message...</span>
@@ -1415,12 +1636,6 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
               <div className="relative group transition-all duration-300" style={{ width: isInputExpanded ? '100%' : '64px' }}>
 
                 {/* Icon when collapsed */}
-                {!isInputExpanded && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <MessageSquare className="w-5 h-5 text-white/60" />
-                  </div>
-                )}
-
                 <textarea
                   ref={textareaRef}
                   value={input}
@@ -1450,7 +1665,7 @@ export const CombinedView = ({ initialMessage, onBack, onToggleView, onNavigateT
                         : 'border-white/20 focus:ring-blue-500/50'
                     }
                              ${isInputExpanded ? 'pr-20' : 'cursor-pointer'}`}
-                  style={{ paddingRight: isInputExpanded ? '80px' : '20px', minHeight: '48px' }}
+                  style={{ paddingRight: '80px', minHeight: '48px' }}
                 />
 
 
