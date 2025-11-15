@@ -1,0 +1,61 @@
+# {{groupName}}
+
+## Overview
+
+{{#if description}}
+{{description}}
+{{else}}
+_[Describe the purpose and scope of this group]_
+{{/if}}
+
+## Technologies
+
+{{#if technologies.length}}
+{{#each technologies}}
+- {{this}}
+{{/each}}
+{{else}}
+_[List the key technologies, libraries, or frameworks used in this group]_
+{{/if}}
+
+## External Connections
+
+{{#if externalConnections.length}}
+{{#each externalConnections}}
+- {{this}}
+{{/each}}
+{{else}}
+_[List any external services, APIs, or databases this group connects to]_
+{{/if}}
+
+## Associated Functions
+
+{{#if functions.length}}
+{{#each functions}}
+### {{name}}
+
+**Path:** `{{path}}`
+
+{{#if purpose}}
+{{purpose}}
+{{else}}
+_[Purpose not documented]_
+{{/if}}
+
+{{#if complexity}}
+**Complexity:** {{complexity}}
+{{/if}}
+
+---
+
+{{/each}}
+{{else}}
+_No functions in this group_
+{{/if}}
+
+## Statistics
+
+- **Total Functions:** {{functionCount}}
+{{#if averageComplexity}}
+- **Average Complexity:** {{averageComplexity}}
+{{/if}}

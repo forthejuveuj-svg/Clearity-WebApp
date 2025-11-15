@@ -1,0 +1,65 @@
+# {{functionName}}
+
+**Path:** `{{filePath}}`
+
+## Purpose
+
+{{#if purpose}}
+{{purpose}}
+{{else}}
+_[Describe the purpose and responsibility of this function]_
+{{/if}}
+
+## Input
+
+{{#if parameters.length}}
+{{#each parameters}}
+- **{{name}}**{{#if optional}} (optional){{/if}}: `{{type}}`{{#if description}} - {{description}}{{/if}}
+{{/each}}
+{{else}}
+_No parameters_
+{{/if}}
+
+## Output
+
+{{#if returnType}}
+**Type:** `{{returnType}}`
+
+{{#if returnDescription}}
+{{returnDescription}}
+{{else}}
+_[Describe what this function returns]_
+{{/if}}
+{{else}}
+**Type:** `void`
+{{/if}}
+
+## Used In
+
+{{#if usedIn.length}}
+{{#each usedIn}}
+- `{{this}}`
+{{/each}}
+{{else}}
+_This function is not currently used in the codebase_
+{{/if}}
+
+## Complexity
+
+**Score:** {{complexity}}
+
+{{#if (gt complexity 10)}}
+⚠️ High complexity - consider refactoring
+{{else if (gt complexity 5)}}
+ℹ️ Moderate complexity
+{{else}}
+✓ Low complexity
+{{/if}}
+
+## Group
+
+{{#if group}}
+**Group:** {{group}}
+{{else}}
+_Ungrouped_
+{{/if}}

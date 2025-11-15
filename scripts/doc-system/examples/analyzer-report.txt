@@ -1,0 +1,289 @@
+================================================================================
+                    CODE ANALYSIS REPORT
+================================================================================
+Generated: 2024-01-15 10:30:00
+Project: React TypeScript Application
+Files Analyzed: 45
+Total Lines of Code: 3,420
+
+================================================================================
+                    EXECUTIVE SUMMARY
+================================================================================
+
+✗ 23 unused imports detected
+✗ 7 unused functions detected
+✗ 3 unused components detected
+✗ 12 files with mixed logic
+✗ 4 instances of split entities
+✓ 0 circular dependencies detected
+
+Recommended Actions:
+1. Remove 23 unused imports (safe, no impact)
+2. Delete or export 7 unused functions
+3. Remove 3 unused components
+4. Split 12 mixed logic files into focused modules
+5. Consolidate 4 split entities into single files
+
+================================================================================
+                    UNUSED IMPORTS (23)
+================================================================================
+
+src/components/DocumentList.tsx:
+  Line 3: import { useState } from 'react' - UNUSED
+  Line 5: import { formatDistance } from 'date-fns' - UNUSED
+  Line 8: import { Button } from './shared/Button' - UNUSED
+
+src/components/SearchBar.tsx:
+  Line 4: import { debounce } from 'lodash' - UNUSED
+  Line 6: import { validateInput } from '../lib/validation' - UNUSED
+
+src/hooks/useDocuments.ts:
+  Line 2: import { useCallback } from 'react' - UNUSED
+  Line 7: import type { Filter } from '../types' - UNUSED
+
+
+src/lib/supabase.ts:
+  Line 12: import { PostgrestError } from '@supabase/supabase-js' - UNUSED
+  Line 15: import type { Database } from '../types/database' - UNUSED
+
+src/services/api.ts:
+  Line 3: import axios from 'axios' - UNUSED (using fetch instead)
+  Line 9: import { retry } from '../lib/utils' - UNUSED
+
+[... 14 more unused imports]
+
+Impact: Safe to remove. No runtime impact.
+Recommendation: Run automated cleanup to remove all unused imports.
+
+================================================================================
+                    UNUSED FUNCTIONS (7)
+================================================================================
+
+1. calculateScore
+   File: src/lib/utils.ts
+   Line: 45-58
+   Exported: Yes
+   Complexity: 6
+   Impact: Not used anywhere in the codebase
+   Recommendation: Remove or document if part of public API
+
+2. formatCurrency
+   File: src/lib/utils.ts
+   Line: 89-95
+   Exported: Yes
+   Complexity: 3
+   Impact: Not used anywhere in the codebase
+   Recommendation: Remove (likely leftover from previous feature)
+
+3. validatePhoneNumber
+   File: src/lib/validation.ts
+   Line: 67-75
+   Exported: Yes
+   Complexity: 4
+   Impact: Not used anywhere in the codebase
+   Recommendation: Remove or keep if planned for future use
+
+4. parseQueryString
+   File: src/lib/utils.ts
+   Line: 120-135
+   Exported: No (internal)
+   Complexity: 7
+   Impact: Safe to remove
+   Recommendation: Remove immediately
+
+5. debounceAsync
+   File: src/lib/utils.ts
+   Line: 156-168
+   Exported: Yes
+   Complexity: 5
+   Impact: Not used, but similar to used debounce function
+   Recommendation: Remove or consolidate with debounce
+
+6. createLogger
+   File: src/services/logger.ts
+   Line: 12-28
+   Exported: Yes
+   Complexity: 4
+   Impact: Logger exists but never instantiated
+   Recommendation: Remove file or implement logging
+
+7. hashPassword
+   File: src/lib/auth.ts
+   Line: 34-40
+   Exported: Yes
+   Complexity: 2
+   Impact: Auth handled by Supabase, this is redundant
+   Recommendation: Remove (security: don't hash passwords client-side)
+
+================================================================================
+                    UNUSED COMPONENTS (3)
+================================================================================
+
+1. LoadingSpinner
+   File: src/components/shared/LoadingSpinner.tsx
+   Lines: 1-15
+   Exported: Yes
+   Impact: Never imported or rendered
+   Recommendation: Remove or use in loading states
+
+2. ErrorBoundary
+   File: src/components/ErrorBoundary.tsx
+   Lines: 1-45
+   Exported: Yes
+   Impact: Defined but never used in component tree
+   Recommendation: Integrate into App.tsx or remove
+
+3. Tooltip
+   File: src/components/shared/Tooltip.tsx
+   Lines: 1-32
+   Exported: Yes
+   Impact: Never imported
+   Recommendation: Remove or implement in UI components
+
+================================================================================
+                    MIXED LOGIC FILES (12)
+================================================================================
+
+1. src/components/DocumentList.tsx
+   Entities: 5 (Component, 2 hooks, 2 helper functions)
+   Complexity: High (avg 8.2)
+   Issues:
+   - DocumentList component (UI)
+   - useDocumentFilters hook (state management)
+   - fetchDocumentsWithCache function (data fetching)
+   - sortDocuments function (business logic)
+   - formatDocumentDate function (formatting)
+   
+   Recommendation: Split into:
+   - DocumentList.tsx (component only)
+   - useDocumentFilters.ts (hook)
+   - documentQueries.ts (data fetching)
+   - documentUtils.ts (sorting, formatting)
+
+2. src/hooks/useDocuments.ts
+   Entities: 4 (Hook, 2 helper functions, 1 type)
+   Complexity: Medium (avg 6.5)
+   Issues:
+   - useDocuments hook (main hook)
+   - fetchDocuments function (should be in services)
+   - cacheDocuments function (should be in cache service)
+   - DocumentCache type (should be in types file)
+   
+   Recommendation: Split into:
+   - useDocuments.ts (hook only)
+   - Move fetchDocuments to services/supabase/
+   - Move caching to services/cache/
+   - Move type to types/
+
+3. src/lib/supabase.ts
+   Entities: 6 (Client, 4 query functions, 1 auth function)
+   Complexity: High (avg 7.8)
+   Issues:
+   - createClient function (client setup)
+   - fetchDocuments, createDocument, updateDocument (queries)
+   - signIn function (auth)
+   - Multiple unrelated concerns in one file
+   
+   Recommendation: Split into:
+   - client/createClient.ts
+   - queries/fetchDocuments.ts
+   - queries/createDocument.ts
+   - queries/updateDocument.ts
+   - auth/signIn.ts
+
+4. src/lib/utils.ts
+   Entities: 8 (8 unrelated utility functions)
+   Complexity: Medium (avg 5.2)
+   Issues:
+   - Date formatting functions
+   - String manipulation functions
+   - Array utilities
+   - Validation functions
+   - No logical grouping
+   
+   Recommendation: Split into:
+   - utils/date/formatDate.ts
+   - utils/string/capitalize.ts
+   - utils/array/groupBy.ts
+   - utils/validation/validateEmail.ts
+
+[... 8 more mixed logic files with similar analysis]
+
+================================================================================
+                    SPLIT ENTITIES (4)
+================================================================================
+
+1. Document Search Logic
+   Split across:
+   - src/components/SearchBar.tsx (UI + partial logic)
+   - src/hooks/useSearch.ts (state management)
+   - src/lib/search.ts (core search algorithm)
+   - src/services/api.ts (API calls)
+   
+   Recommendation: Consolidate into:
+   - services/search/searchDocuments.ts (all search logic)
+   - hooks/useSearch.ts (state management only)
+   - components/SearchBar.tsx (UI only)
+
+2. Authentication Flow
+   Split across:
+   - src/hooks/useSupabase.ts (partial auth logic)
+   - src/lib/auth.ts (auth helpers)
+   - src/contexts/AppContext.tsx (auth state)
+   
+   Recommendation: Consolidate into:
+   - services/supabase/auth/ (all auth functions)
+   - contexts/AuthContext.tsx (auth state only)
+   - Remove redundant auth code
+
+3. Document Validation
+   Split across:
+   - src/lib/validation.ts (generic validation)
+   - src/components/DocumentList.tsx (document-specific validation)
+   - src/hooks/useDocuments.ts (validation on fetch)
+   
+   Recommendation: Consolidate into:
+   - utils/validation/validateDocument.ts (all document validation)
+
+4. Date Formatting
+   Split across:
+   - src/lib/utils.ts (formatDate, parseDate)
+   - src/components/shared/utils.ts (formatRelativeDate)
+   - src/hooks/useDocuments.ts (inline date formatting)
+   
+   Recommendation: Consolidate into:
+   - utils/date/ (all date utilities)
+
+================================================================================
+                    RECOMMENDATIONS
+================================================================================
+
+Priority 1 (High Impact, Low Risk):
+1. Remove all 23 unused imports (automated)
+2. Remove 7 unused functions (after confirming not part of public API)
+3. Remove 3 unused components
+
+Priority 2 (High Impact, Medium Risk):
+4. Split 12 mixed logic files into focused modules
+5. Consolidate 4 split entities
+
+Priority 3 (Medium Impact, High Value):
+6. Generate documentation for all functions
+7. Set up pre-commit hooks for documentation validation
+8. Implement automated testing for refactored code
+
+Estimated Effort:
+- Priority 1: 2-4 hours
+- Priority 2: 1-2 weeks
+- Priority 3: 1 week
+
+Expected Benefits:
+- Improved code maintainability
+- Better code discoverability
+- Easier onboarding for new developers
+- AI-friendly codebase structure
+- Reduced cognitive load
+
+================================================================================
+                    END OF REPORT
+================================================================================

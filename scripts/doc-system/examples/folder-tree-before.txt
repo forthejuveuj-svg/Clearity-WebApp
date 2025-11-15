@@ -1,0 +1,30 @@
+src/
+├── components/
+│   ├── DocumentList.tsx          # Mixed: List component + search logic + Supabase queries
+│   ├── SearchBar.tsx              # Mixed: UI component + search state + filter logic
+│   ├── UserProfile.tsx            # Mixed: Profile display + data fetching + validation
+│   └── shared/
+│       ├── Button.tsx             # Clean: Single UI component
+│       └── utils.ts               # Mixed: UI helpers + date formatting + validation
+├── hooks/
+│   ├── useDocuments.ts            # Mixed: Document fetching + caching + search
+│   ├── useSearch.ts               # Clean: Search state management
+│   └── useSupabase.ts             # Mixed: Supabase client + auth + queries
+├── lib/
+│   ├── supabase.ts                # Mixed: Client setup + helper functions + types
+│   ├── search.ts                  # Mixed: Search logic + filtering + sorting
+│   ├── utils.ts                   # Mixed: Various unrelated utilities
+│   └── validation.ts              # Clean: Input validation functions
+├── services/
+│   ├── api.ts                     # Mixed: Multiple API endpoints + error handling
+│   └── storage.ts                 # Mixed: Local storage + session storage + cache
+└── contexts/
+    ├── AppContext.tsx             # Mixed: Multiple contexts in one file
+    └── ThemeContext.tsx           # Clean: Single theme context
+
+Issues Detected:
+- 23 unused imports across 8 files
+- 7 unused functions (never called)
+- 3 unused components (never imported)
+- 12 files with mixed logic (multiple unrelated entities)
+- 4 instances of split entities (related code in multiple files)

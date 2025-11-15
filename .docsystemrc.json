@@ -1,0 +1,18 @@
+{
+  "analyzer": {
+    "excludePatterns": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/*.test.ts",
+      "**/*.test.tsx"
+    ],
+    "complexityThreshold": 15,
+    "mixedLogicThreshold": 4
+  },
+  "documentation": {
+    "outputDir": "docs/generated",
+    "preserveManual": true,
+    "generateIndex": true
+  }
+}

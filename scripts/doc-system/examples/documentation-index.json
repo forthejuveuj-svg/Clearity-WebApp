@@ -1,0 +1,254 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2024-01-15T10:30:00.000Z",
+  "functions": [
+    {
+      "name": "fetchDocuments",
+      "filePath": "src/services/supabase/queries/fetchDocuments.ts",
+      "docPath": "docs/services/supabase/queries/fetchDocuments.md",
+      "group": "supabase",
+      "exported": true,
+      "complexity": 8,
+      "dependencies": [
+        "src/services/supabase/client/createClient.ts",
+        "src/types/Document.ts"
+      ],
+      "usedBy": [
+        "src/hooks/useDocuments/useDocuments.ts",
+        "src/components/ui/DocumentList/DocumentList.tsx",
+        "src/pages/Dashboard/Dashboard.tsx",
+        "src/services/search/searchDocuments.ts"
+      ]
+    },
+    {
+      "name": "createDocument",
+      "filePath": "src/services/supabase/queries/createDocument.ts",
+      "docPath": "docs/services/supabase/queries/createDocument.md",
+      "group": "supabase",
+      "exported": true,
+      "complexity": 5,
+      "dependencies": [
+        "src/services/supabase/client/createClient.ts",
+        "src/types/Document.ts",
+        "src/utils/validation/validateDocument.ts"
+      ],
+      "usedBy": [
+        "src/components/ui/DocumentEditor/DocumentEditor.tsx",
+        "src/services/import/importDocument.ts"
+      ]
+    },
+    {
+      "name": "updateDocument",
+      "filePath": "src/services/supabase/queries/updateDocument.ts",
+      "docPath": "docs/services/supabase/queries/updateDocument.md",
+      "group": "supabase",
+      "exported": true,
+      "complexity": 6,
+      "dependencies": [
+        "src/services/supabase/client/createClient.ts",
+        "src/types/Document.ts"
+      ],
+      "usedBy": [
+        "src/components/ui/DocumentEditor/DocumentEditor.tsx",
+        "src/hooks/useAutoSave/useAutoSave.ts"
+      ]
+    },
+    {
+      "name": "searchDocuments",
+      "filePath": "src/services/search/searchDocuments.ts",
+      "docPath": "docs/services/search/searchDocuments.md",
+      "group": "search",
+      "exported": true,
+      "complexity": 7,
+      "dependencies": [
+        "src/services/supabase/queries/fetchDocuments.ts",
+        "src/services/search/filterResults.ts",
+        "src/services/search/sortResults.ts"
+      ],
+      "usedBy": [
+        "src/hooks/useSearch/useSearch.ts",
+        "src/components/ui/SearchBar/SearchBar.tsx"
+      ]
+    },
+    {
+      "name": "filterResults",
+      "filePath": "src/services/search/filterResults.ts",
+      "docPath": "docs/services/search/filterResults.md",
+      "group": "search",
+      "exported": true,
+      "complexity": 9,
+      "dependencies": [
+        "src/types/Document.ts",
+        "src/types/Filter.ts"
+      ],
+      "usedBy": [
+        "src/services/search/searchDocuments.ts",
+        "src/hooks/useSearch/useSearch.ts"
+      ]
+    },
+    {
+      "name": "useDocuments",
+      "filePath": "src/hooks/useDocuments/useDocuments.ts",
+      "docPath": "docs/hooks/useDocuments/useDocuments.md",
+      "group": "hooks",
+      "exported": true,
+      "complexity": 10,
+      "dependencies": [
+        "src/services/supabase/queries/fetchDocuments.ts",
+        "src/services/supabase/queries/subscribeToDocuments.ts",
+        "react"
+      ],
+      "usedBy": [
+        "src/components/ui/DocumentList/DocumentList.tsx",
+        "src/pages/Dashboard/Dashboard.tsx"
+      ]
+    },
+    {
+      "name": "useSearch",
+      "filePath": "src/hooks/useSearch/useSearch.ts",
+      "docPath": "docs/hooks/useSearch/useSearch.md",
+      "group": "hooks",
+      "exported": true,
+      "complexity": 6,
+      "dependencies": [
+        "src/services/search/searchDocuments.ts",
+        "react"
+      ],
+      "usedBy": [
+        "src/components/ui/SearchBar/SearchBar.tsx",
+        "src/pages/Search/Search.tsx"
+      ]
+    },
+    {
+      "name": "DocumentList",
+      "filePath": "src/components/ui/DocumentList/DocumentList.tsx",
+      "docPath": "docs/components/ui/DocumentList/DocumentList.md",
+      "group": "ui-components",
+      "exported": true,
+      "complexity": 7,
+      "dependencies": [
+        "src/hooks/useDocuments/useDocuments.ts",
+        "src/components/ui/Button/Button.tsx",
+        "react"
+      ],
+      "usedBy": [
+        "src/pages/Dashboard/Dashboard.tsx",
+        "src/pages/Archive/Archive.tsx"
+      ]
+    },
+    {
+      "name": "formatDate",
+      "filePath": "src/utils/date/formatDate.ts",
+      "docPath": "docs/utils/date/formatDate.md",
+      "group": "utils",
+      "exported": true,
+      "complexity": 4,
+      "dependencies": [
+        "date-fns"
+      ],
+      "usedBy": [
+        "src/components/ui/DocumentList/DocumentList.tsx",
+        "src/components/ui/UserProfile/UserProfile.tsx",
+        "src/utils/date/formatRelativeDate.ts"
+      ]
+    },
+    {
+      "name": "validateEmail",
+      "filePath": "src/utils/validation/validateEmail.ts",
+      "docPath": "docs/utils/validation/validateEmail.md",
+      "group": "utils",
+      "exported": true,
+      "complexity": 3,
+      "dependencies": [],
+      "usedBy": [
+        "src/services/supabase/auth/signUp.ts",
+        "src/components/ui/LoginForm/LoginForm.tsx"
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "name": "supabase",
+      "docPath": "docs/groups/supabase.md",
+      "functionCount": 12,
+      "functions": [
+        "createClient",
+        "getSession",
+        "fetchDocuments",
+        "createDocument",
+        "updateDocument",
+        "deleteDocument",
+        "subscribeToDocuments",
+        "signIn",
+        "signOut",
+        "signUp",
+        "resetPassword",
+        "uploadFile"
+      ]
+    },
+    {
+      "name": "search",
+      "docPath": "docs/groups/search.md",
+      "functionCount": 3,
+      "functions": [
+        "searchDocuments",
+        "filterResults",
+        "sortResults"
+      ]
+    },
+    {
+      "name": "hooks",
+      "docPath": "docs/groups/hooks.md",
+      "functionCount": 5,
+      "functions": [
+        "useDocuments",
+        "useSearch",
+        "useAuth",
+        "useAutoSave",
+        "useDebounce"
+      ]
+    },
+    {
+      "name": "ui-components",
+      "docPath": "docs/groups/ui-components.md",
+      "functionCount": 8,
+      "functions": [
+        "Button",
+        "DocumentList",
+        "SearchBar",
+        "UserProfile",
+        "DocumentEditor",
+        "LoginForm",
+        "Modal",
+        "Spinner"
+      ]
+    },
+    {
+      "name": "utils",
+      "docPath": "docs/groups/utils.md",
+      "functionCount": 10,
+      "functions": [
+        "formatDate",
+        "parseDate",
+        "validateEmail",
+        "validatePassword",
+        "capitalize",
+        "truncate",
+        "debounce",
+        "throttle",
+        "deepClone",
+        "isEqual"
+      ]
+    }
+  ],
+  "statistics": {
+    "totalFunctions": 38,
+    "totalGroups": 5,
+    "documentedFunctions": 38,
+    "documentationCoverage": 100,
+    "averageComplexity": 6.2,
+    "highComplexityFunctions": 3,
+    "filesAnalyzed": 45,
+    "linesOfCode": 3420
+  }
+}
