@@ -9,7 +9,7 @@ interface TypingAnimationProps {
 
 export const TypingAnimation = ({ 
   text, 
-  speed = 30, 
+  speed = 1, 
   onComplete, 
   className = "" 
 }: TypingAnimationProps) => {

@@ -3,7 +3,7 @@ import { User, Session } from '@supabase/supabase-js'
 
 // Mock user data for development
 const MOCK_USER: User = {
-  id: 'dev-user-123',
+  id: '46d7a1fd-bc99-484a-b14d-83b26694a6eb',
   email: 'dev@example.com',
   user_metadata: {
     full_name: 'Development User',

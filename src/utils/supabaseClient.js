@@ -933,57 +933,6 @@ export async function updateMinddumpTitle(minddumpId, newTitle, options = {}) {
   }
 }
 
-// Update minddump conversation
-export async function updateMinddumpConversation(minddumpId, conversation, options = {}) {
-  const { onJWTError = null } = options;
-  
-  try {
-    const { data: session, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError) {
-      if (isJWTError(sessionError)) {
-        if (onJWTError) onJWTError('Session expired. Please log in again.');
-        throw sessionError;
-      }
-    }
-
-    if (!session?.user) {
-      throw new Error('No authenticated user');
-    }
-
-    const { data: minddump, error } = await supabase
-      .from('minddumps')
-      .update({ 
-        conversation: conversation,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', minddumpId)
-      .eq('user_id', session.user.id)
-      .select()
-      .single();
-
-    if (error) {
-      if (isJWTError(error)) {
-        if (onJWTError) onJWTError('Session expired. Please log in again.');
-        throw error;
-      }
-      throw error;
-    }
-
-    // Update cache
-    const index = minddumpCache.data.findIndex(m => m.id === minddumpId);
-    if (index !== -1) {
-      minddumpCache.data[index] = { ...minddumpCache.data[index], conversation: conversation };
-      notifyMinddumpSubscribers();
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Error updating minddump conversation:', error);
-    throw error;
-  }
-}
-
 // Update only problems in minddump (preserves projects and their positions)
 export async function updateMinddumpProblems(minddumpId, problems, options = {}) {
   const { onJWTError = null } = options;
