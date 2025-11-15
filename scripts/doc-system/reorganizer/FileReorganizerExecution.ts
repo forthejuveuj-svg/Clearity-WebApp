@@ -78,6 +78,14 @@ export class FileReorganizerExecutionMixin {
     const sourcePath = path.resolve(this.rootPath, move.sourcePath);
     const targetPath = path.resolve(this.rootPath, move.targetPath);
 
+    // Check if source file exists
+    try {
+      await fs.access(sourcePath);
+    } catch (error) {
+      console.warn(`⚠️  Skipping move - file not found: ${move.sourcePath}`);
+      return;
+    }
+
     const targetDir = path.dirname(targetPath);
     await fs.mkdir(targetDir, { recursive: true });
 
@@ -271,6 +279,15 @@ export class FileReorganizerExecutionMixin {
     console.log(`Splitting file: ${split.sourcePath}`);
     
     const sourcePath = path.resolve(this.rootPath, split.sourcePath);
+    
+    // Check if file exists before attempting to split
+    try {
+      await fs.access(sourcePath);
+    } catch (error) {
+      console.warn(`⚠️  Skipping split - file not found: ${split.sourcePath}`);
+      return;
+    }
+    
     const sourceCode = await fs.readFile(sourcePath, 'utf-8');
     
     const sourceFile = ts.createSourceFile(

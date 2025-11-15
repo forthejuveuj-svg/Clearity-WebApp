@@ -73,16 +73,20 @@ program
   .description('Reorganize files into logical groups based on analysis results')
   .option('-p, --path <path>', 'Path to reorganize', './src')
   .option('-c, --config <config>', 'Path to configuration file')
-  .option('--dry-run', 'Preview changes without applying them', true)
+  .option('--dry-run', 'Preview changes without applying them (default: true)')
+  .option('--execute', 'Actually execute the reorganization (disables dry-run)')
   .option('--no-backup', 'Skip backup creation')
   .action(async (options) => {
     try {
       const config = await loadConfig(options.config);
       const targetPath = path.resolve(process.cwd(), options.path);
       
+      // Determine if this is a dry run
+      const isDryRun = options.execute ? false : (options.dryRun !== false);
+      
       console.log('📁 Reorganizing codebase...');
       console.log(`Target: ${targetPath}`);
-      console.log(`Dry run: ${options.dryRun}`);
+      console.log(`Dry run: ${isDryRun}`);
       console.log(`Create backup: ${options.backup}`);
       console.log('');
       
@@ -99,7 +103,7 @@ program
       console.log('📋 Creating reorganization plan...');
       const reorganizerConfig = {
         ...config.reorganizer,
-        dryRun: options.dryRun,
+        dryRun: isDryRun,
         createBackup: options.backup !== false,
       };
       const reorganizer = new FileReorganizer(reorganizerConfig, targetPath);
@@ -107,7 +111,7 @@ program
       
       // Execute plan
       console.log('🚀 Executing reorganization...');
-      await reorganizer.executeReorganizationPlan(plan, options.dryRun);
+      await reorganizer.executeReorganizationPlan(plan, isDryRun);
       
       console.log('');
       console.log('✅ Reorganization complete!');
